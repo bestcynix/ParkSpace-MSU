@@ -23,6 +23,43 @@ export const officialSource = "https://building.msu.ac.th/news-detail.php?id=23"
 export const officialMapImage = "https://building.msu.ac.th/uploads/news/news_img_20260623_041630_d386e933.png";
 export const campusCenter = "16.24704,103.24936";
 
+export type OfficialMapMarker = { code: string; left: number; top: number };
+
+// These are image-relative reference positions read from the numbered markers
+// in the official MSU announcement graphic. They intentionally are not GPS
+// coordinates. Google Maps pins/routes are enabled only after an area has a
+// verified latitude/longitude in Supabase.
+export const officialMapMarkers: readonly OfficialMapMarker[] = [
+  { code: "P01", left: 23.2, top: 42.0 },
+  { code: "P02", left: 31.7, top: 44.9 },
+  { code: "P03", left: 41.4, top: 50.3 },
+  { code: "P04", left: 41.5, top: 47.2 },
+  { code: "P05", left: 35.9, top: 42.4 },
+  { code: "P06", left: 33.4, top: 40.7 },
+  { code: "P07", left: 27.9, top: 38.0 },
+  { code: "P08", left: 25.1, top: 36.1 },
+  { code: "P09", left: 19.6, top: 28.4 },
+  { code: "P10", left: 28.1, top: 27.0 },
+  { code: "P11", left: 30.9, top: 24.5 },
+  { code: "P12", left: 34.3, top: 26.8 },
+  { code: "P13", left: 30.2, top: 30.6 },
+  { code: "P14", left: 35.4, top: 31.0 },
+  { code: "P15", left: 34.8, top: 36.3 },
+  { code: "P16", left: 37.6, top: 38.8 },
+  { code: "P17", left: 39.9, top: 36.1 },
+  { code: "P18", left: 42.3, top: 32.6 },
+  { code: "P19", left: 45.5, top: 32.4 },
+  { code: "P20", left: 45.7, top: 36.1 },
+  { code: "P21", left: 45.5, top: 39.6 },
+  { code: "P22", left: 42.6, top: 44.0 },
+  { code: "P23", left: 23.4, top: 23.9 },
+  { code: "P24", left: 21.6, top: 26.6 },
+  { code: "P25", left: 17.7, top: 31.7 },
+  { code: "P26", left: 32.6, top: 35.5 },
+  { code: "P27", left: 39.2, top: 31.6 },
+  { code: "P28", left: 45.0, top: 42.4 },
+];
+
 // Area names are transcribed from the MSU Building and Grounds Division
 // announcement graphic. The local catalog describes the requested mock layout;
 // live availability and real bookings must always come from Supabase.

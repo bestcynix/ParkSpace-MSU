@@ -5,7 +5,7 @@ import { ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, ZoomIn, Zoo
 import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { campusCenter, getGoogleMapsNavigationUrl, getGoogleMapsSearchQuery, officialMapImage, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
+import { campusCenter, getGoogleMapsNavigationUrl, getGoogleMapsSearchQuery, officialMapImage, officialMapMarkers, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type MapMode = "google" | "satellite" | "diagram";
@@ -179,9 +179,33 @@ export function InteractiveCampusMap({
             onPointerCancel={stopDragging}
           >
             <div className="interactive-diagram-canvas" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})` }}>
-              {/* This is the official announcement image; the numbered markers are reference data, not live GPS pins. */}
+              {/* This is the official announcement image; the numbered markers
+                  are clickable image references, not live GPS pins. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={officialMapImage} alt={locale === "th" ? "แผนผัง MSU Car Park 28 พื้นที่" : "MSU Car Park map with 28 areas"} draggable={false} />
+              <div className="official-map-markers" aria-label={t.mapReferenceNote}>
+                {officialMapMarkers.map((marker) => {
+                  const area = areas.find((item) => item.code === marker.code);
+                  if (!area) return null;
+                  const active = focusArea?.code === marker.code;
+                  const name = locale === "th" ? area.th : area.en;
+                  return (
+                    <button
+                      className={`official-map-marker ${active ? "active" : ""}`}
+                      key={marker.code}
+                      type="button"
+                      style={{ left: `${marker.left}%`, top: `${marker.top}%` }}
+                      title={`${marker.code} · ${name}`}
+                      aria-label={`${marker.code} · ${name}`}
+                      aria-pressed={active}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => setFocusCode(marker.code)}
+                    >
+                      {marker.code.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="map-zoom-controls" aria-label={t.mapMode}>
               <button type="button" onClick={() => changeZoom(0.18)} aria-label={t.zoomIn}><ZoomIn size={17} /></button>
@@ -190,7 +214,7 @@ export function InteractiveCampusMap({
             </div>
             <span className="diagram-map-hint">{t.dragMap}</span>
           </div>
-          <div className="map-embed-footer"><span>{t.officialMap} · {coordinateNote}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
+          <div className="map-embed-footer"><span>{t.officialMap} · {t.mapReferenceNote} · {coordinateNote}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 

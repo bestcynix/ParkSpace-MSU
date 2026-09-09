@@ -2506,6 +2506,7 @@ button.role-chip:disabled {
 }
 
 .interactive-diagram-canvas {
+  position: relative;
   display: flex;
   width: 100%;
   align-items: center;
@@ -2525,6 +2526,41 @@ button.role-chip:disabled {
   max-height: 540px;
   object-fit: contain;
   pointer-events: none;
+}
+
+.official-map-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.official-map-marker {
+  position: absolute;
+  display: grid;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  place-items: center;
+  transform: translate(-50%, -50%);
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #db2d24;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 2px 7px rgba(24, 31, 39, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.official-map-marker:hover,
+.official-map-marker.active {
+  z-index: 2;
+  transform: translate(-50%, -50%) scale(1.2);
+  background: #b98b00;
+  box-shadow: 0 0 0 3px rgba(255, 244, 169, 0.95), 0 4px 10px rgba(24, 31, 39, 0.38);
 }
 
 .map-zoom-controls {
