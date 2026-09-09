@@ -3,10 +3,10 @@ import { ArrowRight, ExternalLink, MapPin } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { getAreaDetail, getAreaName, getGoogleMapsSearchUrl, type ParkingArea } from "@/lib/parking/demo-data";
-import { LiveAreaStatus } from "@/components/parking/LiveAreaStatus";
+import { LiveAreaStatus, type LiveAreaSummary } from "@/components/parking/LiveAreaStatus";
 import { AreaImage } from "@/components/parking/AreaImage";
 
-export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Locale }) {
+export function ParkingCard({ area, locale, liveSummary = null }: { area: ParkingArea; locale: Locale; liveSummary?: LiveAreaSummary | null }) {
   const t = getCopy(locale);
   const slotLayoutHref = area.slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid ? `/${locale}/parking/${area.id}/slots` : `/${locale}/app/bookings/new?area=${area.id}`;
   const reserveLabel = area.slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid ? t.selectSlot : t.reserve;
@@ -20,7 +20,7 @@ export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Local
             {area.code} · {getAreaName(area, locale)}
             <span>{getAreaDetail(area, locale)}</span>
           </h3>
-          <LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} />
+          <LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} summary={liveSummary} />
           </div>
         <a className="parking-detail-line text-link" href={getGoogleMapsSearchUrl(area)} target="_blank" rel="noreferrer"><MapPin size={13} />{t.openGoogleMaps}<ExternalLink size={12} /></a>
         {area.estimatedCapacity ? <div className="parking-detail-line">{t.estimatedCapacity}: {area.estimatedCapacity} {locale === "th" ? "คัน" : "vehicles"}</div> : null}

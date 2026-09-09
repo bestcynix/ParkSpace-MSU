@@ -29,6 +29,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["areas", t.areas, MapPinned, "/parking-areas"],
     ["users", t.users, Users, "/users"],
     ["analytics", t.analytics, BarChart3, "/analytics"],
+    ["audit", t.audit, ShieldCheck, "/audit-logs"],
     ["traces", t.traceExplorer, Wrench, "/traces"],
     ["errors", t.errors, FileText, "/errors"],
     ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],

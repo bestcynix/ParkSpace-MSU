@@ -12,6 +12,9 @@ export const metadata: Metadata = {
   },
   description: "ระบบจองที่จอดรถมหาวิทยาลัยมหาสารคาม / Smart parking for Mahasarakham University.",
   applicationName: "ParkSpace MSU",
+  verification: {
+    google: "PR6C3gK2h6W23zGl3nkyZJJOobDSNhpYihE9gPDAVaI",
+  },
   keywords: ["ParkSpace MSU", "จองที่จอดรถ", "มหาวิทยาลัยมหาสารคาม", "Mahasarakham University parking"],
   icons: {
     icon: "/brand/favicon.svg",

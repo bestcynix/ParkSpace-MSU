@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Building2, Clock3, ExternalLink, Navigation, ParkingSquare, ShieldCheck } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { getGoogleMapsSearchUrl, officialSource, parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
+import { getGoogleMapsNavigationUrl, officialSource, parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
 import { MockupNotice } from "@/components/parking/MockupNotice";
 import { InteractiveCampusMap } from "@/components/map/InteractiveCampusMap";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -18,6 +18,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
   const t = getCopy(locale);
   const [tab, setTab] = useState<"overview" | "map" | "photos" | "details">("overview");
   const [slotMode, setSlotMode] = useState(area.slotMode);
+  const [verifiedPoint, setVerifiedPoint] = useState<{ latitude: number; longitude: number } | null>(null);
   const title = locale === "th" ? area.th : area.en;
   const detail = locale === "th" ? area.detailTh : area.detailEn;
 
@@ -26,8 +27,15 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
     async function loadLiveArea() {
       if (!isSupabaseConfigured()) return;
       const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.from("parking_areas").select("slot_mode").eq("code", area.code).maybeSingle();
+      const { data } = await supabase.from("parking_areas").select("slot_mode, latitude, longitude, data_status").eq("code", area.code).maybeSingle();
       if (active && (data?.slot_mode === "AREA_ONLY" || data?.slot_mode === "INDIVIDUAL_SLOT")) setSlotMode(data.slot_mode);
+      const latitude = Number(data?.latitude);
+      const longitude = Number(data?.longitude);
+      if (active && data?.data_status === "VERIFIED" && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+        setVerifiedPoint({ latitude, longitude });
+      } else if (active) {
+        setVerifiedPoint(null);
+      }
     }
     void loadLiveArea();
     return () => { active = false; };
@@ -44,7 +52,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
         <AreaImage areaCode={area.code} title={title} locale={locale} className="detail-image" loading="eager" />
         <main className="detail-content">
           <div className="detail-title-row"><div><h1>{title}<span>{locale === "th" ? area.en : area.th}</span></h1></div><LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} /></div>
-          <div className="inline-actions" style={{ marginTop: 13 }}><span className="data-badge"><ShieldCheck size={12} /> {t.officialMap}</span><span className="mockup-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span></div>
+          <div className="inline-actions" style={{ marginTop: 13 }}><span className="data-badge"><ShieldCheck size={12} /> {t.officialMap}</span><span className="mockup-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span><span className="data-badge">{verifiedPoint ? t.coordinateVerified : t.coordinateSearchFallback}</span></div>
           {area.estimatedCapacity ? <MockupNotice locale={locale} compact /> : null}
           <div className="stat-grid">
             <div className="stat-card"><strong>{area.estimatedCapacity ?? "—"}</strong><span>{t.estimatedCapacity}<br />{area.estimatedCapacity ? t.sampleData : t.notVerified}</span></div>
@@ -66,7 +74,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
           </> : null}
           {tab === "details" ? <div className="info-card" style={{ padding: 18, marginTop: 18 }}><strong>{t.rules}</strong><p className="page-subtitle">{t.operationalData}</p></div> : null}
           {tab === "overview" ? <CapacitySummary areaCode={area.code} locale={locale} /> : null}
-          <div className="sticky-action"><a className="secondary-button" href={getGoogleMapsSearchUrl(area)} target="_blank" rel="noreferrer"><Navigation size={16} />{t.navigate}</a><Link className="primary-button" href={bookingHref}>{bookingLabel}</Link></div>
+          <div className="sticky-action"><a className="secondary-button" href={getGoogleMapsNavigationUrl(area, verifiedPoint)} target="_blank" rel="noreferrer"><Navigation size={16} />{verifiedPoint ? t.navigate : t.openGoogleMaps}</a><Link className="primary-button" href={bookingHref}>{bookingLabel}</Link></div>
         </main>
       </div>
       <div className="page-wrap"><PublicFooter locale={locale} /></div>

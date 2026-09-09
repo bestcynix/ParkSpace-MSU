@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, ZoomIn, ZoomOut } from "lucide-react";
-import { useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { campusCenter, officialMapImage, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
+import { campusCenter, getGoogleMapsNavigationUrl, getGoogleMapsSearchQuery, officialMapImage, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
+import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 type MapMode = "google" | "satellite" | "diagram";
 
-const officialGoogleMyMap = "https://www.google.com/maps/d/embed?mid=19EPtHszwxadv8Jst4jps9NbMakAC4rq1";
-const officialGoogleMyMapLink = "https://www.google.com/maps/d/viewer?mid=19EPtHszwxadv8Jst4jps9NbMakAC4rq1";
+type LiveMapPoint = { latitude: number; longitude: number };
+type LiveMapRow = { code: string; latitude: number | string | null; longitude: number | string | null; data_status: string | null };
+
+function coordinate(value: number | string | null) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export function InteractiveCampusMap({
   locale,
@@ -30,15 +36,63 @@ export function InteractiveCampusMap({
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [livePoints, setLivePoints] = useState<Record<string, LiveMapPoint>>({});
+  const [coordinatesLoading, setCoordinatesLoading] = useState(true);
+  const [coordinatesError, setCoordinatesError] = useState("");
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const areaCodes = areas.map((area) => area.code).join(",");
+
+  useEffect(() => {
+    let active = true;
+    async function loadVerifiedPoints() {
+      if (!isSupabaseConfigured() || !areaCodes) {
+        if (active) setCoordinatesLoading(false);
+        return;
+      }
+      setCoordinatesLoading(true);
+      setCoordinatesError("");
+      try {
+        const { data, error } = await createSupabaseBrowserClient()
+          .from("parking_areas")
+          .select("code, latitude, longitude, data_status")
+          .in("code", areaCodes.split(","));
+        if (error) throw error;
+        const next: Record<string, LiveMapPoint> = {};
+        for (const row of (data ?? []) as LiveMapRow[]) {
+          const latitude = coordinate(row.latitude);
+          const longitude = coordinate(row.longitude);
+          if (row.data_status === "VERIFIED" && latitude !== null && longitude !== null) {
+            next[row.code.toUpperCase()] = { latitude, longitude };
+          }
+        }
+        if (active) setLivePoints(next);
+      } catch (error) {
+        if (active) {
+          setLivePoints({});
+          setCoordinatesError(error instanceof Error ? error.message : t.operationalData);
+        }
+      } finally {
+        if (active) setCoordinatesLoading(false);
+      }
+    }
+    void loadVerifiedPoints();
+    return () => { active = false; };
+  }, [areaCodes, t.operationalData]);
+
   const focusArea = areas.find((area) => area.code === focusCode) ?? areas[0];
   const focusName = focusArea ? (locale === "th" ? focusArea.th : focusArea.en) : t.map;
-  const searchQuery = focusArea
-    ? `${focusArea.code} ${focusArea.th} ${focusArea.en} มหาวิทยาลัยมหาสารคาม เขตพื้นที่ขามเรียง`
-    : "มหาวิทยาลัยมหาสารคาม เขตพื้นที่ขามเรียง";
-  const googleSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}`;
-  const satelliteUrl = `https://www.google.com/maps/@?api=1&map_action=map&center=${encodeURIComponent(campusCenter)}&zoom=16&basemap=satellite`;
-  const satelliteEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(campusCenter)}&t=k&z=16&ie=UTF8&iwloc=&output=embed`;
+  const focusPoint = focusArea ? livePoints[focusArea.code] ?? null : null;
+  const destinationQuery = focusPoint
+    ? `${focusPoint.latitude},${focusPoint.longitude}`
+    : focusArea ? getGoogleMapsSearchQuery(focusArea) : "มหาวิทยาลัยมหาสารคาม ตำบลขามเรียง จังหวัดมหาสารคาม";
+  const googleMapsUrl = focusArea ? getGoogleMapsNavigationUrl(focusArea, focusPoint) : "https://www.google.com/maps/search/?api=1&query=มหาวิทยาลัยมหาสารคาม";
+  const googleEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&z=${focusPoint ? 18 : 16}&ie=UTF8&iwloc=&output=embed`;
+  const satelliteUrl = focusPoint
+    ? `https://www.google.com/maps/@?api=1&map_action=map&center=${focusPoint.latitude},${focusPoint.longitude}&zoom=18&basemap=satellite`
+    : `https://www.google.com/maps/@?api=1&map_action=map&center=${encodeURIComponent(campusCenter)}&zoom=16&basemap=satellite`;
+  const satelliteEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&t=k&z=${focusPoint ? 18 : 16}&ie=UTF8&iwloc=&output=embed`;
+  const coordinateNote = focusPoint ? t.coordinateVerified : t.coordinateSearchFallback;
+  const mapActionLabel = focusPoint ? t.navigate : t.openGoogleMaps;
 
   function changeZoom(delta: number) {
     setZoom((current) => Math.min(2.6, Math.max(0.75, Number((current + delta).toFixed(2)))));
@@ -81,6 +135,7 @@ export function InteractiveCampusMap({
           <p className="eyebrow"><MapPinned size={14} />{t.map}</p>
           <h2>{t.mapMode}</h2>
           <p>{t.mapAreaNote}</p>
+          <p className="map-coordinate-status" role="status">{coordinatesLoading ? "…" : coordinatesError ? t.coordinateSearchFallback : coordinateNote}</p>
         </div>
         <span className="data-badge"><LocateFixed size={13} />{t.allAreas}</span>
       </div>
@@ -99,15 +154,15 @@ export function InteractiveCampusMap({
 
       {mode === "google" ? (
         <div className="map-embed-shell">
-          <iframe title={`${t.googleMaps} · ${t.allAreas}`} src={officialGoogleMyMap} loading="lazy" allowFullScreen referrerPolicy="no-referrer-when-downgrade" />
-          <div className="map-embed-footer"><span>{t.officialMap}</span><a className="text-link" href={officialGoogleMyMapLink} target="_blank" rel="noreferrer">{t.openGoogleMaps}<ExternalLink size={13} /></a></div>
+          <iframe title={`${t.googleMaps} · ${focusName}`} src={googleEmbedUrl} loading="lazy" allowFullScreen referrerPolicy="no-referrer-when-downgrade" />
+          <div className="map-embed-footer"><span>{coordinateNote}</span><a className="text-link" href={googleMapsUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 
       {mode === "satellite" ? (
         <div className="map-embed-shell">
           <iframe title={`${t.satellite} · Kham Riang Campus`} src={satelliteEmbedUrl} loading="lazy" allowFullScreen referrerPolicy="no-referrer-when-downgrade" />
-          <div className="map-embed-footer"><span>{t.mapApproximateCenter}</span><a className="text-link" href={satelliteUrl} target="_blank" rel="noreferrer">{t.openGoogleMaps}<ExternalLink size={13} /></a></div>
+          <div className="map-embed-footer"><span>{focusPoint ? t.coordinateVerified : t.mapApproximateCenter}</span><a className="text-link" href={focusPoint ? googleMapsUrl : satelliteUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 
@@ -135,14 +190,14 @@ export function InteractiveCampusMap({
             </div>
             <span className="diagram-map-hint">{t.dragMap}</span>
           </div>
-          <div className="map-embed-footer"><span>{t.officialMap}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
+          <div className="map-embed-footer"><span>{t.officialMap} · {coordinateNote}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 
       {focusArea ? (
         <div className="selected-map-area">
-          <div className="selected-map-area-copy"><span>{t.selectedArea}</span><strong>{focusArea.code} · {focusName}</strong><small>{t.mapAreaNote}</small></div>
-          <div className="selected-map-area-actions"><Link className="secondary-button" href={`/${locale}/parking/${focusArea.id}`}>{t.details}</Link><a className="primary-button" href={googleSearchUrl} target="_blank" rel="noreferrer">{t.openGoogleMaps}<ExternalLink size={14} /></a></div>
+          <div className="selected-map-area-copy"><span>{t.selectedArea}</span><strong>{focusArea.code} · {focusName}</strong><small>{coordinateNote}</small></div>
+          <div className="selected-map-area-actions"><Link className="secondary-button" href={`/${locale}/parking/${focusArea.id}`}>{t.details}</Link><a className="primary-button" href={googleMapsUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={14} /></a></div>
         </div>
       ) : null}
 

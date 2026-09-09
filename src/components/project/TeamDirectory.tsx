@@ -141,8 +141,8 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   );
   const displayMembers = useMemo(
     () => dataState === "fallback"
-      ? [{ member: fallbackMember, isFallback: true }]
-      : visibleMembers.map((member) => ({ member, isFallback: false })),
+      ? [fallbackMember]
+      : visibleMembers,
     [dataState, visibleMembers],
   );
   const loadingCopy = locale === "th" ? "กำลังโหลดสมาชิกทีม…" : "Loading team members…";
@@ -301,7 +301,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
         </div>
       ) : displayMembers.length ? (
         <div className="team-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
-          {displayMembers.map(({ member, isFallback }, index) => {
+          {displayMembers.map((member, index) => {
             const name = locale === "th" ? member.name_th : member.name_en;
             const study = [
               locale === "th" ? member.major_th : member.major_en,
@@ -311,7 +311,6 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
 
             return (
               <article className={`team-card team-member-card ${member.visible ? "" : "hidden-member"}`} key={member.id}>
-                <span className="team-number">{isFallback ? 1 : member.display_order || index + 1}</span>
                 <div className="team-member-heading">
                   <TeamAvatar key={`${member.id}:${member.avatar_path ?? "placeholder"}`} path={member.avatar_path} />
                   <div>
@@ -321,7 +320,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
                 </div>
                 {study ? <span>{study}</span> : null}
                 <div className="data-badge" aria-label={role}>{role}</div>
-                {editorRole && !isFallback ? (
+                {editorRole && member.id !== fallbackMember.id ? (
                   <div className="team-editor-actions">
                     <button className="icon-button" type="button" onClick={() => void move(member, -1)} disabled={index === 0} aria-label={t.moveUp}>↑</button>
                     <button className="icon-button" type="button" onClick={() => void move(member, 1)} disabled={index === displayMembers.length - 1} aria-label={t.moveDown}>↓</button>

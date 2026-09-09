@@ -751,6 +751,20 @@ button {
   color: #312a10;
 }
 
+.live-filter-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.live-filter-note.warning {
+  color: #8b6410;
+}
+
 .mockup-note {
   display: flex;
   align-items: start;
@@ -1424,7 +1438,28 @@ button {
   font-size: 14px;
 }
 
-.team-card span {
+.team-card > span:not(.team-number):not(.team-avatar) {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.team-number {
+  display: inline-grid !important;
+  width: 30px;
+  height: 30px;
+  margin: 0 !important;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.team-avatar {
+  display: grid !important;
+  margin: 0 !important;
+}
+
+.team-member-heading > div > span {
   display: block;
   margin-top: 5px;
   color: var(--muted);
@@ -1433,6 +1468,7 @@ button {
 
 .team-grid-single {
   grid-template-columns: minmax(0, 420px);
+  margin-inline: auto;
 }
 
 .project-info-card {
@@ -1923,6 +1959,88 @@ button {
   flex: 0 0 auto;
 }
 
+.user-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface);
+  color: #8b949d;
+}
+
+.user-search-box input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.account-history {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.account-history .form-section-title {
+  margin: 0;
+}
+
+.account-history .form-section-title h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.account-history .form-section-title p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.history-list {
+  display: grid;
+  gap: 6px;
+  max-height: 290px;
+  overflow: auto;
+}
+
+.history-item {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fbfcfc;
+}
+
+.history-item strong {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item span {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.history-item small {
+  overflow-wrap: anywhere;
+  color: #9aa2a9;
+  font-size: 8px;
+  line-height: 1.35;
+}
+
 .icon-button.danger {
   color: var(--red);
 }
@@ -2265,6 +2383,14 @@ button.role-chip:disabled {
 .map-mode-header h2 {
   margin: 6px 0 0;
   font-size: 19px;
+}
+
+.map-coordinate-status {
+  margin: 5px 0 0;
+  color: #8a6d00;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .map-mode-header p:not(.eyebrow) {

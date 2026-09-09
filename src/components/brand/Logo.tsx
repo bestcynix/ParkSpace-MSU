@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { Locale } from "@/lib/i18n";
-import { getCopy } from "@/lib/i18n";
+import { getLocalizedTagline } from "@/lib/i18n";
 
 export function Logo({ locale, dark = false }: { locale: Locale; dark?: boolean }) {
-  const t = getCopy(locale);
+  const tagline = getLocalizedTagline(locale);
   return (
     <Link className="brand" href={`/${locale}`} aria-label="ParkSpace MSU home">
       <span className="brand-mark" aria-hidden="true">
@@ -15,7 +15,7 @@ export function Logo({ locale, dark = false }: { locale: Locale; dark?: boolean 
       </span>
       <span className="brand-copy">
         <span className="brand-name" style={dark ? { color: "white" } : undefined}>ParkSpace <span style={{ color: "#dca900" }}>MSU</span></span>
-        <span className="brand-tagline" style={dark ? { color: "#bac4ce" } : undefined}>{t.tagline} · {t.taglineEn}</span>
+        <span className="brand-tagline" style={dark ? { color: "#bac4ce" } : undefined}>{tagline.primary} · {tagline.secondary}</span>
       </span>
     </Link>
   );

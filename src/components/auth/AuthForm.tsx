@@ -4,12 +4,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
-import { getCopy } from "@/lib/i18n";
+import { getCopy, getLocalizedTagline } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/layout/NotificationProvider";
 
 export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "register" }) {
   const t = getCopy(locale);
+  const tagline = getLocalizedTagline(locale);
   const isLogin = mode === "login";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -82,7 +83,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       <div style={{ display: "grid", justifyItems: "center", marginBottom: 20 }}>
         <Link href={`/${locale}`} aria-label="ParkSpace MSU"><span className="brand-mark"><svg width="34" height="34" viewBox="0 0 64 64" fill="none"><path d="M14 10h21c10 0 17 6 17 15s-7 15-17 15H24v13H14V10Zm10 9v12h10c5 0 8-2 8-6s-3-6-8-6H24Z" fill="white"/><path d="M46 10c6 0 9 4 9 9 0 8-9 17-9 17s-9-9-9-17c0-5 4-9 9-9Z" fill="#F8C928"/><circle cx="46" cy="19" r="3" fill="#222C38"/></svg></span></Link>
         <strong style={{ marginTop: 10, fontSize: 21 }}>ParkSpace <span style={{ color: "#dca900" }}>MSU</span></strong>
-        <span className="page-subtitle" style={{ marginTop: 5 }}>{t.tagline} · {t.taglineEn}</span>
+        <span className="page-subtitle" style={{ marginTop: 5 }}>{tagline.primary} · {tagline.secondary}</span>
       </div>
       <h1>{isLogin ? t.login : t.register}</h1>
       <p>{isLogin ? t.welcomeSub : t.selectDestination}</p>

@@ -9,13 +9,34 @@ import { StatusBadge } from "@/components/parking/StatusBadge";
 
 type LiveSlotRow = { availability?: string };
 
-export function LiveAreaStatus({ areaCode, locale, fallback = "unverified" }: { areaCode: string; locale: Locale; fallback?: ParkingStatus }) {
+export type LiveAreaSummary = {
+  total: number;
+  available: number;
+  reserved: number;
+  occupied: number;
+  closed: number;
+};
+
+export function getLiveAreaStatus(summary: LiveAreaSummary, fallback: ParkingStatus): ParkingStatus {
+  if (summary.total <= 0) return fallback;
+  if (summary.closed >= summary.total) return "closed";
+  if (summary.available > 0) return "available";
+  if (summary.occupied > 0) return "occupied";
+  if (summary.reserved > 0) return "reserved";
+  return "full";
+}
+
+export function LiveAreaStatus({ areaCode, locale, fallback = "unverified", summary = null }: { areaCode: string; locale: Locale; fallback?: ParkingStatus; summary?: LiveAreaSummary | null }) {
   const t = getCopy(locale);
-  const [status, setStatus] = useState<ParkingStatus>(fallback);
-  const [counts, setCounts] = useState<{ available: number; total: number } | null>(null);
+  const [status, setStatus] = useState<ParkingStatus>(summary ? getLiveAreaStatus(summary, fallback) : fallback);
+  const [counts, setCounts] = useState<LiveAreaSummary | null>(summary);
 
   useEffect(() => {
     let active = true;
+    if (summary) {
+      return () => { active = false; };
+    }
+
     async function loadStatus() {
       if (!isSupabaseConfigured()) return;
       const startsAt = new Date();
@@ -34,7 +55,7 @@ export function LiveAreaStatus({ areaCode, locale, fallback = "unverified" }: { 
         const nextStatus: ParkingStatus = !rows.length ? fallback : closed === rows.length ? "closed" : available === 0 ? (occupied ? "occupied" : "full") : available < rows.length ? "reserved" : "available";
         if (active) {
           setStatus(nextStatus);
-          setCounts({ available, total: rows.length });
+          setCounts({ available, total: rows.length, reserved: rows.filter((row) => row.availability === "RESERVED").length, occupied, closed });
         }
       } catch {
         // Keep the explicit fallback label if the public availability RPC is unavailable.
@@ -42,7 +63,9 @@ export function LiveAreaStatus({ areaCode, locale, fallback = "unverified" }: { 
     }
     void loadStatus();
     return () => { active = false; };
-  }, [areaCode, fallback]);
+  }, [areaCode, fallback, summary]);
 
-  return <div className="live-area-status" aria-live="polite"><StatusBadge status={status} locale={locale} />{counts ? <span>{counts.available}/{counts.total} {t.available}</span> : null}</div>;
+  const displayStatus = summary ? getLiveAreaStatus(summary, fallback) : status;
+  const displayCounts = summary ?? counts;
+  return <div className="live-area-status" aria-live="polite"><StatusBadge status={displayStatus} locale={locale} />{displayCounts ? <span title={`${t.reserved}: ${displayCounts.reserved} · ${t.occupied}: ${displayCounts.occupied} · ${t.closed}: ${displayCounts.closed}`}>{displayCounts.available}/{displayCounts.total} {t.available}</span> : null}</div>;
 }

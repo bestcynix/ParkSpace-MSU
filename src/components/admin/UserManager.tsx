@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Edit3, LoaderCircle, Save, ShieldCheck, UserRound, UserRoundPlus, X } from "lucide-react";
+import { Edit3, History, LoaderCircle, Save, Search, ShieldCheck, UserRound, UserRoundPlus, X } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -26,6 +26,10 @@ type ProfileRow = {
 
 type RoleRow = { user_id: string; role: AppRole };
 type UserRecord = ProfileRow & { roles: AppRole[] };
+type AuditHistoryRow = { id: string; action: string; actor_type: string | null; entity_type: string | null; result: string | null; created_at: string };
+type BookingHistoryRow = { id: string; reference: string; status: string; booking_date: string; starts_at: string; ends_at: string; created_at: string };
+type SessionHistoryRow = { id: string; status: string; check_in_at: string | null; check_out_at: string | null; created_at: string };
+type AccountHistory = { audits: AuditHistoryRow[]; bookings: BookingHistoryRow[]; sessions: SessionHistoryRow[] };
 
 const profileFields = "id, email, full_name, university_id, faculty, major, department, phone, user_type, preferred_locale, created_at";
 
@@ -38,9 +42,27 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [userQuery, setUserQuery] = useState("");
+  const [history, setHistory] = useState<AccountHistory | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const { confirm, notify } = useNotifications();
 
   const selectedUser = useMemo(() => users.find((user) => user.id === selectedId) ?? null, [selectedId, users]);
+  const filteredUsers = useMemo(() => {
+    const normalizedQuery = userQuery.trim().toLowerCase();
+    if (!normalizedQuery) return users;
+    return users.filter((user) => [
+      user.full_name,
+      user.email,
+      user.university_id,
+      user.faculty,
+      user.major,
+      user.department,
+      user.phone,
+      user.user_type,
+      ...user.roles,
+    ].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedQuery)));
+  }, [userQuery, users]);
 
   const loadUsers = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -73,6 +95,32 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
     return () => window.clearTimeout(timer);
   }, [loadUsers]);
 
+  const loadHistory = useCallback(async (userId: string) => {
+    if (!isSupabaseConfigured()) return;
+    setHistoryLoading(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const [auditResult, bookingResult, sessionResult] = await Promise.all([
+        supabase.from("audit_logs").select("id, action, actor_type, entity_type, result, created_at").or(`actor_id.eq.${userId},entity_id.eq.${userId}`).order("created_at", { ascending: false }).limit(25),
+        supabase.from("bookings").select("id, reference, status, booking_date, starts_at, ends_at, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(25),
+        supabase.from("parking_sessions").select("id, status, check_in_at, check_out_at, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(25),
+      ]);
+      if (auditResult.error) throw auditResult.error;
+      if (bookingResult.error) throw bookingResult.error;
+      if (sessionResult.error) throw sessionResult.error;
+      setHistory({
+        audits: (auditResult.data ?? []) as AuditHistoryRow[],
+        bookings: (bookingResult.data ?? []) as BookingHistoryRow[],
+        sessions: (sessionResult.data ?? []) as SessionHistoryRow[],
+      });
+    } catch (error) {
+      setHistory(null);
+      setMessage(error instanceof Error ? error.message : t.operationalData);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [t.operationalData]);
+
   function editUser(user: UserRecord) {
     setSelectedId(user.id);
     setProfileDraft({
@@ -83,6 +131,8 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
       department: user.department ?? "",
       phone: user.phone ?? "",
     });
+    setHistory(null);
+    void loadHistory(user.id);
     setMessage("");
   }
 
@@ -177,10 +227,19 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
     <div className="data-manager-heading"><div><p className="eyebrow">{role === "admin" ? t.admin : t.developer}</p><h2>{t.manageUsers}</h2><p className="page-subtitle">{t.noPrivateData} · {role === "admin" ? t.grantRole : t.systemHealth}</p></div><span className="data-badge"><ShieldCheck size={13} />{role === "admin" ? t.admin : t.developer}</span></div>
     {message ? <div className="form-note" role="status">{message}</div> : null}
     <div className="user-manager-layout">
-      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.users}</h2><p>{users.length} · {t.noPrivateData}</p></div><UserRoundPlus size={20} color="#a27e00" /></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : users.length ? <div className="data-list">{users.map((user) => <article className={`data-list-item ${selectedId === user.id ? "selected" : ""}`} key={user.id}><div><strong>{user.full_name || user.email || user.university_id || user.id}</strong><small>{user.email || user.university_id || "—"}</small><div className="role-chip-list">{user.roles.length ? user.roles.map((userRole) => <button className={`role-chip ${userRole}`} type="button" key={userRole} onClick={() => void revokeRole(user, userRole)} disabled={role !== "admin"}>{userRole}</button>) : <span className="role-chip">{user.user_type || "user"}</span>}</div></div><button className="icon-button" type="button" onClick={() => editUser(user)} aria-label={`${t.edit} ${user.email ?? user.id}`}><Edit3 size={15} /></button></article>)}</div> : <div className="empty-card compact-empty"><div><UserRound size={24} /><h2>{t.noRecords}</h2></div></div>}</section>
+      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.users}</h2><p>{filteredUsers.length}/{users.length} · {t.noPrivateData}</p></div><UserRoundPlus size={20} color="#a27e00" /></div><div className="user-search-box"><Search size={16} /><input aria-label={t.searchAccounts} placeholder={t.searchAccounts} value={userQuery} onChange={(event) => setUserQuery(event.target.value)} /></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : filteredUsers.length ? <div className="data-list">{filteredUsers.map((user) => <article className={`data-list-item ${selectedId === user.id ? "selected" : ""}`} key={user.id}><div><strong>{user.full_name || user.email || user.university_id || user.id}</strong><small>{user.email || user.university_id || "—"}</small><div className="role-chip-list">{user.roles.length ? user.roles.map((userRole) => <button className={`role-chip ${userRole}`} type="button" key={userRole} onClick={() => void revokeRole(user, userRole)} disabled={role !== "admin"}>{userRole}</button>) : <span className="role-chip">{user.user_type || "user"}</span>}</div></div><button className="icon-button" type="button" onClick={() => editUser(user)} aria-label={`${t.edit} ${user.email ?? user.id}`}><Edit3 size={15} /></button></article>)}</div> : <div className="empty-card compact-empty"><div><UserRound size={24} /><h2>{users.length ? t.noResults : t.noRecords}</h2></div></div>}</section>
       <section className="data-editor-card">
-        {selectedUser ? <><div className="form-section-title"><UserRound size={22} /><div><h2>{t.edit}</h2><p>{selectedUser.email || selectedUser.id}</p></div><button className="icon-button" type="button" onClick={() => setSelectedId(null)} aria-label={t.cancel}><X size={16} /></button></div><form className="support-form" onSubmit={(event) => void saveProfile(event)}><div className="support-form-grid"><div className="form-group"><label htmlFor="user-name">{t.name}</label><input id="user-name" className="form-control" value={profileDraft.full_name} onChange={(event) => updateDraft("full_name", event.target.value)} /></div><div className="form-group"><label htmlFor="user-id">{t.studentId}</label><input id="user-id" className="form-control" value={profileDraft.university_id} onChange={(event) => updateDraft("university_id", event.target.value)} /></div><div className="form-group"><label htmlFor="user-faculty">{locale === "th" ? "คณะ" : "Faculty"}</label><input id="user-faculty" className="form-control" value={profileDraft.faculty} onChange={(event) => updateDraft("faculty", event.target.value)} /></div><div className="form-group"><label htmlFor="user-major">{locale === "th" ? "สาขา" : "Major"}</label><input id="user-major" className="form-control" value={profileDraft.major} onChange={(event) => updateDraft("major", event.target.value)} /></div><div className="form-group"><label htmlFor="user-department">{locale === "th" ? "หน่วยงาน" : "Department"}</label><input id="user-department" className="form-control" value={profileDraft.department} onChange={(event) => updateDraft("department", event.target.value)} /></div><div className="form-group"><label htmlFor="user-phone">{t.phone}</label><input id="user-phone" className="form-control" type="tel" value={profileDraft.phone} onChange={(event) => updateDraft("phone", event.target.value)} /></div></div><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{t.save}</button></form>{role === "admin" ? <div className="role-grant-box"><h3>{t.grantRole}</h3><div className="inline-actions"><select className="form-control" value={roleToGrant} onChange={(event) => setRoleToGrant(event.target.value as AppRole)} aria-label={t.role}><option value="admin">admin</option><option value="developer">developer</option><option value="staff">staff</option><option value="student">student</option><option value="personnel">personnel</option><option value="visitor">visitor</option></select><button className="secondary-button" type="button" onClick={() => void grantRole(selectedUser)} disabled={saving || selectedUser.roles.includes(roleToGrant)}>{t.grantRole}</button></div></div> : <p className="form-note">{t.developer} · {locale === "th" ? "ดูและแก้ไขข้อมูลโปรไฟล์ได้ แต่เพิ่ม/ถอนสิทธิ์ไม่ได้" : "Can inspect and update profile data, but cannot grant or revoke roles."}</p>}</> : <div className="empty-card compact-empty"><div><div className="empty-icon"><UserRound size={24} /></div><h2>{t.edit}</h2><p>{locale === "th" ? "เลือกผู้ใช้งานเพื่อดูหรือแก้ไขข้อมูล" : "Select a user to inspect or edit profile data."}</p></div></div>}
+        {selectedUser ? <><div className="form-section-title"><UserRound size={22} /><div><h2>{t.edit}</h2><p>{selectedUser.email || selectedUser.id}</p></div><button className="icon-button" type="button" onClick={() => { setSelectedId(null); setHistory(null); }} aria-label={t.cancel}><X size={16} /></button></div><form className="support-form" onSubmit={(event) => void saveProfile(event)}><div className="support-form-grid"><div className="form-group"><label htmlFor="user-name">{t.name}</label><input id="user-name" className="form-control" value={profileDraft.full_name} onChange={(event) => updateDraft("full_name", event.target.value)} /></div><div className="form-group"><label htmlFor="user-id">{t.studentId}</label><input id="user-id" className="form-control" value={profileDraft.university_id} onChange={(event) => updateDraft("university_id", event.target.value)} /></div><div className="form-group"><label htmlFor="user-faculty">{locale === "th" ? "คณะ" : "Faculty"}</label><input id="user-faculty" className="form-control" value={profileDraft.faculty} onChange={(event) => updateDraft("faculty", event.target.value)} /></div><div className="form-group"><label htmlFor="user-major">{locale === "th" ? "สาขา" : "Major"}</label><input id="user-major" className="form-control" value={profileDraft.major} onChange={(event) => updateDraft("major", event.target.value)} /></div><div className="form-group"><label htmlFor="user-department">{locale === "th" ? "หน่วยงาน" : "Department"}</label><input id="user-department" className="form-control" value={profileDraft.department} onChange={(event) => updateDraft("department", event.target.value)} /></div><div className="form-group"><label htmlFor="user-phone">{t.phone}</label><input id="user-phone" className="form-control" type="tel" value={profileDraft.phone} onChange={(event) => updateDraft("phone", event.target.value)} /></div></div><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{t.save}</button></form>{role === "admin" ? <div className="role-grant-box"><h3>{t.grantRole}</h3><div className="inline-actions"><select className="form-control" value={roleToGrant} onChange={(event) => setRoleToGrant(event.target.value as AppRole)} aria-label={t.role}><option value="admin">admin</option><option value="developer">developer</option><option value="staff">staff</option><option value="student">student</option><option value="personnel">personnel</option><option value="visitor">visitor</option></select><button className="secondary-button" type="button" onClick={() => void grantRole(selectedUser)} disabled={saving || selectedUser.roles.includes(roleToGrant)}>{t.grantRole}</button></div></div> : <p className="form-note">{t.developer} · {locale === "th" ? "ดูและแก้ไขข้อมูลโปรไฟล์ได้ แต่เพิ่ม/ถอนสิทธิ์ไม่ได้" : "Can inspect and update profile data, but cannot grant or revoke roles."}</p>}<AccountHistoryPanel locale={locale} history={history} loading={historyLoading} copy={t} /></> : <div className="empty-card compact-empty"><div><div className="empty-icon"><UserRound size={24} /></div><h2>{t.edit}</h2><p>{locale === "th" ? "เลือกผู้ใช้งานเพื่อดูหรือแก้ไขข้อมูล" : "Select a user to inspect or edit profile data."}</p></div></div>}
       </section>
     </div>
   </div>;
+}
+
+function AccountHistoryPanel({ locale, history, loading, copy }: { locale: Locale; history: AccountHistory | null; loading: boolean; copy: ReturnType<typeof getCopy> }) {
+  const total = history ? history.audits.length + history.bookings.length + history.sessions.length : 0;
+  return <section className="account-history" aria-label={copy.accountHistory}><div className="form-section-title"><History size={19} /><div><h3>{copy.accountHistory}</h3><p>{total} {locale === "th" ? "รายการจากระบบจริง" : "live system records"}</p></div></div>{loading ? <div className="inline-loading"><LoaderCircle size={16} className="spin" />Loading</div> : history && total ? <div className="history-list">{history.audits.slice(0, 8).map((item) => <div className="history-item" key={`audit-${item.id}`}><strong>{item.action}</strong><span>{item.entity_type || "—"} · {item.result || "—"} · {formatDate(item.created_at, locale)}</span></div>)}{history.bookings.slice(0, 8).map((item) => <div className="history-item" key={`booking-${item.id}`}><strong>{item.reference}</strong><span>{item.status} · {item.booking_date} · {formatDate(item.created_at, locale)}</span></div>)}{history.sessions.slice(0, 8).map((item) => <div className="history-item" key={`session-${item.id}`}><strong>{item.status}</strong><span>{item.check_in_at ? formatDate(item.check_in_at, locale) : "—"} → {item.check_out_at ? formatDate(item.check_out_at, locale) : "—"}</span></div>)}</div> : <p className="form-note">{copy.noHistory}</p>}</section>;
+}
+
+function formatDate(value: string, locale: Locale) {
+  return new Date(value).toLocaleString(locale === "th" ? "th-TH" : "en-US", { dateStyle: "medium", timeStyle: "short" });
 }

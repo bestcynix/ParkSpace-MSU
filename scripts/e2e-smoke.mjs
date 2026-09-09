@@ -6,7 +6,7 @@ const paths = [
   "/app", "/app/bookings", "/app/bookings/new", "/app/notifications", "/app/profile", "/app/profile/vehicles",
   "/admin/dashboard", "/admin/operations", "/admin/parking-areas", "/admin/bookings", "/admin/users", "/admin/analytics", "/admin/feedback", "/admin/audit-logs", "/admin/settings",
   "/staff/dashboard", "/staff/scan", "/staff/operations", "/staff/incidents",
-  "/developer/health", "/developer/database", "/developer/parking-areas", "/developer/users", "/developer/analytics", "/developer/traces", "/developer/errors", "/developer/feedback", "/developer/feature-flags",
+  "/developer/health", "/developer/database", "/developer/parking-areas", "/developer/users", "/developer/analytics", "/developer/audit-logs", "/developer/traces", "/developer/errors", "/developer/feedback", "/developer/feature-flags",
   "/parking/p01", "/parking/p01/slots", "/parking/p28", "/parking/p28/slots",
 ];
 
@@ -18,6 +18,7 @@ for (const locale of locales) {
     try {
       const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
       const body = await response.text();
+      const visibleBody = body.slice(body.indexOf("<body"), body.lastIndexOf("</body>"));
       if (!response.ok) failures.push(`${response.status} ${url}`);
       if (!body.includes("ParkSpace MSU")) failures.push(`missing brand ${url}`);
       if (!redirectOnlyPaths.has(path)) {
@@ -26,6 +27,17 @@ for (const locale of locales) {
         if (body.includes("Powered by นายพงศ์ภรณ์") || body.includes("Powered by Natthaphon")) failures.push(`visible powered-by credit ${url}`);
       }
       if (path === "/parking/p01/slots" && !body.includes("100")) failures.push(`missing mock layout marker ${url}`);
+      if (path === "/map") {
+        const mapMarkers = locale === "th" ? ["ทั้ง 28 พื้นที่", "Google Maps", "แผนภาพ 2D"] : ["All 28 areas", "Google Maps", "2D diagram"];
+        for (const marker of mapMarkers) if (!body.includes(marker)) failures.push(`missing map marker ${marker} ${url}`);
+      }
+      if (path === "" || path === "/login") {
+        const primaryTagline = locale === "th" ? "จองง่าย จอดสะดวก" : "Easy to Book, Easy to Park";
+        const secondaryTagline = locale === "th" ? "Easy to Book, Easy to Park" : "จองง่าย จอดสะดวก";
+        const primaryIndex = visibleBody.indexOf(primaryTagline);
+        const secondaryIndex = visibleBody.indexOf(secondaryTagline);
+        if (primaryIndex < 0 || secondaryIndex < 0 || primaryIndex > secondaryIndex) failures.push(`swapped bilingual tagline ${url}`);
+      }
       if (path === "/feedback" && !body.includes(locale === "th" ? "ศูนย์ความคิดเห็น" : "Feedback center")) failures.push(`missing feedback marker ${url}`);
       if (path === "/cookies") {
         const cookieMarker = locale === "th" ? ["นโยบายคุกกี้", "ตั้งค่าคุกกี้"] : ["Cookie policy", "Cookie settings"];

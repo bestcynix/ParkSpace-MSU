@@ -3,7 +3,7 @@ import { ArrowRight, Brain, Lightbulb, PencilRuler, Search, TestTube2, UserRound
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PageTopbar } from "@/components/layout/PageTopbar";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { getCopy, isLocale, type Locale } from "@/lib/i18n";
+import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
 import { projectInfo } from "@/lib/project-info";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -21,6 +21,7 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const t = getCopy(locale);
+  const tagline = getLocalizedTagline(locale);
 
   const steps = [
     [Brain, "Empathize", locale === "th" ? "เข้าใจผู้ใช้งาน" : "Understand users"],
@@ -41,7 +42,7 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
           <section className="hero" style={{ marginTop: 20 }}>
             <div className="hero-content">
               <p className="eyebrow">ParkSpace MSU</p>
-              <h1>{t.tagline}</h1>
+              <h1>{tagline.primary}</h1>
               <p>
                 {t.projectPurpose}
                 {locale === "th" ? <><br />Mahasarakham University</> : null}
@@ -64,7 +65,6 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
             </div>
             <div className="team-grid team-grid-single">
               <article className="team-card team-member-card">
-                <span className="team-number">1</span>
                 <div className="team-member-heading">
                   <span className="team-avatar" aria-hidden="true"><UserRound size={20} /></span>
                   <div>

@@ -39,6 +39,8 @@ export const copy = {
     officialMap: "ผังอ้างอิงจากประกาศ มมส.",
     mapApproximateCenter: "ดาวเทียมแสดงบริเวณศูนย์กลางเขตพื้นที่ขามเรียงโดยประมาณ พิกัดรายลานรอตรวจสอบ",
     mapAreaNote: "จุดหมายรายพื้นที่ใช้ชื่อค้นหาใน Google Maps จนกว่าพิกัดรายจุดจะผ่านการยืนยัน",
+    coordinateVerified: "พิกัดจุดนี้ผ่านการยืนยันแล้ว",
+    coordinateSearchFallback: "ยังไม่มีพิกัดยืนยัน จึงใช้การค้นหาชื่อสถานที่ใน Google Maps",
     selectedArea: "พื้นที่ที่เลือก",
     parking: "ลานจอดรถ",
     home: "หน้าหลัก",
@@ -304,11 +306,18 @@ export const copy = {
     description: "รายละเอียด",
     latitude: "ละติจูด",
     longitude: "ลองจิจูด",
+    mapPinVerificationNote: "ระบบจะใช้เป็นหมุดและเส้นทางจริงเมื่อบันทึกพิกัดและเปลี่ยนสถานะข้อมูลเป็น VERIFIED",
     sourceReference: "แหล่งอ้างอิง",
     dataStatus: "สถานะข้อมูล",
     capacitySource: "แหล่งที่มาความจุ",
     slotMode: "โหมดช่องจอด",
     manageUsers: "จัดการผู้ใช้งาน",
+    searchAccounts: "ค้นหาชื่อ อีเมล รหัสนิสิต คณะ สาขา หรือสิทธิ์",
+    accountHistory: "ประวัติการใช้งานบัญชี",
+    bookingHistory: "ประวัติการจอง",
+    sessionHistory: "ประวัติการเข้าใช้พื้นที่",
+    auditHistory: "ประวัติการทำรายการ",
+    noHistory: "ยังไม่มีประวัติรายการของบัญชีนี้",
     grantRole: "เพิ่มสิทธิ์",
     role: "สิทธิ์",
     noRecords: "ยังไม่มีข้อมูล",
@@ -382,6 +391,8 @@ export const copy = {
     officialMap: "Reference map from the MSU announcement",
     mapApproximateCenter: "Satellite view shows the approximate Kham Riang campus center; area coordinates await verification.",
     mapAreaNote: "Area destinations use Google Maps name search until each exact coordinate is verified.",
+    coordinateVerified: "This point has verified coordinates",
+    coordinateSearchFallback: "No verified coordinates yet; Google Maps place-name search is used",
     selectedArea: "Selected area",
     parking: "Parking",
     home: "Home",
@@ -647,11 +658,18 @@ export const copy = {
     description: "Description",
     latitude: "Latitude",
     longitude: "Longitude",
+    mapPinVerificationNote: "The system uses this as the real pin and route after coordinates are saved and the data status is VERIFIED.",
     sourceReference: "Source reference",
     dataStatus: "Data status",
     capacitySource: "Capacity source",
     slotMode: "Slot mode",
     manageUsers: "Manage users",
+    searchAccounts: "Search name, email, student ID, faculty, major, or role",
+    accountHistory: "Account activity history",
+    bookingHistory: "Booking history",
+    sessionHistory: "Parking session history",
+    auditHistory: "Audit activity",
+    noHistory: "No activity history for this account yet",
     grantRole: "Grant role",
     role: "Role",
     noRecords: "No records yet",
@@ -702,4 +720,16 @@ export type Copy = (typeof copy)[Locale];
 
 export function getCopy(locale: string): Copy {
   return copy[isLocale(locale) ? locale : "th"];
+}
+
+/**
+ * Keep the bilingual product tagline in a predictable locale-first order.
+ * The old `taglineEn` field is retained for compatibility with existing copy,
+ * but callers should use this helper so TH/EN labels cannot be swapped by
+ * changing one locale's translation independently.
+ */
+export function getLocalizedTagline(locale: Locale) {
+  return locale === "th"
+    ? { primary: copy.th.tagline, secondary: copy.th.taglineEn }
+    : { primary: copy.en.tagline, secondary: copy.en.taglineEn };
 }

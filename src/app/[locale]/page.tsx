@@ -6,7 +6,7 @@ import { PublicFooter } from "@/components/layout/PublicFooter";
 import { MockupNotice } from "@/components/parking/MockupNotice";
 import { ParkingCard } from "@/components/parking/ParkingCard";
 import { SearchCombobox } from "@/components/parking/SearchCombobox";
-import { getCopy, isLocale, type Locale } from "@/lib/i18n";
+import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
 import { parkingAreas } from "@/lib/parking/demo-data";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
@@ -22,6 +22,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const t = getCopy(locale);
+  const tagline = getLocalizedTagline(locale);
 
   return (
     <div className="app-frame">
@@ -31,8 +32,8 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
           <section className="hero">
             <div className="hero-content">
               <p className="eyebrow">Mahasarakham University</p>
-              <h1>{t.tagline}</h1>
-              <p>{t.taglineEn} · {t.selectDestination}</p>
+              <h1>{tagline.primary}</h1>
+              <p>{tagline.secondary} · {t.selectDestination}</p>
               <div className="hero-actions">
                 <a className="secondary-button" href={`/${locale}/parking`}>{t.parking}</a>
                 <a className="ghost-button" href={`/${locale}/login`}>{t.login}</a>

@@ -89,6 +89,20 @@ export function getAreaDetail(area: ParkingArea, locale: Locale) {
 }
 
 export function getGoogleMapsSearchUrl(area: ParkingArea) {
-  const query = `${area.code} ${area.th} ${area.en} มหาวิทยาลัยมหาสารคาม เขตพื้นที่ขามเรียง`;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(getGoogleMapsSearchQuery(area))}`;
+}
+
+export function getGoogleMapsSearchQuery(area: ParkingArea) {
+  // The official announcement does not publish a verified GPS point for each
+  // area. Keep the fallback query focused on the official Thai place name so
+  // Google Maps does not rank an arbitrary result from the P01/P02 code.
+  const query = `${area.th} มหาวิทยาลัยมหาสารคาม ตำบลขามเรียง อำเภอกันทรวิชัย จังหวัดมหาสารคาม`;
+  return query;
+}
+
+export function getGoogleMapsNavigationUrl(area: ParkingArea, coordinates?: { latitude: number; longitude: number } | null) {
+  if (coordinates && Number.isFinite(coordinates.latitude) && Number.isFinite(coordinates.longitude)) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${coordinates.latitude},${coordinates.longitude}`;
+  }
+  return getGoogleMapsSearchUrl(area);
 }
