@@ -1,0 +1,44 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { LoaderCircle, ShieldAlert } from "lucide-react";
+import type { Locale } from "@/lib/i18n";
+import { getCopy } from "@/lib/i18n";
+import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+
+type ProtectedRole = "staff" | "admin" | "developer";
+
+export function RoleGate({ locale, role, children }: { locale: Locale; role: ProtectedRole; children: React.ReactNode }) {
+  const t = getCopy(locale);
+  const [state, setState] = useState<"checking" | "allowed" | "blocked" | "setup">("checking");
+
+  useEffect(() => {
+    let mounted = true;
+    async function check() {
+      if (!isSupabaseConfigured()) {
+        if (mounted) setState("setup");
+        return;
+      }
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) {
+          if (mounted) setState("blocked");
+          return;
+        }
+        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userData.user.id).eq("role", role).maybeSingle();
+        if (mounted) setState(roleData ? "allowed" : "blocked");
+      } catch {
+        if (mounted) setState("blocked");
+      }
+    }
+    void check();
+    return () => { mounted = false; };
+  }, [role]);
+
+  if (state === "checking") return <div className="empty-card"><div><div className="empty-icon"><LoaderCircle size={26} /></div><h2>Loading · กำลังตรวจสอบ</h2><p>{t.setupRequired}</p></div></div>;
+  if (state === "setup") return <div className="empty-card"><div><div className="empty-icon"><ShieldAlert size={27} /></div><h2>{t.setupRequired}</h2><p>{t.accountNotConfigured} / {t.accountNotConfiguredEn}</p><Link className="primary-button" style={{ marginTop: 18 }} href={`/${locale}/login`}>{t.login}</Link></div></div>;
+  if (state === "blocked") return <div className="empty-card"><div><div className="empty-icon"><ShieldAlert size={27} /></div><h2>{t.accessDenied}</h2><p>{t.signInRequired}</p><Link className="primary-button" style={{ marginTop: 18 }} href={`/${locale}/login`}>{t.login}</Link></div></div>;
+  return <>{children}</>;
+}

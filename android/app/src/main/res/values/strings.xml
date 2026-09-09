@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ParkSpace MSU</string>
+    <string name="title_activity_main">ParkSpace MSU</string>
+    <string name="package_name">th.ac.msu.parkspace</string>
+    <string name="custom_url_scheme">th.ac.msu.parkspace</string>
+</resources>

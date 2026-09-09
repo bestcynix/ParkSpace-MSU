@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">ParkSpace MSU app icon</title>
+  <desc id="desc">Dark parking symbol with a yellow location accent</desc>
+  <rect width="192" height="192" rx="52" fill="#222c38"/>
+  <path d="M44 28h61c31 0 51 18 51 46s-20 46-51 46H73v37H44V28Zm29 26v40h30c15 0 24-8 24-20s-9-20-24-20H73Z" fill="#fff"/>
+  <path d="M137 28c15 0 27 12 27 27 0 23-27 52-27 52s-27-29-27-52c0-15 12-27 27-27Z" fill="#f8c928"/>
+  <circle cx="137" cy="55" r="9" fill="#222c38"/>
+  <path d="M132 111h10v20h-10z" fill="#f8c928"/>
+</svg>

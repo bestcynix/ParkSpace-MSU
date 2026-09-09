@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env*
+!.env.example
+coverage/
+dist/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+ios/App/Pods/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+*.log
