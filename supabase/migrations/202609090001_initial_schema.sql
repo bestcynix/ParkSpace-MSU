@@ -81,7 +81,7 @@ create table if not exists public.parking_slots (
   parking_area_id uuid not null references public.parking_areas(id) on delete cascade,
   slot_code text not null,
   row_label text not null default 'A',
-  position integer not null default 1 check (position > 0),
+  "position" integer not null default 1 check ("position" > 0),
   slot_type text not null default 'CAR',
   status text not null default 'AVAILABLE' check (status in ('AVAILABLE', 'RESERVED', 'OCCUPIED', 'CLOSED')),
   source_reference text,
@@ -89,7 +89,7 @@ create table if not exists public.parking_slots (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (parking_area_id, slot_code),
-  unique (parking_area_id, row_label, position)
+  unique (parking_area_id, row_label, "position")
 );
 
 create table if not exists public.staff_assignments (
@@ -433,7 +433,7 @@ returns table (
   id uuid,
   slot_code text,
   row_label text,
-  position integer,
+  "position" integer,
   slot_type text,
   operational_status text,
   availability text
@@ -447,7 +447,7 @@ as $$
     s.id,
     s.slot_code,
     s.row_label,
-    s.position,
+    s."position",
     s.slot_type,
     s.status as operational_status,
     case
@@ -470,7 +470,7 @@ as $$
     and a.data_status in ('AWAITING_VERIFICATION', 'VERIFIED')
     and s.data_status in ('MOCKUP', 'VERIFIED')
     and p_ends_at > p_starts_at
-  order by s.row_label, s.position, s.slot_code;
+  order by s.row_label, s."position", s.slot_code;
 $$;
 
 revoke all on function public.get_available_parking_slots(text, timestamptz, timestamptz) from public;

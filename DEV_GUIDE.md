@@ -7,7 +7,7 @@ Build one product named **ParkSpace MSU** for Mahasarakham University:
 - Web/PWA: responsive on phone, tablet, Windows, macOS, and Linux browsers.
 - Android/iOS: Capacitor projects in `android/` and `ios/`, sharing the built web UI and Supabase source of truth.
 - Language: every user-visible message has Thai and English translations. Use `/th/...` and `/en/...` routes.
-- Account owner supplied by the user: `bestcynix@gmail.com`. Never hard-code this account as Admin or Developer; assign roles explicitly in Supabase.
+- Account owner supplied by the user: `68011211206@msu.ac.th`. Never hard-code this account as Admin or Developer; assign roles explicitly in Supabase.
 
 ## Non-negotiable truth rules
 

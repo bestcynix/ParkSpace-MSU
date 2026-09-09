@@ -67,7 +67,7 @@ where public.parking_areas.data_status = 'AWAITING_VERIFICATION'
 -- Requested demo layout: 100 real database slot rows per area, grouped into
 -- rows A–G. The layout/capacity is Mockup, but bookings and time-based status
 -- are real records and are never reset by this seed.
-insert into public.parking_slots (parking_area_id, slot_code, row_label, position, slot_type, status, source_reference, data_status)
+insert into public.parking_slots (parking_area_id, slot_code, row_label, "position", slot_type, status, source_reference, data_status)
 select
   a.id,
   a.code || '-' || chr(65 + ((slot_number - 1) % 7)) || '-' || lpad((((slot_number - 1) / 7) + 1)::text, 2, '0'),
