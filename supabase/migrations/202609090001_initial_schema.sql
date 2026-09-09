@@ -126,7 +126,11 @@ create table if not exists public.bookings (
   cancellation_reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (ends_at > starts_at)
+  check (ends_at > starts_at),
+  check (
+    (booking_mode = 'AREA_ONLY' and parking_slot_id is null)
+    or (booking_mode = 'INDIVIDUAL_SLOT' and parking_slot_id is not null)
+  )
 );
 
 -- Individual slots can have only one active booking at a time window.
@@ -456,6 +460,7 @@ as $$
   where upper(a.code) = upper(p_area_code)
     and a.slot_mode = 'INDIVIDUAL_SLOT'
     and a.data_status = 'VERIFIED'
+    and s.data_status = 'VERIFIED'
     and p_ends_at > p_starts_at
   order by s.row_label, s.position, s.slot_code;
 $$;
@@ -505,7 +510,7 @@ create policy "users read own bookings" on public.bookings for select using (use
 create policy "users create own bookings" on public.bookings for insert with check (
   user_id = auth.uid()
   and (vehicle_id is null or exists (select 1 from public.vehicles v where v.id = vehicle_id and v.user_id = auth.uid()))
-  and (parking_slot_id is null or exists (select 1 from public.parking_slots s where s.id = parking_slot_id and s.parking_area_id = parking_area_id and s.data_status = 'VERIFIED' and s.status <> 'CLOSED'))
+  and (parking_slot_id is null or exists (select 1 from public.parking_slots s where s.id = public.bookings.parking_slot_id and s.parking_area_id = public.bookings.parking_area_id and s.data_status = 'VERIFIED' and s.status <> 'CLOSED'))
 );
 create policy "users update own pending bookings" on public.bookings for update using (user_id = auth.uid() and status in ('DRAFT', 'PENDING')) with check (user_id = auth.uid());
 create policy "staff read assigned bookings" on public.bookings for select using (public.is_assigned_to_area(parking_area_id) or public.has_role('admin') or public.has_role('developer'));

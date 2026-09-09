@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, Car, CircleAlert, Clock3, MapPin, RefreshCw } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
@@ -27,7 +27,8 @@ export function BookingsList({ locale }: { locale: Locale }) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadBookings() {
+  const loadBookings = useCallback(async () => {
+    const copy = getCopy(locale);
     if (!isSupabaseConfigured()) {
       setLoading(false);
       return;
@@ -36,7 +37,7 @@ export function BookingsList({ locale }: { locale: Locale }) {
       const supabase = createSupabaseBrowserClient();
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) {
-        setMessage(t.signInRequired);
+        setMessage(copy.signInRequired);
         return;
       }
       const { data, error } = await supabase.from("bookings").select("id, reference, booking_date, starts_at, ends_at, status, booking_mode, parking_area_id, parking_slot_id, vehicle_snapshot").order("created_at", { ascending: false });
@@ -45,15 +46,18 @@ export function BookingsList({ locale }: { locale: Locale }) {
       const { data: areas } = await supabase.from("parking_areas").select("id, code, name_th, name_en");
       setAreaNames(Object.fromEntries(((areas ?? []) as Array<{ id: string; code: string; name_th: string; name_en: string }>).map((area) => [area.id, { code: area.code, name: locale === "th" ? area.name_th : area.name_en }])));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      setMessage(error instanceof Error ? error.message : copy.operationalData);
     } finally {
       setLoading(false);
     }
-  }
+  }, [locale]);
 
   useEffect(() => {
-    void loadBookings();
-  }, []);
+    const timer = window.setTimeout(() => {
+      void loadBookings();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadBookings]);
 
   async function cancelBooking(booking: Booking) {
     if (!window.confirm(locale === "th" ? "ต้องการยกเลิกการจองนี้หรือไม่?" : "Cancel this booking?")) return;
