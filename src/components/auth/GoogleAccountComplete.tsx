@@ -27,13 +27,13 @@ export function GoogleAccountComplete({ locale, next }: { locale: Locale; next: 
         window.location.replace(`/${locale}/login?error=setup`);
         return;
       }
-      const { data } = await createSupabaseBrowserClient().auth.getUser();
-      if (!data.user) {
+      const { data } = await createSupabaseBrowserClient().auth.getSession();
+      if (!data.session) {
         window.location.replace(`/${locale}/login?error=oauth`);
         return;
       }
       if (active) {
-        setEmail(data.user.email ?? "");
+        setEmail(data.session.user.email ?? "");
         setLoading(false);
       }
     }

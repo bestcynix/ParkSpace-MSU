@@ -56,7 +56,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       setProfile(nextProfile);
       setDraft({ full_name: nextProfile.full_name ?? "", university_id: nextProfile.university_id ?? "", faculty: nextProfile.faculty ?? "", major: nextProfile.major ?? "", department: nextProfile.department ?? "", phone: nextProfile.phone ?? "" });
       setRoles(((roleResult.data ?? []) as Array<{ role: Role }>).map((item) => item.role));
-      setEmailVerified(Boolean(userData.user.email_confirmed_at) || Boolean(userData.user.identities?.some((identity) => identity.provider === "google")));
+      setEmailVerified(Boolean(userData.user.email_confirmed_at) || Boolean(userData.user.identities?.some((identity: { provider?: string }) => identity.provider === "google")));
       if (nextProfile.avatar_path) {
         const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(nextProfile.avatar_path, 3600);
         setAvatarUrl(signed?.signedUrl ?? "");

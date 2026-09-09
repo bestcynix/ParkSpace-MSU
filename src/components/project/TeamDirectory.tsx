@@ -67,7 +67,7 @@ function normalizeMembers(data: unknown): TeamMember[] {
   if (!Array.isArray(data)) return [];
 
   return data
-    .flatMap((item, index) => {
+    .flatMap((item: unknown, index: number) => {
       if (!item || typeof item !== "object") return [];
       const row = item as Record<string, unknown>;
       const id = nullableText(row.id);
@@ -178,8 +178,8 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
           .select("role")
           .eq("user_id", userData.user.id);
         const roleValues = (roles ?? [])
-          .map((item) => (item as { role?: unknown }).role)
-          .filter((role): role is EditorRole => role === "admin" || role === "developer");
+          .map((item: { role?: unknown }) => item.role)
+          .filter((role: unknown): role is EditorRole => role === "admin" || role === "developer");
         setEditorRole(roleValues.includes("admin") ? "admin" : roleValues.includes("developer") ? "developer" : null);
       }
     } catch {
