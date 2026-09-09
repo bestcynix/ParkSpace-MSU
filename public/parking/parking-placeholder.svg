@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Parking area placeholder</title>
+  <desc id="desc">A neutral parking symbol used until an area image is verified.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eef8f1"/>
+      <stop offset="1" stop-color="#b8d7c1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="560" rx="36" fill="url(#bg)"/>
+  <path d="M0 420h1200" stroke="#91b99e" stroke-width="8" opacity=".5"/>
+  <path d="M110 450 260 170h680l150 280" fill="none" stroke="#fff" stroke-width="18" opacity=".8"/>
+  <circle cx="600" cy="270" r="126" fill="#202c38"/>
+  <path d="M535 164h92c62 0 102 39 102 91s-40 91-102 91h-42v62h-50V164Zm50 49v84h39c34 0 55-15 55-42s-21-42-55-42h-39Z" fill="#fff"/>
+  <path d="M746 173c31 0 54 22 54 51 0 45-54 97-54 97s-54-52-54-97c0-29 23-51 54-51Z" fill="#f8c928"/>
+  <circle cx="746" cy="224" r="17" fill="#202c38"/>
+</svg>

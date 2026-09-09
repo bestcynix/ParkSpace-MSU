@@ -7,10 +7,17 @@ import { otherLocale, type Locale } from "@/lib/i18n";
 export function LanguageToggle({ locale }: { locale: Locale }) {
   const pathname = usePathname() ?? `/${locale}`;
   const searchParams = useSearchParams();
-  const queryString = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  const query = new URLSearchParams(searchParams.toString());
+  const localizedQuery = new URLSearchParams(query.toString());
+  const next = localizedQuery.get("next");
+  if (next) {
+    localizedQuery.set("next", next.replace(/^\/(th|en)(?=\/|$)/, `/${otherLocale(locale)}`));
+  }
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  const localizedQueryString = localizedQuery.toString() ? `?${localizedQuery.toString()}` : "";
   const nextPath = pathname.replace(/^\/(th|en)(?=\/|$)/, `/${otherLocale(locale)}`);
   const currentPath = `${pathname}${queryString}`;
-  const localizedNextPath = `${nextPath}${queryString}`;
+  const localizedNextPath = `${nextPath}${localizedQueryString}`;
 
   return (
     <nav className="language-toggle" aria-label="Language">

@@ -5,11 +5,15 @@ import { Check, Edit3, LoaderCircle, MapPinned, Plus, Save, Trash2 } from "lucid
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { SlotLayoutManager } from "@/components/admin/SlotLayoutManager";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type ManagerRole = "admin" | "developer";
 type AreaStatus = "DRAFT" | "AWAITING_VERIFICATION" | "VERIFIED" | "OUTDATED";
 type CapacitySource = "UNVERIFIED" | "MOCKUP" | "VERIFIED_SURVEY";
 type SlotMode = "AREA_ONLY" | "INDIVIDUAL_SLOT";
+type OperationalStatus = "AVAILABLE" | "CLOSED";
+type VehicleType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER";
 
 type AreaRow = {
   id: string;
@@ -27,6 +31,9 @@ type AreaRow = {
   slot_layout_source: CapacitySource;
   slot_layout_verified: boolean;
   current_status: string;
+  vehicle_types: unknown;
+  cover_image_path: string | null;
+  entrance_image_path: string | null;
   data_status: AreaStatus;
   source_reference: string | null;
 };
@@ -41,10 +48,16 @@ type AreaDraft = {
   capacity_source: CapacitySource;
   slot_mode: SlotMode;
   data_status: AreaStatus;
+  current_status: OperationalStatus;
+  vehicle_types: VehicleType[];
   latitude: string;
   longitude: string;
   source_reference: string;
+  cover_image_path: string;
+  entrance_image_path: string;
 };
+
+const supportedVehicleTypes: VehicleType[] = ["CAR", "MOTORCYCLE", "PICKUP", "VAN", "EV", "OTHER"];
 
 const emptyDraft: AreaDraft = {
   code: "",
@@ -56,9 +69,13 @@ const emptyDraft: AreaDraft = {
   capacity_source: "MOCKUP",
   slot_mode: "INDIVIDUAL_SLOT",
   data_status: "AWAITING_VERIFICATION",
+  current_status: "AVAILABLE",
+  vehicle_types: supportedVehicleTypes,
   latitude: "",
   longitude: "",
   source_reference: "https://building.msu.ac.th/news-detail.php?id=23",
+  cover_image_path: "",
+  entrance_image_path: "",
 };
 
 function draftFromArea(area: AreaRow): AreaDraft {
@@ -72,13 +89,17 @@ function draftFromArea(area: AreaRow): AreaDraft {
     capacity_source: area.capacity_source,
     slot_mode: area.slot_mode,
     data_status: area.data_status,
+    current_status: area.current_status === "CLOSED" ? "CLOSED" : "AVAILABLE",
+    vehicle_types: Array.isArray(area.vehicle_types) ? area.vehicle_types.filter((value): value is VehicleType => supportedVehicleTypes.includes(value as VehicleType)) : supportedVehicleTypes,
     latitude: area.latitude == null ? "" : String(area.latitude),
     longitude: area.longitude == null ? "" : String(area.longitude),
     source_reference: area.source_reference ?? "",
+    cover_image_path: area.cover_image_path ?? "",
+    entrance_image_path: area.entrance_image_path ?? "",
   };
 }
 
-const fields = "id, code, name_th, name_en, description_th, description_en, latitude, longitude, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, current_status, data_status, source_reference";
+const fields = "id, code, name_th, name_en, description_th, description_en, latitude, longitude, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, current_status, vehicle_types, cover_image_path, entrance_image_path, data_status, source_reference";
 
 export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRole }) {
   const t = getCopy(locale);
@@ -88,6 +109,8 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const selectedArea = editingId ? areas.find((area) => area.id === editingId) ?? null : null;
+  const { confirm, notify } = useNotifications();
 
   const loadAreas = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -115,6 +138,10 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
 
   function updateDraft<K extends keyof AreaDraft>(key: K, value: AreaDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function toggleVehicleType(value: VehicleType) {
+    setDraft((current) => ({ ...current, vehicle_types: current.vehicle_types.includes(value) ? current.vehicle_types.filter((item) => item !== value) : [...current.vehicle_types, value] }));
   }
 
   function startEdit(area: AreaRow) {
@@ -177,9 +204,13 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       capacity_source: draft.capacity_source,
       slot_mode: draft.slot_mode,
       data_status: draft.data_status,
+      current_status: draft.current_status,
+      vehicle_types: draft.vehicle_types,
       latitude: draft.latitude.trim() ? Number(draft.latitude) : null,
       longitude: draft.longitude.trim() ? Number(draft.longitude) : null,
       source_reference: draft.source_reference.trim() || null,
+      cover_image_path: draft.cover_image_path.trim() || null,
+      entrance_image_path: draft.entrance_image_path.trim() || null,
     };
     try {
       const supabase = createSupabaseBrowserClient();
@@ -204,7 +235,9 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   }
 
   async function deleteArea(area: AreaRow) {
-    if (role !== "admin" || !window.confirm(`${t.delete} ${area.code} · ${area.name_th}?`)) return;
+    if (role !== "admin") return;
+    const confirmed = await confirm({ title: t.confirmDelete, message: `${area.code} · ${area.name_th}`, confirmLabel: t.delete, cancelLabel: t.close, danger: true });
+    if (!confirmed) return;
     setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
@@ -214,8 +247,11 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       setAreas((current) => current.filter((item) => item.id !== area.id));
       if (editingId === area.id) startCreate();
       setMessage(t.delete);
+      notify({ title: t.delete, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.operationalData, message: detail, kind: "error" });
     }
   }
 
@@ -228,6 +264,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
         <div className="support-form-grid">
           <div className="form-group"><label htmlFor="area-code">{t.area} / Code</label><input id="area-code" className="form-control" value={draft.code} onChange={(event) => updateDraft("code", event.target.value)} placeholder="P01" required disabled={Boolean(editingId)} /></div>
           <div className="form-group"><label htmlFor="area-capacity">{t.estimatedCapacity}</label><input id="area-capacity" className="form-control" type="number" min="0" value={draft.capacity} onChange={(event) => updateDraft("capacity", event.target.value)} /></div>
+          <div className="form-group"><label htmlFor="area-operational-status">{t.areaOpen}</label><select id="area-operational-status" className="form-control" value={draft.current_status} onChange={(event) => updateDraft("current_status", event.target.value as OperationalStatus)}><option value="AVAILABLE">{t.enabled}</option><option value="CLOSED">{t.areaClosed}</option></select></div>
           <div className="form-group"><label htmlFor="area-name-th">{t.nameThai}</label><input id="area-name-th" className="form-control" value={draft.name_th} onChange={(event) => updateDraft("name_th", event.target.value)} required /></div>
           <div className="form-group"><label htmlFor="area-name-en">{t.nameEnglish}</label><input id="area-name-en" className="form-control" value={draft.name_en} onChange={(event) => updateDraft("name_en", event.target.value)} required /></div>
           <div className="form-group"><label htmlFor="area-source">{t.capacitySource}</label><select id="area-source" className="form-control" value={draft.capacity_source} onChange={(event) => updateDraft("capacity_source", event.target.value as CapacitySource)}><option value="UNVERIFIED">UNVERIFIED</option><option value="MOCKUP">MOCKUP</option><option value="VERIFIED_SURVEY">VERIFIED_SURVEY</option></select></div>
@@ -237,11 +274,14 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
           <div className="form-group"><label htmlFor="area-lon">{t.longitude}</label><input id="area-lon" className="form-control" type="number" step="any" value={draft.longitude} onChange={(event) => updateDraft("longitude", event.target.value)} /></div>
         </div>
         <div className="form-group"><label htmlFor="area-source-reference">{t.sourceReference}</label><input id="area-source-reference" className="form-control" type="url" value={draft.source_reference} onChange={(event) => updateDraft("source_reference", event.target.value)} /></div>
+        <div className="support-form-grid"><div className="form-group"><label htmlFor="area-cover-image">{t.imagePath}</label><input id="area-cover-image" className="form-control" type="url" placeholder="https://…" value={draft.cover_image_path} onChange={(event) => updateDraft("cover_image_path", event.target.value)} /><small className="field-hint">{t.placeholderImageNote}</small></div><div className="form-group"><label htmlFor="area-entrance-image">{t.imagePath} · Entrance</label><input id="area-entrance-image" className="form-control" type="url" placeholder="https://…" value={draft.entrance_image_path} onChange={(event) => updateDraft("entrance_image_path", event.target.value)} /></div></div>
+        <fieldset className="vehicle-type-fieldset"><legend>{t.allowedVehicleTypes}</legend><div className="vehicle-type-options">{supportedVehicleTypes.map((value) => <label key={value}><input type="checkbox" checked={draft.vehicle_types.includes(value)} onChange={() => toggleVehicleType(value)} /><span>{value === "CAR" ? t.car : value === "MOTORCYCLE" ? t.motorcycle : value === "PICKUP" ? t.pickup : value === "VAN" ? t.van : value === "EV" ? t.ev : t.otherVehicle}</span></label>)}</div></fieldset>
         <div className="support-form-grid"><div className="form-group"><label htmlFor="area-description-th">{t.description} · TH</label><textarea id="area-description-th" className="form-control" rows={4} value={draft.description_th} onChange={(event) => updateDraft("description_th", event.target.value)} /></div><div className="form-group"><label htmlFor="area-description-en">{t.description} · EN</label><textarea id="area-description-en" className="form-control" rows={4} value={draft.description_en} onChange={(event) => updateDraft("description_en", event.target.value)} /></div></div>
         <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving || role !== "admin" && !editingId}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
         {role === "developer" ? <p className="form-note">{t.developer} · {locale === "th" ? "ตรวจสอบและแก้ไขข้อมูลได้ แต่สร้างหรือลบพื้นที่ไม่ได้" : "Can inspect and update data, but cannot create or delete areas."}</p> : null}
       </form>
-      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.areas}</h2><p>{areas.length} · {t.realMetrics}</p></div><span className="data-badge">{t.noPrivateData}</span></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : areas.length ? <div className="data-list">{areas.map((area) => <article className="data-list-item" key={area.id}><div><strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong><small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small><small>{area.latitude ?? "—"}, {area.longitude ?? "—"}</small></div><div className="data-list-actions"><button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>{role === "admin" ? <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button> : <Check size={16} color="#2b9d65" />}</div></article>)}</div> : <div className="empty-card compact-empty"><div><MapPinned size={24} /><h2>{t.noRecords}</h2></div></div>}</section>
+      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.areas}</h2><p>{areas.length} · {t.realMetrics}</p></div><span className="data-badge">{t.noPrivateData}</span></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : areas.length ? <div className="data-list">{areas.map((area) => <article className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`} key={area.id}><div><strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong><small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small><small>{area.current_status === "CLOSED" ? t.areaClosed : t.areaOpen} · {Array.isArray(area.vehicle_types) ? area.vehicle_types.length : 0} {t.vehicleTypes}</small></div><div className="data-list-actions"><button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>{role === "admin" ? <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button> : <Check size={16} color="#2b9d65" />}</div></article>)}</div> : <div className="empty-card compact-empty"><div><MapPinned size={24} /><h2>{t.noRecords}</h2></div></div>}</section>
     </div>
+    <SlotLayoutManager locale={locale} role={role} areaId={selectedArea?.id ?? null} areaCode={selectedArea?.code ?? null} />
   </div>;
 }

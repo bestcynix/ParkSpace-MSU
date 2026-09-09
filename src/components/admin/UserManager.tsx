@@ -5,6 +5,7 @@ import { Edit3, LoaderCircle, Save, ShieldCheck, UserRound, UserRoundPlus, X } f
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type ManagerRole = "admin" | "developer";
 type AppRole = "admin" | "developer" | "staff" | "student" | "personnel" | "visitor";
@@ -37,6 +38,7 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const { confirm, notify } = useNotifications();
 
   const selectedUser = useMemo(() => users.find((user) => user.id === selectedId) ?? null, [selectedId, users]);
 
@@ -151,7 +153,8 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
       setMessage(locale === "th" ? "ต้องมี Admin อย่างน้อยหนึ่งบัญชี" : "At least one Admin account must remain.");
       return;
     }
-    if (!window.confirm(`${t.delete} ${revokedRole} · ${user.email ?? user.id}?`)) return;
+    const confirmed = await confirm({ title: t.confirmDelete, message: `${revokedRole} · ${user.email ?? user.id}`, confirmLabel: t.delete, cancelLabel: t.close, danger: true });
+    if (!confirmed) return;
     setSaving(true);
     setMessage("");
     try {
@@ -160,8 +163,11 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, roles: item.roles.filter((itemRole) => itemRole !== revokedRole) } : item));
       await audit("REVOKE_ROLE", user.id, { role: revokedRole });
       setMessage(t.delete);
+      notify({ title: t.delete, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.operationalData, message: detail, kind: "error" });
     } finally {
       setSaving(false);
     }

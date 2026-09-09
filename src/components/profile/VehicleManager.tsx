@@ -6,6 +6,7 @@ import { Car, Check, ChevronLeft, CircleAlert, Trash2 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type Vehicle = {
   id: string;
@@ -19,6 +20,8 @@ type Vehicle = {
   is_default: boolean;
 };
 
+type VehicleType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER";
+
 const emptyForm = { plate: "", province: "", vehicle_type: "CAR", brand: "", model: "", color: "", usage_type: "PERSONAL" as "PERSONAL" | "ONE_DAY" };
 
 export function VehicleManager({ locale }: { locale: Locale }) {
@@ -29,6 +32,7 @@ export function VehicleManager({ locale }: { locale: Locale }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const configured = isSupabaseConfigured();
+  const { confirm, notify } = useNotifications();
 
   useEffect(() => {
     let active = true;
@@ -95,8 +99,11 @@ export function VehicleManager({ locale }: { locale: Locale }) {
       if (error) throw error;
       setVehicles((current) => [data as Vehicle, ...(shouldBeDefault ? current.map((vehicle) => ({ ...vehicle, is_default: false })) : current)]);
       setForm(emptyForm);
+      notify({ title: t.saveVehicle, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.operationalData, message: detail, kind: "error" });
     } finally {
       setSaving(false);
     }
@@ -123,15 +130,20 @@ export function VehicleManager({ locale }: { locale: Locale }) {
   }
 
   async function deleteVehicle(vehicle: Vehicle) {
-    if (!configured || !window.confirm(locale === "th" ? "ต้องการลบรถคันนี้หรือไม่?" : "Delete this vehicle?")) return;
+    if (!configured) return;
+    const confirmed = await confirm({ title: t.deleteVehicle, message: locale === "th" ? `ต้องการลบรถ ${vehicle.plate} หรือไม่?` : `Delete vehicle ${vehicle.plate}?`, confirmLabel: t.delete, cancelLabel: t.close, danger: true });
+    if (!confirmed) return;
     setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.from("vehicles").delete().eq("id", vehicle.id);
       if (error) throw error;
       setVehicles((current) => current.filter((item) => item.id !== vehicle.id));
+      notify({ title: t.deleteVehicle, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.operationalData, message: detail, kind: "error" });
     }
   }
 
@@ -142,8 +154,19 @@ export function VehicleManager({ locale }: { locale: Locale }) {
       {configured && message && !vehicles.length && loading === false ? <div className="form-note" role="alert">{message}</div> : null}
       {configured && loading ? <div className="empty-card"><div><p>Loading · กำลังโหลด</p></div></div> : null}
       {configured && !loading && vehicles.length === 0 && !message ? <div className="empty-card"><div><div className="empty-icon"><Car size={27} /></div><h2>{t.noVehicles}</h2><p>{t.vehicleDataNote}</p></div></div> : null}
-      {configured && vehicles.length ? <div className="vehicle-list">{vehicles.map((vehicle) => <article className="vehicle-card" key={vehicle.id}><div className="vehicle-icon"><Car size={21} /></div><div className="vehicle-card-copy"><strong>{vehicle.plate}</strong><span>{[vehicle.brand, vehicle.model, vehicle.color, vehicle.province].filter(Boolean).join(" · ") || (locale === "th" ? "ยังไม่ได้กรอกรายละเอียด" : "No extra details")}</span><small>{vehicle.usage_type === "ONE_DAY" ? t.oneDayVehicle : t.personalVehicle}{vehicle.is_default ? ` · ${t.defaultVehicle}` : ""}</small></div><div className="vehicle-card-actions">{vehicle.is_default ? <span className="default-mark"><Check size={13} />{t.defaultVehicle}</span> : <button type="button" onClick={() => void makeDefault(vehicle)}>{t.setDefault}</button>}<button type="button" className="danger-button" onClick={() => void deleteVehicle(vehicle)} aria-label={`${t.deleteVehicle} ${vehicle.plate}`}><Trash2 size={15} /></button></div></article>)}</div> : null}
-      {configured ? <form className="form-card vehicle-form" onSubmit={saveVehicle}><div className="form-section-title"><Car size={18} /><div><h2>{t.addVehicleTitle}</h2><p>{t.vehicleDataNote}</p></div></div><div className="form-group"><label htmlFor="vehicle-plate">{t.vehiclePlate}</label><input className="form-control" id="vehicle-plate" value={form.plate} onChange={(event) => updateField("plate", event.target.value)} required /></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-province">{t.vehicleProvince}</label><input className="form-control" id="vehicle-province" value={form.province} onChange={(event) => updateField("province", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-type">{t.vehicleType}</label><select className="form-control" id="vehicle-type" value={form.vehicle_type} onChange={(event) => updateField("vehicle_type", event.target.value)}><option value="CAR">{t.car}</option><option value="MOTORCYCLE">{t.motorcycle}</option><option value="EV">{t.ev}</option></select></div></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-brand">{t.vehicleBrand}</label><input className="form-control" id="vehicle-brand" value={form.brand} onChange={(event) => updateField("brand", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-model">{t.vehicleModel}</label><input className="form-control" id="vehicle-model" value={form.model} onChange={(event) => updateField("model", event.target.value)} /></div></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-color">{t.vehicleColor}</label><input className="form-control" id="vehicle-color" value={form.color} onChange={(event) => updateField("color", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-usage">{locale === "th" ? "ลักษณะการใช้งาน" : "Usage"}</label><select className="form-control" id="vehicle-usage" value={form.usage_type} onChange={(event) => updateField("usage_type", event.target.value)}><option value="PERSONAL">{t.personalVehicle}</option><option value="ONE_DAY">{t.oneDayVehicle}</option></select></div></div>{message ? <div className="form-note" role="alert">{message}</div> : null}<button className="primary-button" type="submit" disabled={saving}>{saving ? "…" : t.saveVehicle}</button></form> : null}
+      {configured && vehicles.length ? <div className="vehicle-list">{vehicles.map((vehicle) => <article className="vehicle-card" key={vehicle.id}><div className="vehicle-icon"><Car size={21} /></div><div className="vehicle-card-copy"><strong>{vehicle.plate}</strong><span>{[vehicle.brand, vehicle.model, vehicle.color, vehicle.province].filter(Boolean).join(" · ") || (locale === "th" ? "ยังไม่ได้กรอกรายละเอียด" : "No extra details")}</span><small>{vehicleTypeLabel(t, vehicle.vehicle_type)} · {vehicle.usage_type === "ONE_DAY" ? t.oneDayVehicle : t.personalVehicle}{vehicle.is_default ? ` · ${t.defaultVehicle}` : ""}</small></div><div className="vehicle-card-actions">{vehicle.is_default ? <span className="default-mark"><Check size={13} />{t.defaultVehicle}</span> : <button type="button" onClick={() => void makeDefault(vehicle)}>{t.setDefault}</button>}<button type="button" className="danger-button" onClick={() => void deleteVehicle(vehicle)} aria-label={`${t.deleteVehicle} ${vehicle.plate}`}><Trash2 size={15} /></button></div></article>)}</div> : null}
+      {configured ? <form className="form-card vehicle-form" onSubmit={saveVehicle}><div className="form-section-title"><Car size={18} /><div><h2>{t.addVehicleTitle}</h2><p>{t.vehicleDataNote}</p></div></div><div className="form-group"><label htmlFor="vehicle-plate">{t.vehiclePlate}</label><input className="form-control" id="vehicle-plate" value={form.plate} onChange={(event) => updateField("plate", event.target.value)} required /></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-province">{t.vehicleProvince}</label><input className="form-control" id="vehicle-province" value={form.province} onChange={(event) => updateField("province", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-type">{t.vehicleType}</label><select className="form-control" id="vehicle-type" value={form.vehicle_type} onChange={(event) => updateField("vehicle_type", event.target.value)}><option value="CAR">{t.car}</option><option value="MOTORCYCLE">{t.motorcycle}</option><option value="PICKUP">{t.pickup}</option><option value="VAN">{t.van}</option><option value="EV">{t.ev}</option><option value="OTHER">{t.otherVehicle}</option></select></div></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-brand">{t.vehicleBrand}</label><input className="form-control" id="vehicle-brand" value={form.brand} onChange={(event) => updateField("brand", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-model">{t.vehicleModel}</label><input className="form-control" id="vehicle-model" value={form.model} onChange={(event) => updateField("model", event.target.value)} /></div></div><div className="vehicle-two-columns"><div className="form-group"><label htmlFor="vehicle-color">{t.vehicleColor}</label><input className="form-control" id="vehicle-color" value={form.color} onChange={(event) => updateField("color", event.target.value)} /></div><div className="form-group"><label htmlFor="vehicle-usage">{locale === "th" ? "ลักษณะการใช้งาน" : "Usage"}</label><select className="form-control" id="vehicle-usage" value={form.usage_type} onChange={(event) => updateField("usage_type", event.target.value)}><option value="PERSONAL">{t.personalVehicle}</option><option value="ONE_DAY">{t.oneDayVehicle}</option></select></div></div>{message ? <div className="form-note" role="alert">{message}</div> : null}<button className="primary-button" type="submit" disabled={saving}>{saving ? "…" : t.saveVehicle}</button></form> : null}
     </div>
   );
+}
+
+function vehicleTypeLabel(t: ReturnType<typeof getCopy>, value: string) {
+  switch (value) {
+    case "CAR": return t.car;
+    case "MOTORCYCLE": return t.motorcycle;
+    case "PICKUP": return t.pickup;
+    case "VAN": return t.van;
+    case "EV": return t.ev;
+    default: return t.otherVehicle;
+  }
 }

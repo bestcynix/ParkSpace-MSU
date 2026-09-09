@@ -11,6 +11,7 @@ const paths = [
 ];
 
 const failures = [];
+const redirectOnlyPaths = new Set(["/app", "/admin", "/staff", "/developer"]);
 for (const locale of locales) {
   for (const path of paths) {
     const url = `${baseUrl}/${locale}${path}`;
@@ -19,6 +20,11 @@ for (const locale of locales) {
       const body = await response.text();
       if (!response.ok) failures.push(`${response.status} ${url}`);
       if (!body.includes("ParkSpace MSU")) failures.push(`missing brand ${url}`);
+      if (!redirectOnlyPaths.has(path)) {
+        if (!body.includes("footer-copyright") || !body.includes("© 2026 MSU ParkSpace")) failures.push(`missing unified footer ${url}`);
+        if (!body.includes(`/${locale}/about-project`) || !body.includes(`/${locale}/team`) || !body.includes(`/${locale}/privacy`) || !body.includes(`/${locale}/terms`) || !body.includes(`/${locale}/help`) || !body.includes(`/${locale}/report-bug`) || !body.includes(`/${locale}/feedback`)) failures.push(`incomplete footer links ${url}`);
+        if (body.includes("Powered by นายพงศ์ภรณ์") || body.includes("Powered by Natthaphon")) failures.push(`visible powered-by credit ${url}`);
+      }
       if (path === "/parking/p01/slots" && !body.includes("100")) failures.push(`missing mock layout marker ${url}`);
       if (path === "/feedback" && !body.includes(locale === "th" ? "ศูนย์ความคิดเห็น" : "Feedback center")) failures.push(`missing feedback marker ${url}`);
       if (path === "/cookies") {
@@ -31,10 +37,19 @@ for (const locale of locales) {
   }
 }
 
+const callbackUrl = `${baseUrl}/auth/callback`;
+try {
+  const response = await fetch(callbackUrl, { signal: AbortSignal.timeout(10000) });
+  const body = await response.text();
+  if (!response.ok || !body.includes("ParkSpace MSU")) failures.push(`auth callback route ${response.status} ${callbackUrl}`);
+} catch (error) {
+  failures.push(`${callbackUrl} · ${error instanceof Error ? error.message : String(error)}`);
+}
+
 if (failures.length) {
   console.error(`E2E smoke failed (${failures.length})`);
   for (const failure of failures) console.error(`- ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log(`E2E smoke passed: ${locales.length * paths.length} localized routes checked at ${baseUrl}`);
+  console.log(`E2E smoke passed: ${locales.length * paths.length} localized routes + auth callback checked at ${baseUrl}`);
 }

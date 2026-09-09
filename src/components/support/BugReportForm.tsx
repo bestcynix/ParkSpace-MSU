@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { Bug, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type Severity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 
@@ -17,6 +17,7 @@ export function BugReportForm({ locale }: { locale: Locale }) {
   const [route, setRoute] = useState(() => typeof window === "undefined" ? "" : window.location.pathname);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [statusMessage, setStatusMessage] = useState("");
+  const { notify } = useNotifications();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,11 +43,13 @@ export function BugReportForm({ locale }: { locale: Locale }) {
       if (error) throw error;
       setStatus("sent");
       setStatusMessage(t.bugSent);
+      notify({ title: t.bugSent, kind: "success" });
       setSubject("");
       setMessage("");
     } catch (error) {
       setStatus("error");
       setStatusMessage(error instanceof Error ? error.message : t.operationalData);
+      notify({ title: t.reportBug, message: error instanceof Error ? error.message : t.operationalData, kind: "error" });
     }
   }
 
@@ -58,7 +61,7 @@ export function BugReportForm({ locale }: { locale: Locale }) {
       <div className="form-group"><label htmlFor="bug-message">{t.bugDescription}</label><textarea className="form-control" id="bug-message" rows={6} value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={5000} /></div>
       <p className="privacy-inline"><ShieldCheck size={14} />{t.noPrivateData}</p>
       {statusMessage ? <div className="form-note" role={status === "error" ? "alert" : "status"}>{statusMessage}</div> : null}
-      <div className="support-form-actions"><button className="primary-button" type="submit" disabled={status === "sending"}>{status === "sending" ? "…" : t.sendBug}</button><Link className="secondary-button" href={`/${locale}/feedback`}>{t.rateExperience}</Link></div>
+      <div className="support-form-actions"><button className="primary-button" type="submit" disabled={status === "sending"}>{status === "sending" ? "…" : t.sendBug}</button></div>
     </form>
   );
 }

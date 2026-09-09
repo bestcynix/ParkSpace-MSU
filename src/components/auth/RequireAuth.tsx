@@ -31,6 +31,6 @@ export function RequireAuth({ locale, target, children }: { locale: Locale; targ
     return () => { active = false; };
   }, [loginHref]);
 
-  if (!allowed) return <div className="empty-card auth-gate" role="status"><div><h2>{t.signInRequired}</h2><p>{t.accountNotConfigured} / {t.accountNotConfiguredEn}</p><Link className="primary-button" href={loginHref}>{t.login}</Link></div></div>;
+  if (!allowed) return <div className="empty-card auth-gate" role="status"><div><h2>{t.signInRequired}</h2><p>{isSupabaseConfigured() ? t.loginHint : `${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`}</p><Link className="primary-button" href={loginHref}>{t.login}</Link></div></div>;
   return <>{children}</>;
 }

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
-import { Bell } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { PageTopbar } from "@/components/layout/PageTopbar";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 import { getCopy, isLocale, type Locale } from "@/lib/i18n";
+import { RequireAuth } from "@/components/auth/RequireAuth";
+import { NotificationList } from "@/components/profile/NotificationList";
 
 export async function generateMetadata(): Promise<Metadata> { return { title: "Notifications" }; }
 
@@ -11,5 +13,5 @@ export default async function NotificationsPage({ params }: { params: Promise<{ 
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const t = getCopy(locale);
-  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.notifications} subtitle={t.operationalData} /><div className="empty-card"><div><div className="empty-icon"><Bell size={27} /></div><h2>{t.comingSoon}</h2><p>{t.operationalData}</p></div></div></div><BottomNav locale={locale} active="profile" /></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.notifications} subtitle={t.operationalData} /><RequireAuth locale={locale} target={`/${locale}/app/notifications`}><NotificationList locale={locale} /></RequireAuth><PublicFooter locale={locale} /></div><BottomNav locale={locale} active="profile" /></div>;
 }

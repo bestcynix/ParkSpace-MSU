@@ -8,6 +8,7 @@ import { getCopy } from "@/lib/i18n";
 import type { ParkingArea } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { QrPass } from "@/components/booking/QrPass";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type BookingVehicle = {
   id: string;
@@ -20,19 +21,23 @@ type BookingVehicle = {
   usage_type: "PERSONAL" | "ONE_DAY";
 };
 
-export function BookingForm({ locale, area, selectedSlot, initialDate, initialStartTime, initialEndTime }: { locale: Locale; area: ParkingArea; selectedSlot?: { id: string; code: string }; initialDate?: string; initialStartTime?: string; initialEndTime?: string }) {
+type VehicleType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER";
+
+export function BookingForm({ locale, area, selectedSlot, initialDate, initialStartTime, initialEndTime }: { locale: Locale; area: ParkingArea; selectedSlot?: { id: string; code: string; type?: string }; initialDate?: string; initialStartTime?: string; initialEndTime?: string }) {
   const t = getCopy(locale);
   const [date, setDate] = useState(initialDate ?? "");
   const [startTime, setStartTime] = useState(initialStartTime ?? "10:00");
   const [endTime, setEndTime] = useState(initialEndTime ?? "13:00");
   const [vehicle, setVehicle] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+  const [vehicleType, setVehicleType] = useState<VehicleType>("CAR");
   const [vehicles, setVehicles] = useState<BookingVehicle[]>([]);
   const [loadingVehicles, setLoadingVehicles] = useState(false);
   const [acceptRules, setAcceptRules] = useState(false);
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState<{ reference: string; qrPayload: string | null; expiresAt: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
+  const { notify } = useNotifications();
   const title = locale === "th" ? area.th : area.en;
 
   useEffect(() => {
@@ -53,6 +58,7 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         if (defaultVehicle) {
           setVehicleId(defaultVehicle.id);
           setVehicle(defaultVehicle.plate);
+          setVehicleType((defaultVehicle.vehicle_type as VehicleType) || "CAR");
         }
       } catch {
         if (active) setVehicles([]);
@@ -69,14 +75,17 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
     setMessage("");
     if (!acceptRules) {
       setMessage(t.parkingRules);
+      notify({ title: t.parkingRules, kind: "warning" });
       return;
     }
     if (endTime <= startTime) {
       setMessage(t.endTime);
+      notify({ title: t.endTime, kind: "warning" });
       return;
     }
     if (!isSupabaseConfigured()) {
-      setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
+      setMessage(t.accountNotConfigured);
+      notify({ title: t.accountNotConfigured, message: t.accountNotConfiguredEn, kind: "error", duration: 8000 });
       return;
     }
     setLoading(true);
@@ -85,14 +94,22 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
         setMessage(t.signInRequired);
+        notify({ title: t.signInRequired, kind: "warning" });
         return;
       }
       const { data: dbArea, error: areaError } = await supabase.from("parking_areas").select("id").eq("code", area.code).single();
       if (areaError || !dbArea) {
         setMessage(t.operationalData);
+        notify({ title: t.operationalData, kind: "error" });
         return;
       }
       const selectedVehicle = vehicles.find((item) => item.id === vehicleId);
+      const selectedVehicleType = (selectedVehicle?.vehicle_type as VehicleType | undefined) ?? vehicleType;
+      if (selectedSlot?.type && !["ANY", "OTHER"].includes(selectedSlot.type) && selectedSlot.type !== selectedVehicleType) {
+        setMessage(t.vehicleSlotMismatch);
+        notify({ title: t.vehicleSlotMismatch, message: `${t.slotType}: ${slotTypeLabel(locale, selectedSlot.type)}`, kind: "warning" });
+        return;
+      }
       const { data: booking, error } = await supabase.from("bookings").insert({
         user_id: userData.user.id,
         parking_area_id: dbArea.id,
@@ -101,17 +118,20 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         vehicle_id: selectedVehicle?.id ?? null,
         starts_at: `${date}T${startTime}:00+07:00`,
         ends_at: `${date}T${endTime}:00+07:00`,
-        vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, source: "MANUAL_ENTRY" },
+        vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, vehicle_type: selectedVehicleType, source: "MANUAL_ENTRY" },
         booking_mode: selectedSlot ? "INDIVIDUAL_SLOT" : area.slotMode,
         status: "PENDING",
       }).select("id, reference").single();
       if (error) throw error;
       if (!booking) throw new Error("Booking was not returned by Supabase.");
-      const { data: qrData } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
+      const { data: qrData, error: qrError } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
       const qrRow = (Array.isArray(qrData) ? qrData[0] : qrData) as { qr_payload?: string; expires_at?: string } | null;
       setSuccess({ reference: booking.reference, qrPayload: qrRow?.qr_payload ?? null, expiresAt: qrRow?.expires_at ?? null });
+      notify({ title: t.bookingSaved, message: qrError ? t.qrUnavailable : booking.reference, kind: qrError ? "warning" : "success", duration: 8000 });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Booking failed");
+      const detail = error instanceof Error ? error.message : t.bookingFailed;
+      setMessage(detail);
+      notify({ title: t.bookingFailed, message: detail, kind: "error", duration: 8000 });
     } finally {
       setLoading(false);
     }
@@ -128,11 +148,28 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       <p>{title} · {t.realDataNote}</p>
       <div className="form-group"><label htmlFor="date"><CalendarDays size={13} style={{ verticalAlign: "-2px" }} /> {t.selectDate}</label><input className="form-control" id="date" type="date" value={date} onChange={(event) => setDate(event.target.value)} required /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><div className="form-group"><label htmlFor="start"><Clock3 size={13} style={{ verticalAlign: "-2px" }} /> {t.startTime}</label><input className="form-control" id="start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required /></div><div className="form-group"><label htmlFor="end">{t.endTime}</label><input className="form-control" id="end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} required /></div></div>
-      <div className="form-group"><label htmlFor="vehicle-choice"><Car size={13} style={{ verticalAlign: "-2px" }} /> {t.chooseVehicle}</label>{isSupabaseConfigured() ? <select className="form-control" id="vehicle-choice" value={vehicleId} onChange={(event) => { const nextId = event.target.value; setVehicleId(nextId); const nextVehicle = vehicles.find((item) => item.id === nextId); setVehicle(nextVehicle?.plate ?? ""); }}><option value="">{loadingVehicles ? "…" : vehicles.length ? t.addVehicle : t.vehicleDataNote}</option>{vehicles.map((item) => <option value={item.id} key={item.id}>{item.plate}{item.province ? ` · ${item.province}` : ""}{item.usage_type === "ONE_DAY" ? ` · ${t.oneDayVehicle}` : ""}</option>)}</select> : null}<input className="form-control" id="vehicle" placeholder={t.vehiclePlate} value={vehicle} onChange={(event) => { const nextPlate = event.target.value; setVehicle(nextPlate); if (vehicles.find((item) => item.id === vehicleId)?.plate !== nextPlate) setVehicleId(""); }} required />{isSupabaseConfigured() ? <Link className="text-link" href={`/${locale}/app/profile/vehicles`}>{t.addVehicle}</Link> : null}</div>
+      <div className="form-group"><label htmlFor="vehicle-choice"><Car size={13} style={{ verticalAlign: "-2px" }} /> {t.chooseVehicle}</label>{isSupabaseConfigured() ? <select className="form-control" id="vehicle-choice" value={vehicleId} onChange={(event) => { const nextId = event.target.value; setVehicleId(nextId); const nextVehicle = vehicles.find((item) => item.id === nextId); setVehicle(nextVehicle?.plate ?? ""); setVehicleType((nextVehicle?.vehicle_type as VehicleType) || "CAR"); }}><option value="">{loadingVehicles ? "…" : vehicles.length ? t.addVehicle : t.vehicleDataNote}</option>{vehicles.map((item) => <option value={item.id} key={item.id}>{item.plate}{item.province ? ` · ${item.province}` : ""}{item.usage_type === "ONE_DAY" ? ` · ${t.oneDayVehicle}` : ""}</option>)}</select> : null}<input className="form-control" id="vehicle" placeholder={t.vehiclePlate} value={vehicle} onChange={(event) => { const nextPlate = event.target.value; setVehicle(nextPlate); if (vehicles.find((item) => item.id === vehicleId)?.plate !== nextPlate) setVehicleId(""); }} required /><label htmlFor="booking-vehicle-type">{t.vehicleType}</label><select className="form-control" id="booking-vehicle-type" value={selectedVehicleForType(vehicles, vehicleId)?.vehicle_type ?? vehicleType} onChange={(event) => { setVehicleId(""); setVehicleType(event.target.value as VehicleType); }}><option value="CAR">{t.car}</option><option value="MOTORCYCLE">{t.motorcycle}</option><option value="PICKUP">{t.pickup}</option><option value="VAN">{t.van}</option><option value="EV">{t.ev}</option><option value="OTHER">{t.otherVehicle}</option></select>{selectedSlot?.type ? <small className="field-hint">{t.slotType}: {slotTypeLabel(locale, selectedSlot.type)}</small> : null}{isSupabaseConfigured() ? <Link className="text-link" href={`/${locale}/app/profile/vehicles`}>{t.addVehicle}</Link> : null}</div>
       <label style={{ display: "flex", alignItems: "start", gap: 9, marginTop: 20, color: "#59636e", fontSize: 12, lineHeight: 1.5 }}><input type="checkbox" checked={acceptRules} onChange={(event) => setAcceptRules(event.target.checked)} required />{t.parkingRules}</label>
       {message ? <div className="form-note" role="alert">{message}</div> : null}
       <button className="primary-button" type="submit" disabled={loading}>{loading ? "…" : t.confirm}</button>
       <Link className="secondary-button" href={`/${locale}/parking/${area.id}`}>{t.back}</Link>
     </form>
   );
+}
+
+function selectedVehicleForType(vehicles: BookingVehicle[], vehicleId: string) {
+  return vehicles.find((vehicle) => vehicle.id === vehicleId);
+}
+
+function slotTypeLabel(locale: Locale, value: string) {
+  const t = getCopy(locale);
+  switch (value) {
+    case "CAR": return t.car;
+    case "MOTORCYCLE": return t.motorcycle;
+    case "PICKUP": return t.pickup;
+    case "VAN": return t.van;
+    case "EV": return t.ev;
+    case "ANY": return t.otherVehicle;
+    default: return t.otherVehicle;
+  }
 }

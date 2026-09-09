@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SystemConsoleNotice } from "@/components/layout/SystemConsoleNotice";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
@@ -33,7 +34,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body>{children}</body>
+      <body><SystemConsoleNotice />{children}</body>
     </html>
   );
 }

@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import { ProjectCredits } from "@/components/project/ProjectCredits";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "register" }) {
   const t = getCopy(locale);
@@ -17,6 +17,16 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const { notify } = useNotifications();
+  const notifiedError = useRef<string | null>(null);
+
+  useEffect(() => {
+    const error = new URLSearchParams(window.location.search).get("error");
+    if (!error || notifiedError.current === error) return;
+    notifiedError.current = error;
+    const title = error === "oauth" ? t.oauthFailed : `${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`;
+    notify({ title, kind: "error", duration: 8000 });
+  }, [notify, t.accountNotConfigured, t.accountNotConfiguredEn, t.oauthFailed]);
 
   function getNextPath() {
     if (typeof window === "undefined") return `/${locale}/app`;
@@ -34,14 +44,18 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
     setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
+      const authEmail = normalizeLoginIdentifier(email);
       const result = isLogin
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password, options: { data: { full_name: name, preferred_locale: locale } } });
+        ? await supabase.auth.signInWithPassword({ email: authEmail, password })
+        : await supabase.auth.signUp({ email: authEmail, password, options: { data: { full_name: name, preferred_locale: locale }, emailRedirectTo: `${window.location.origin}/${locale}/verify-email` } });
       if (result.error) throw result.error;
       setMessage(isLogin ? t.ready : t.verifyEmail);
+      notify({ title: isLogin ? t.accountConnected : t.verifyEmail, kind: "success" });
       if (isLogin) window.location.assign(getNextPath());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Authentication failed");
+      const detail = error instanceof Error ? error.message : "Authentication failed";
+      setMessage(detail);
+      notify({ title: isLogin ? t.oauthFailed : t.register, message: detail, kind: "error", duration: 8000 });
     } finally {
       setLoading(false);
     }
@@ -52,8 +66,15 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
       return;
     }
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}${getNextPath()}` } });
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(getNextPath())}` } });
+      if (error) throw error;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : t.oauthFailed;
+      setMessage(detail);
+      notify({ title: t.oauthFailed, message: detail, kind: "error", duration: 8000 });
+    }
   }
 
   return (
@@ -73,7 +94,13 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       <button className="primary-button" type="submit" disabled={loading}>{loading ? "…" : isLogin ? t.login : t.createAccount}</button>
       <button className="secondary-button" type="button" onClick={continueWithGoogle}>◉ &nbsp;{t.continueGoogle}</button>
       {isLogin ? <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, fontSize: 12 }}><Link className="text-link" href={`/${locale}/forgot-password`}>{t.forgotPassword}</Link><span>{t.noAccount} <Link className="text-link" href={`/${locale}/register`}>{t.createAccount}</Link></span></div> : <div style={{ marginTop: 16, textAlign: "center", fontSize: 12 }}>{t.login} <Link className="text-link" href={`/${locale}/login`}>{t.login}</Link></div>}
-      <ProjectCredits locale={locale} compact />
     </form>
   );
+}
+
+function normalizeLoginIdentifier(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (/^\d{11}$/.test(normalized)) return `${normalized}@msu.ac.th`;
+  if (normalized.endsWith("@msu.a.th")) return `${normalized.slice(0, -"@msu.a.th".length)}@msu.ac.th`;
+  return normalized;
 }

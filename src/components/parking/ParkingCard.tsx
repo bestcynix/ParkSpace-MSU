@@ -2,20 +2,18 @@ import Link from "next/link";
 import { ArrowRight, ExternalLink, MapPin } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { getAreaDetail, getAreaName, getGoogleMapsSearchUrl, officialMapImage, type ParkingArea } from "@/lib/parking/demo-data";
+import { getAreaDetail, getAreaName, getGoogleMapsSearchUrl, type ParkingArea } from "@/lib/parking/demo-data";
 import { LiveAreaStatus } from "@/components/parking/LiveAreaStatus";
+import { AreaImage } from "@/components/parking/AreaImage";
 
 export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Locale }) {
   const t = getCopy(locale);
   const slotLayoutHref = area.slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid ? `/${locale}/parking/${area.id}/slots` : `/${locale}/app/bookings/new?area=${area.id}`;
   const reserveLabel = area.slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid ? t.selectSlot : t.reserve;
+  const title = getAreaName(area, locale);
   return (
     <article className="parking-card">
-      <div className="parking-image">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={officialMapImage} alt={`${t.officialMap} · ${getAreaName(area, locale)}`} loading="lazy" />
-        <span className="image-label">{t.officialMap}</span>
-      </div>
+      <AreaImage areaCode={area.code} title={title} locale={locale} />
       <div className="parking-card-body">
         <div className="parking-card-top">
           <h3>

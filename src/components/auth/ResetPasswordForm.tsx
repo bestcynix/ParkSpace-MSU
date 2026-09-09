@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 export function ResetPasswordForm({ locale }: { locale: Locale }) {
   const t = getCopy(locale);
@@ -14,19 +15,23 @@ export function ResetPasswordForm({ locale }: { locale: Locale }) {
   const [message, setMessage] = useState("");
   const [updated, setUpdated] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { notify } = useNotifications();
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (password.length < 8) {
       setMessage(t.passwordMin);
+      notify({ title: t.passwordMin, kind: "warning" });
       return;
     }
     if (password !== confirmation) {
       setMessage(t.passwordMismatch);
+      notify({ title: t.passwordMismatch, kind: "warning" });
       return;
     }
     if (!isSupabaseConfigured()) {
-      setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
+      setMessage(t.accountNotConfigured);
+      notify({ title: t.accountNotConfigured, message: t.accountNotConfiguredEn, kind: "error", duration: 8000 });
       return;
     }
     setSaving(true);
@@ -38,8 +43,11 @@ export function ResetPasswordForm({ locale }: { locale: Locale }) {
       setMessage(t.passwordUpdated);
       setPassword("");
       setConfirmation("");
+      notify({ title: t.passwordUpdated, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.resetPasswordTitle, message: detail, kind: "error", duration: 8000 });
     } finally {
       setSaving(false);
     }

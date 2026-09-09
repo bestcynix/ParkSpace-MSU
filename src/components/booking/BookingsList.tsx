@@ -7,6 +7,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { QrPass } from "@/components/booking/QrPass";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type Booking = {
   id: string;
@@ -31,6 +32,7 @@ export function BookingsList({ locale }: { locale: Locale }) {
   const [loading, setLoading] = useState(true);
   const [qrLoadingId, setQrLoadingId] = useState("");
   const [qrPass, setQrPass] = useState<{ bookingId: string; reference: string; payload: string | null; expiresAt: string | null } | null>(null);
+  const { confirm, notify } = useNotifications();
 
   const loadBookings = useCallback(async () => {
     const copy = getCopy(locale);
@@ -78,14 +80,18 @@ export function BookingsList({ locale }: { locale: Locale }) {
   }
 
   async function cancelBooking(booking: Booking) {
-    if (!window.confirm(locale === "th" ? "ต้องการยกเลิกการจองนี้หรือไม่?" : "Cancel this booking?")) return;
+    const confirmed = await confirm({ title: t.cancel, message: locale === "th" ? `ต้องการยกเลิกการจอง ${booking.reference} หรือไม่?` : `Cancel booking ${booking.reference}?`, confirmLabel: t.confirm, cancelLabel: t.close, danger: true });
+    if (!confirmed) return;
     try {
       const { error } = await createSupabaseBrowserClient().from("bookings").update({ status: "CANCELLED", cancellation_reason: "USER_REQUEST" }).eq("id", booking.id).eq("status", "PENDING");
       if (error) throw error;
       setBookings((current) => current.map((item) => item.id === booking.id ? { ...item, status: "CANCELLED" } : item));
       if (qrPass?.bookingId === booking.id) setQrPass(null);
+      notify({ title: t.cancel, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      const detail = error instanceof Error ? error.message : t.operationalData;
+      setMessage(detail);
+      notify({ title: t.operationalData, message: detail, kind: "error" });
     }
   }
 

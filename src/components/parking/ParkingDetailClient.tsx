@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Building2, Clock3, ExternalLink, MapPin, Navigation, ParkingSquare, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, Clock3, ExternalLink, Navigation, ParkingSquare, ShieldCheck } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { getGoogleMapsSearchUrl, officialMapImage, officialSource, parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
+import { getGoogleMapsSearchUrl, officialSource, parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
 import { MockupNotice } from "@/components/parking/MockupNotice";
 import { InteractiveCampusMap } from "@/components/map/InteractiveCampusMap";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { LiveAreaStatus } from "@/components/parking/LiveAreaStatus";
+import { AreaImage } from "@/components/parking/AreaImage";
+import { CapacitySummary } from "@/components/parking/CapacitySummary";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 
 export function ParkingDetailClient({ locale, area }: { locale: Locale; area: ParkingArea }) {
   const t = getCopy(locale);
@@ -38,11 +41,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
     <div className="app-frame">
       <div className="mobile-page page-wrap">
         <div className="page-topbar"><Link className="back-button" href={`/${locale}/parking`} aria-label={t.back}><ArrowLeft size={18} /></Link><div><h1>{t.details}</h1><p>{area.code} · {title}</p></div></div>
-        <div className="detail-image">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={officialMapImage} alt={`${t.officialMap} · ${title}`} />
-          <span className="image-label"><MapPin size={13} />{t.officialMap}</span>
-        </div>
+        <AreaImage areaCode={area.code} title={title} locale={locale} className="detail-image" loading="eager" />
         <main className="detail-content">
           <div className="detail-title-row"><div><h1>{title}<span>{locale === "th" ? area.en : area.th}</span></h1></div><LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} /></div>
           <div className="inline-actions" style={{ marginTop: 13 }}><span className="data-badge"><ShieldCheck size={12} /> {t.officialMap}</span><span className="mockup-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span></div>
@@ -56,10 +55,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
             {([["overview", t.overview], ["map", t.map], ["photos", t.photos], ["details", t.detailsTab]] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)} role="tab" aria-selected={tab === key}>{label}</button>)}
           </div>
           {tab === "map" ? <InteractiveCampusMap locale={locale} areas={parkingAreas} selectedAreaCode={area.code} showAreaPicker={false} /> : null}
-          {tab === "photos" ? <div className="detail-photo-card"><div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={officialMapImage} alt={`${t.officialMap} · ${title}`} />
-          </div><div><strong>{t.officialMap}</strong><p>{t.realDataNote}</p><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource} <ExternalLink size={13} /></a></div></div> : null}
+          {tab === "photos" ? <div className="detail-photo-card"><AreaImage areaCode={area.code} title={title} locale={locale} className="detail-photo-image" /><div><strong>{t.customImage}</strong><p>{t.placeholderImageNote}</p><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.officialMap} · {t.realSource} <ExternalLink size={13} /></a></div></div> : null}
           {tab === "overview" ? <>
             <p className="page-subtitle" style={{ marginTop: 18 }}>{detail}</p>
             <ul className="detail-list">
@@ -69,10 +65,11 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
             </ul>
           </> : null}
           {tab === "details" ? <div className="info-card" style={{ padding: 18, marginTop: 18 }}><strong>{t.rules}</strong><p className="page-subtitle">{t.operationalData}</p></div> : null}
+          {tab === "overview" ? <CapacitySummary areaCode={area.code} locale={locale} /> : null}
           <div className="sticky-action"><a className="secondary-button" href={getGoogleMapsSearchUrl(area)} target="_blank" rel="noreferrer"><Navigation size={16} />{t.navigate}</a><Link className="primary-button" href={bookingHref}>{bookingLabel}</Link></div>
         </main>
       </div>
-      <div className="page-wrap"><div className="footer-note">{t.noPrivateData}</div></div>
+      <div className="page-wrap"><PublicFooter locale={locale} /></div>
     </div>
   );
 }

@@ -6,8 +6,9 @@ import { PublicFooter } from "@/components/layout/PublicFooter";
 import { BugReportForm } from "@/components/support/BugReportForm";
 import { getCopy, isLocale, type Locale } from "@/lib/i18n";
 
-export async function generateMetadata(): Promise<Metadata> {
-  return { title: "Report a system bug", robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
+  const { locale } = await params;
+  return { title: locale === "th" ? "แจ้งบักระบบ" : "Report a system bug", robots: { index: false, follow: false } };
 }
 
 export default async function ReportBugPage({ params }: { params: Promise<{ locale: string }> }) {

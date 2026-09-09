@@ -3,6 +3,7 @@ import { Activity, BarChart3, ClipboardList, Database, FileText, LayoutDashboard
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 
 export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff" | "developer"; children: React.ReactNode }) {
   const t = getCopy(locale);
@@ -45,7 +46,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
           })}
         </nav>
       </aside>
-      <main className="admin-main">{children}</main>
+      <main className="admin-main">{children}<PublicFooter locale={locale} /></main>
     </div>
   );
 }

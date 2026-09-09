@@ -34,7 +34,7 @@ with official_areas(area_number, name_th, name_en) as (
     (27, 'พื้นที่โซนหลังคณะเทคโนโลยี', 'Behind the Faculty of Technology'),
     (28, 'พื้นที่สนามจอดอาคารปฏิบัติการวิศวกรรมศาสตร์', 'Engineering Practice Building Parking Area')
 )
-insert into public.parking_areas (code, name_th, name_en, description_th, description_en, data_status, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, source_reference)
+insert into public.parking_areas (code, name_th, name_en, description_th, description_en, data_status, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, vehicle_types, source_reference)
 select
   'P' || lpad(area_number::text, 2, '0'),
   name_th,
@@ -48,6 +48,7 @@ select
   'INDIVIDUAL_SLOT',
   'MOCKUP',
   false,
+  '["CAR", "MOTORCYCLE", "PICKUP", "VAN", "EV", "OTHER"]'::jsonb,
   'https://building.msu.ac.th/news-detail.php?id=23'
 from official_areas
 on conflict (code) do update set
@@ -64,21 +65,39 @@ on conflict (code) do update set
 where public.parking_areas.data_status = 'AWAITING_VERIFICATION'
   and public.parking_areas.verified_at is null;
 
+insert into public.parking_rows (parking_area_id, row_label, display_order, status, slot_type, allowed_vehicle_types, data_status, source_reference)
+select a.id, layout.row_label, layout.display_order, 'AVAILABLE', layout.slot_type, layout.allowed_vehicle_types, 'MOCKUP', 'MOCKUP_LAYOUT:' || coalesce(a.source_reference, 'MSU')
+from public.parking_areas a
+cross join (values
+  ('A', 1, 'CAR', '["CAR"]'::jsonb),
+  ('B', 2, 'CAR', '["CAR"]'::jsonb),
+  ('C', 3, 'MOTORCYCLE', '["MOTORCYCLE"]'::jsonb),
+  ('D', 4, 'PICKUP', '["PICKUP"]'::jsonb),
+  ('E', 5, 'EV', '["EV"]'::jsonb),
+  ('F', 6, 'VAN', '["VAN"]'::jsonb),
+  ('G', 7, 'OTHER', '["OTHER"]'::jsonb)
+) as layout(row_label, display_order, slot_type, allowed_vehicle_types)
+on conflict (parking_area_id, row_label) do nothing;
+
 -- Requested demo layout: 100 real database slot rows per area, grouped into
 -- rows A–G. The layout/capacity is Mockup, but bookings and time-based status
 -- are real records and are never reset by this seed.
-insert into public.parking_slots (parking_area_id, slot_code, row_label, "position", slot_type, status, source_reference, data_status)
+insert into public.parking_slots (parking_area_id, row_id, slot_code, row_label, "position", slot_type, status, source_reference, data_status)
 select
   a.id,
+  r.id,
   a.code || '-' || chr(65 + ((slot_number - 1) % 7)) || '-' || lpad((((slot_number - 1) / 7) + 1)::text, 2, '0'),
   chr(65 + ((slot_number - 1) % 7)),
   ((slot_number - 1) / 7) + 1,
-  'CAR',
+  r.slot_type,
   'AVAILABLE',
   'MOCKUP_LAYOUT:' || a.source_reference,
   'MOCKUP'
 from public.parking_areas a
 cross join generate_series(1, 100) as generated(slot_number)
+join public.parking_rows r
+  on r.parking_area_id = a.id
+ and r.row_label = chr(65 + ((slot_number - 1) % 7))
 where a.data_status = 'AWAITING_VERIFICATION'
   and a.slot_layout_verified = false
 on conflict (parking_area_id, slot_code) do nothing;

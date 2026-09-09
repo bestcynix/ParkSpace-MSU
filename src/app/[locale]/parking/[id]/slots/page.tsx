@@ -5,6 +5,7 @@ import { PageTopbar } from "@/components/layout/PageTopbar";
 import { SlotSelector } from "@/components/parking/SlotSelector";
 import { getAreaName, getParkingArea } from "@/lib/parking/demo-data";
 import { getCopy, isLocale, type Locale } from "@/lib/i18n";
+import { PublicFooter } from "@/components/layout/PublicFooter";
 
 export function generateStaticParams() {
   return Array.from({ length: 28 }, (_, index) => ({ id: `p${String(index + 1).padStart(2, "0")}` }));
@@ -22,5 +23,5 @@ export default async function SlotSelectionPage({ params }: { params: Promise<{ 
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const area = getParkingArea(id);
   const t = getCopy(locale);
-  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.selectSlot} subtitle={`${area.code} · ${getAreaName(area, locale)}`} /><SlotSelector locale={locale} area={area} /></div><BottomNav locale={locale} active="parking" /></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.selectSlot} subtitle={`${area.code} · ${getAreaName(area, locale)}`} /><SlotSelector locale={locale} area={area} /><PublicFooter locale={locale} /></div><BottomNav locale={locale} active="parking" /></div>;
 }
