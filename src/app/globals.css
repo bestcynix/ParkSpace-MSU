@@ -2243,6 +2243,7 @@ button.role-chip:disabled {
 .vehicle-card {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--line);
@@ -2325,6 +2326,61 @@ button.role-chip:disabled {
   padding: 0;
   background: var(--red-soft);
   color: var(--red);
+}
+
+.vehicle-card-actions button svg,
+.vehicle-form-actions button svg {
+  flex: 0 0 auto;
+}
+
+.vehicle-card-actions .is-rotated {
+  transform: rotate(180deg);
+}
+
+.vehicle-details {
+  width: 100%;
+  margin-top: 4px;
+  padding: 14px 0 0 54px;
+  border-top: 1px solid var(--line);
+}
+
+.vehicle-details > strong {
+  display: block;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.vehicle-details dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 10px 0 0;
+}
+
+.vehicle-details dl div {
+  display: grid;
+  gap: 2px;
+}
+
+.vehicle-details dt {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.vehicle-details dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.vehicle-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.vehicle-form-actions > * {
+  flex: 1;
 }
 
 .vehicle-form {
@@ -2698,6 +2754,56 @@ button.role-chip:disabled {
 .support-page > .support-form {
   width: min(100%, 560px);
   margin-inline: auto;
+}
+
+.google-account-complete-card {
+  width: min(100%, 560px);
+  margin: 26px auto;
+}
+
+.password-control {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fbfbfc;
+  color: #89919b;
+}
+
+.password-control:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 4px rgba(248, 201, 40, 0.15);
+}
+
+.password-control .form-control {
+  min-height: 44px;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.password-toggle {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: #f0f2f4;
+  color: #69737d;
+  cursor: pointer;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  background: var(--gold-soft);
+  color: #806400;
 }
 
 .support-page-grid {
@@ -3399,19 +3505,33 @@ button.role-chip:disabled {
 .profile-avatar-image { display: block; width: 68px; height: 68px; border-radius: 22px; object-fit: cover; }
 .avatar-upload-button { position: absolute; right: -6px; bottom: -6px; display: grid; width: 28px; height: 28px; place-items: center; border: 3px solid var(--surface); border-radius: 50%; background: var(--gold); color: #5e4b00; cursor: pointer; }
 .avatar-upload-button input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.profile-avatar-actions { position: absolute; right: -8px; bottom: -8px; display: flex; gap: 4px; }
+.profile-avatar-actions .avatar-upload-button { position: relative; right: auto; bottom: auto; }
+.avatar-upload-button.is-disabled { cursor: not-allowed; opacity: .55; }
+.avatar-remove-button { display: grid; width: 28px; height: 28px; place-items: center; border: 3px solid var(--surface); border-radius: 50%; background: var(--red-soft); color: var(--red); cursor: pointer; }
 .profile-hero-copy { display: grid; min-width: 0; gap: 5px; }
 .profile-hero-copy > strong { font-size: 18px; }
 .profile-hero-copy > span { color: var(--muted); font-size: 11px; }
+.profile-hero-title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.profile-edit-button { min-height: 34px; padding: 0 11px; font-size: 10px; }
 .verification-status { display: inline-flex; align-items: center; gap: 5px; width: fit-content; font-size: 10px !important; font-weight: 800; }
 .verification-status.verified { color: var(--green); }
 .verification-status.pending { color: var(--amber); }
 .verification-button { width: fit-content; padding: 0; border: 0; background: none; }
 .profile-overview-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); align-items: start; gap: 16px; }
 .profile-editor-card { width: 100%; max-width: none; margin: 0; }
+.profile-editor-card:not(.is-editing) .form-control { background: #f2f4f6; color: #59636e; cursor: not-allowed; }
+.profile-form-edit { width: 100%; margin-top: 18px; }
+.profile-form-actions { display: flex; gap: 8px; margin-top: 18px; }
+.profile-form-actions > * { flex: 1; }
 .profile-two-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .profile-security-stack { display: grid; gap: 16px; }
 .profile-actions-card { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); box-shadow: var(--shadow-card); }
 .profile-actions-card .secondary-button { width: 100%; }
+.role-console-button { border-color: #d9c56a; background: #fffaf0; }
+.role-console-button.developer-console { border-color: #b9d2e8; background: #eef7ff; color: #356b94; }
+.role-console-button.admin-console { border-color: #f1d581; background: #fff5c9; color: #826500; }
+.role-console-button.staff-console { border-color: #bde3ce; background: var(--green-soft); color: #258552; }
 
 .notification-list { display: grid; gap: 10px; margin-top: 20px; }
 .notification-card { display: flex; align-items: start; gap: 11px; padding: 14px; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); box-shadow: var(--shadow-card); }
@@ -3548,16 +3668,47 @@ button.role-chip:disabled {
   .vehicle-card-actions {
     flex-direction: column;
     align-items: stretch;
+    width: 100%;
+  }
+
+  .vehicle-card-actions button,
+  .vehicle-card-actions .default-mark {
+    justify-content: center;
+  }
+
+  .vehicle-details {
+    padding-left: 0;
+  }
+
+  .vehicle-details dl {
+    grid-template-columns: 1fr;
   }
 
   .vehicle-two-columns {
     grid-template-columns: 1fr;
   }
 
+  .vehicle-form-actions {
+    flex-direction: column;
+  }
+
   .support-page-grid,
   .support-form-grid,
   .profile-two-columns {
     grid-template-columns: 1fr;
+  }
+
+  .profile-hero-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-edit-button {
+    width: 100%;
+  }
+
+  .profile-form-actions {
+    flex-direction: column-reverse;
   }
 
   .notification-stack {
