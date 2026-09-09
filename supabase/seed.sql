@@ -1,6 +1,8 @@
 -- Official area labels from the MSU Building and Grounds Division announcement.
--- Capacity, coordinates, photos, slot labels, and live availability remain
--- unverified until supplied and approved by MSU.
+-- The only intentional mockup values are the capacity/layout: every area gets
+-- 100 database-backed demo slots in rows A–G so the booking flow can be tested.
+-- Area names are official-source labels; coordinates, photos, and operational
+-- availability remain unverified until supplied and approved by MSU.
 with official_areas(area_number, name_th, name_en) as (
   values
     (1, 'พื้นที่โซนโรงเรียนสาธิต (ฝ่ายมัธยม)', 'Demonstration School Zone (Secondary Division)'),
@@ -32,7 +34,7 @@ with official_areas(area_number, name_th, name_en) as (
     (27, 'พื้นที่โซนหลังคณะเทคโนโลยี', 'Behind the Faculty of Technology'),
     (28, 'พื้นที่สนามจอดอาคารปฏิบัติการวิศวกรรมศาสตร์', 'Engineering Practice Building Parking Area')
 )
-insert into public.parking_areas (code, name_th, name_en, description_th, description_en, data_status, capacity_source, capacity_verified, slot_mode, source_reference)
+insert into public.parking_areas (code, name_th, name_en, description_th, description_en, data_status, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, source_reference)
 select
   'P' || lpad(area_number::text, 2, '0'),
   name_th,
@@ -40,9 +42,12 @@ select
   'ชื่อพื้นที่อ้างอิงจากประกาศกองอาคารสถานที่ มมส. พิกัด รูปภาพ ความจุ และสถานะช่องจอดรอตรวจสอบ',
   'Area name is sourced from the MSU announcement. Coordinates, photos, capacity, and slot status await verification.',
   'AWAITING_VERIFICATION',
-  'UNVERIFIED',
+  100,
+  'MOCKUP',
   false,
-  'AREA_ONLY',
+  'INDIVIDUAL_SLOT',
+  'MOCKUP',
+  false,
   'https://building.msu.ac.th/news-detail.php?id=23'
 from official_areas
 on conflict (code) do update set
@@ -50,7 +55,30 @@ on conflict (code) do update set
   name_en = excluded.name_en,
   description_th = excluded.description_th,
   description_en = excluded.description_en,
+  capacity = case when public.parking_areas.capacity_verified = false and public.parking_areas.data_status = 'AWAITING_VERIFICATION' then excluded.capacity else public.parking_areas.capacity end,
+  capacity_source = case when public.parking_areas.capacity_verified = false and public.parking_areas.data_status = 'AWAITING_VERIFICATION' then excluded.capacity_source else public.parking_areas.capacity_source end,
+  slot_mode = case when public.parking_areas.slot_layout_verified = false and public.parking_areas.data_status = 'AWAITING_VERIFICATION' then excluded.slot_mode else public.parking_areas.slot_mode end,
+  slot_layout_source = case when public.parking_areas.slot_layout_verified = false and public.parking_areas.data_status = 'AWAITING_VERIFICATION' then excluded.slot_layout_source else public.parking_areas.slot_layout_source end,
   source_reference = excluded.source_reference,
   updated_at = now()
 where public.parking_areas.data_status = 'AWAITING_VERIFICATION'
   and public.parking_areas.verified_at is null;
+
+-- Requested demo layout: 100 real database slot rows per area, grouped into
+-- rows A–G. The layout/capacity is Mockup, but bookings and time-based status
+-- are real records and are never reset by this seed.
+insert into public.parking_slots (parking_area_id, slot_code, row_label, position, slot_type, status, source_reference, data_status)
+select
+  a.id,
+  a.code || '-' || chr(65 + ((slot_number - 1) % 7)) || '-' || lpad((((slot_number - 1) / 7) + 1)::text, 2, '0'),
+  chr(65 + ((slot_number - 1) % 7)),
+  ((slot_number - 1) / 7) + 1,
+  'CAR',
+  'AVAILABLE',
+  'MOCKUP_LAYOUT:' || a.source_reference,
+  'MOCKUP'
+from public.parking_areas a
+cross join generate_series(1, 100) as generated(slot_number)
+where a.data_status = 'AWAITING_VERIFICATION'
+  and a.slot_layout_verified = false
+on conflict (parking_area_id, slot_code) do nothing;

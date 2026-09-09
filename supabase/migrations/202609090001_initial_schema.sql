@@ -8,6 +8,7 @@ end $$;
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
+  email text,
   full_name text,
   user_type public.app_role,
   university_id text,
@@ -20,6 +21,8 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.profiles add column if not exists email text;
 
 create table if not exists public.user_roles (
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -45,6 +48,8 @@ create table if not exists public.parking_areas (
   capacity_source text not null default 'UNVERIFIED' check (capacity_source in ('UNVERIFIED', 'MOCKUP', 'VERIFIED_SURVEY')),
   capacity_verified boolean not null default false,
   slot_mode text not null default 'AREA_ONLY' check (slot_mode in ('AREA_ONLY', 'INDIVIDUAL_SLOT')),
+  slot_layout_source text not null default 'UNVERIFIED' check (slot_layout_source in ('UNVERIFIED', 'MOCKUP', 'VERIFIED_SURVEY')),
+  slot_layout_verified boolean not null default false,
   vehicle_types jsonb not null default '[]'::jsonb,
   allowed_roles jsonb not null default '[]'::jsonb,
   operating_hours jsonb,
@@ -80,7 +85,7 @@ create table if not exists public.parking_slots (
   slot_type text not null default 'CAR',
   status text not null default 'AVAILABLE' check (status in ('AVAILABLE', 'RESERVED', 'OCCUPIED', 'CLOSED')),
   source_reference text,
-  data_status text not null default 'AWAITING_VERIFICATION' check (data_status in ('AWAITING_VERIFICATION', 'VERIFIED', 'OUTDATED')),
+  data_status text not null default 'AWAITING_VERIFICATION' check (data_status in ('AWAITING_VERIFICATION', 'MOCKUP', 'VERIFIED', 'OUTDATED')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (parking_area_id, slot_code),
@@ -275,6 +280,9 @@ create table if not exists public.feedback (
   category text not null,
   subject text not null,
   message text not null,
+  severity text not null default 'MEDIUM' check (severity in ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
+  route text,
+  metadata jsonb not null default '{}'::jsonb,
   status text not null default 'NEW' check (status in ('NEW', 'REVIEWING', 'IN_PROGRESS', 'RESOLVED')),
   response text,
   created_at timestamptz not null default now(),
@@ -459,14 +467,240 @@ as $$
   join public.parking_areas a on a.id = s.parking_area_id
   where upper(a.code) = upper(p_area_code)
     and a.slot_mode = 'INDIVIDUAL_SLOT'
-    and a.data_status = 'VERIFIED'
-    and s.data_status = 'VERIFIED'
+    and a.data_status in ('AWAITING_VERIFICATION', 'VERIFIED')
+    and s.data_status in ('MOCKUP', 'VERIFIED')
     and p_ends_at > p_starts_at
   order by s.row_label, s.position, s.slot_code;
 $$;
 
 revoke all on function public.get_available_parking_slots(text, timestamptz, timestamptz) from public;
 grant execute on function public.get_available_parking_slots(text, timestamptz, timestamptz) to anon, authenticated;
+
+-- Issue a short-lived QR payload without exposing a database id or storing the
+-- raw token. The payload is returned once to the booking owner/staff/admin.
+create or replace function public.issue_booking_qr(p_booking_id uuid)
+returns table (
+  qr_reference text,
+  qr_payload text,
+  expires_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  booking_row record;
+  raw_token text;
+  next_reference text;
+  next_expiry timestamptz;
+begin
+  select b.id, b.reference, b.user_id, b.status, b.starts_at, b.ends_at
+  into booking_row
+  from public.bookings b
+  where b.id = p_booking_id
+    and (b.user_id = auth.uid() or public.has_role('admin') or public.has_role('staff'));
+
+  if not found then
+    raise exception 'BOOKING_NOT_FOUND_OR_FORBIDDEN';
+  end if;
+
+  if booking_row.status not in ('PENDING', 'CONFIRMED', 'RESERVED', 'CHECKED_IN', 'OVERSTAY') then
+    raise exception 'BOOKING_NOT_ACTIVE';
+  end if;
+
+  update public.qr_tokens
+  set status = 'REISSUED'
+  where booking_id = p_booking_id and status = 'ACTIVE';
+
+  raw_token := encode(gen_random_bytes(24), 'hex');
+  next_reference := 'MSUPK-QR-' || upper(substr(encode(gen_random_bytes(5), 'hex'), 1, 10));
+  next_expiry := booking_row.ends_at;
+
+  insert into public.qr_tokens (booking_id, token_hash, reference, expires_at)
+  values (p_booking_id, encode(digest(raw_token, 'sha256'), 'hex'), next_reference, next_expiry);
+
+  return query
+  select next_reference,
+    json_build_object('version', 1, 'reference', next_reference, 'token', raw_token)::text,
+    next_expiry;
+end;
+$$;
+
+revoke all on function public.issue_booking_qr(uuid) from public;
+grant execute on function public.issue_booking_qr(uuid) to authenticated;
+
+-- Validate a QR at the gate and return only the operational fields a staff
+-- member needs. Every attempt is recorded, including invalid/replayed scans.
+create or replace function public.validate_booking_qr(
+  p_reference text,
+  p_token text,
+  p_area_code text default null
+)
+returns table (
+  booking_id uuid,
+  booking_reference text,
+  parking_area_code text,
+  parking_area_name_th text,
+  parking_slot_code text,
+  vehicle_plate text,
+  booking_status text,
+  qr_status text,
+  scan_result text,
+  scan_reason text
+)
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  qr_row record;
+  result_code text := 'INVALID';
+  result_reason text := 'QR_NOT_FOUND';
+begin
+  if not (public.has_role('staff') or public.has_role('admin')) then
+    raise exception 'STAFF_OR_ADMIN_REQUIRED';
+  end if;
+
+  select q.id as qr_token_id,
+    q.status as token_status,
+    q.expires_at,
+    b.id as booking_id,
+    b.reference as booking_reference,
+    b.status as booking_status,
+    a.id as parking_area_id,
+    a.code as parking_area_code,
+    a.name_th as parking_area_name_th,
+    s.slot_code as parking_slot_code,
+    b.vehicle_snapshot ->> 'plate' as vehicle_plate
+  into qr_row
+  from public.qr_tokens q
+  join public.bookings b on b.id = q.booking_id
+  join public.parking_areas a on a.id = b.parking_area_id
+  left join public.parking_slots s on s.id = b.parking_slot_id
+  where q.reference = p_reference
+    and q.token_hash = encode(digest(p_token, 'sha256'), 'hex')
+  limit 1;
+
+  if found then
+    result_code := 'VALID';
+    result_reason := 'OK';
+    if qr_row.token_status <> 'ACTIVE' then
+      result_code := 'INVALID';
+      result_reason := 'QR_' || qr_row.token_status;
+    elsif qr_row.expires_at <= now() then
+      result_code := 'EXPIRED';
+      result_reason := 'QR_EXPIRED';
+      update public.qr_tokens set status = 'EXPIRED' where id = qr_row.qr_token_id and status = 'ACTIVE';
+    elsif qr_row.booking_status in ('CANCELLED', 'EXPIRED', 'NO_SHOW', 'REJECTED', 'COMPLETED') then
+      result_code := 'INVALID';
+      result_reason := 'BOOKING_' || qr_row.booking_status;
+    elsif p_area_code is not null and upper(qr_row.parking_area_code) <> upper(p_area_code) then
+      result_code := 'WRONG_AREA';
+      result_reason := 'QR_AREA_MISMATCH';
+    end if;
+
+    insert into public.qr_scan_logs (qr_token_id, booking_id, staff_user_id, parking_area_id, result, reason, metadata)
+    values (qr_row.qr_token_id, qr_row.booking_id, auth.uid(), qr_row.parking_area_id, result_code, result_reason, jsonb_build_object('area_code', p_area_code));
+
+    return query select qr_row.booking_id, qr_row.booking_reference, qr_row.parking_area_code,
+      qr_row.parking_area_name_th, qr_row.parking_slot_code, qr_row.vehicle_plate,
+      qr_row.booking_status, qr_row.token_status, result_code, result_reason;
+    return;
+  end if;
+
+  insert into public.qr_scan_logs (staff_user_id, result, reason, metadata)
+  values (auth.uid(), result_code, result_reason, jsonb_build_object('reference', p_reference, 'area_code', p_area_code));
+
+  return query select null::uuid, p_reference, null::text, null::text, null::text, null::text,
+    null::text, null::text, result_code, result_reason;
+end;
+$$;
+
+revoke all on function public.validate_booking_qr(text, text, text) from public;
+grant execute on function public.validate_booking_qr(text, text, text) to authenticated;
+
+-- Check-in/out is a server-side state transition. Staff can act only on an
+-- assigned area; Admin can act globally. The audit/event rows are written in
+-- the same transaction as the booking/session update.
+create or replace function public.transition_parking_session(
+  p_booking_id uuid,
+  p_action text,
+  p_area_code text default null
+)
+returns table (
+  booking_id uuid,
+  booking_reference text,
+  next_booking_status text,
+  session_status text,
+  transition_message text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  booking_row record;
+  next_booking_status text;
+  next_session_status text;
+  transition_message text;
+begin
+  if not (public.has_role('staff') or public.has_role('admin')) then
+    raise exception 'STAFF_OR_ADMIN_REQUIRED';
+  end if;
+
+  select b.id, b.reference, b.status, b.parking_area_id, a.code
+  into booking_row
+  from public.bookings b
+  join public.parking_areas a on a.id = b.parking_area_id
+  where b.id = p_booking_id
+    and (public.has_role('admin') or public.is_assigned_to_area(b.parking_area_id))
+    and (p_area_code is null or upper(a.code) = upper(p_area_code));
+
+  if not found then
+    raise exception 'BOOKING_NOT_FOUND_OR_AREA_FORBIDDEN';
+  end if;
+
+  if upper(p_action) = 'CHECK_IN' then
+    if booking_row.status not in ('PENDING', 'CONFIRMED', 'RESERVED') then
+      raise exception 'BOOKING_NOT_READY_FOR_CHECK_IN';
+    end if;
+    next_booking_status := 'CHECKED_IN';
+    next_session_status := 'ACTIVE';
+    transition_message := 'CHECK_IN_RECORDED';
+    insert into public.parking_sessions (booking_id, user_id, parking_area_id, vehicle_id, check_in_at, status)
+    select b.id, b.user_id, b.parking_area_id, b.vehicle_id, now(), 'ACTIVE'
+    from public.bookings b
+    where b.id = p_booking_id
+    on conflict (booking_id) do update set check_in_at = coalesce(public.parking_sessions.check_in_at, now()), status = 'ACTIVE', updated_at = now();
+  elsif upper(p_action) = 'CHECK_OUT' then
+    if booking_row.status not in ('CHECKED_IN', 'OVERSTAY') then
+      raise exception 'BOOKING_NOT_READY_FOR_CHECK_OUT';
+    end if;
+    next_booking_status := 'COMPLETED';
+    next_session_status := 'COMPLETED';
+    transition_message := 'CHECK_OUT_RECORDED';
+    update public.parking_sessions
+    set check_out_at = now(), status = 'COMPLETED', updated_at = now()
+    where booking_id = p_booking_id;
+    if not found then
+      raise exception 'PARKING_SESSION_NOT_FOUND';
+    end if;
+  else
+    raise exception 'UNKNOWN_SESSION_ACTION';
+  end if;
+
+  update public.bookings set status = next_booking_status, updated_at = now() where id = p_booking_id;
+  insert into public.booking_events (booking_id, event_type, actor_type, actor_id, metadata)
+  values (p_booking_id, upper(p_action), 'STAFF', auth.uid(), jsonb_build_object('area_code', booking_row.code));
+  insert into public.staff_activity_logs (staff_user_id, action, parking_area_id, booking_id, metadata)
+  values (auth.uid(), upper(p_action), booking_row.parking_area_id, p_booking_id, jsonb_build_object('area_code', booking_row.code));
+
+  return query select booking_row.id, booking_row.reference, next_booking_status, next_session_status, transition_message;
+end;
+$$;
+
+revoke all on function public.transition_parking_session(uuid, text, text) from public;
+grant execute on function public.transition_parking_session(uuid, text, text) to authenticated;
 
 alter table public.profiles enable row level security;
 alter table public.user_roles enable row level security;
@@ -505,12 +739,15 @@ create policy "public can read publishable images" on public.parking_images for 
 create policy "users read own profile" on public.profiles for select using (id = auth.uid());
 create policy "users update own profile" on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
 create policy "users read own roles" on public.user_roles for select using (user_id = auth.uid());
+create policy "developer inspect profiles" on public.profiles for select using (public.has_role('developer'));
+create policy "developer update profiles" on public.profiles for update using (public.has_role('developer')) with check (public.has_role('developer'));
+create policy "developer inspect roles" on public.user_roles for select using (public.has_role('developer'));
 create policy "users manage own vehicles" on public.vehicles for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "users read own bookings" on public.bookings for select using (user_id = auth.uid() or public.has_role('admin') or public.has_role('developer'));
 create policy "users create own bookings" on public.bookings for insert with check (
   user_id = auth.uid()
   and (vehicle_id is null or exists (select 1 from public.vehicles v where v.id = vehicle_id and v.user_id = auth.uid()))
-  and (parking_slot_id is null or exists (select 1 from public.parking_slots s where s.id = public.bookings.parking_slot_id and s.parking_area_id = public.bookings.parking_area_id and s.data_status = 'VERIFIED' and s.status <> 'CLOSED'))
+  and (parking_slot_id is null or exists (select 1 from public.parking_slots s where s.id = public.bookings.parking_slot_id and s.parking_area_id = public.bookings.parking_area_id and s.data_status in ('MOCKUP', 'VERIFIED') and s.status <> 'CLOSED'))
 );
 create policy "users update own pending bookings" on public.bookings for update using (user_id = auth.uid() and status in ('DRAFT', 'PENDING')) with check (user_id = auth.uid());
 create policy "staff read assigned bookings" on public.bookings for select using (public.is_assigned_to_area(parking_area_id) or public.has_role('admin') or public.has_role('developer'));
@@ -522,11 +759,15 @@ create policy "users manage own consents" on public.consent_records for all usin
 create policy "users manage own cookie preferences" on public.cookie_preferences for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "users create feedback" on public.feedback for insert with check (user_id = auth.uid() or user_id is null);
 create policy "users read own feedback" on public.feedback for select using (user_id = auth.uid() or public.has_role('admin'));
+create policy "developer read feedback" on public.feedback for select using (public.has_role('developer'));
+create policy "developer update feedback" on public.feedback for update using (public.has_role('developer')) with check (public.has_role('developer'));
 create policy "users create evaluations" on public.evaluations for insert with check (user_id = auth.uid() or user_id is null);
 create policy "users read own evaluations" on public.evaluations for select using (user_id = auth.uid() or public.has_role('admin'));
+create policy "developer read evaluations" on public.evaluations for select using (public.has_role('developer'));
 create policy "staff read assigned incidents" on public.incidents for select using (reported_by = auth.uid() or public.is_assigned_to_area(parking_area_id) or public.has_role('admin') or public.has_role('developer'));
 create policy "staff create incidents" on public.incidents for insert with check (reported_by = auth.uid() and (public.has_role('staff') or public.has_role('admin')));
 create policy "admin manage areas" on public.parking_areas for all using (public.has_role('admin')) with check (public.has_role('admin'));
+create policy "developer inspect areas" on public.parking_areas for select using (public.has_role('developer'));
 create policy "developer update areas" on public.parking_areas for update using (public.has_role('developer')) with check (public.has_role('developer'));
 create policy "admin manage slots" on public.parking_slots for all using (public.has_role('admin')) with check (public.has_role('admin'));
 create policy "developer read slots" on public.parking_slots for select using (public.has_role('developer'));
@@ -542,6 +783,11 @@ create policy "admin manage booking policies" on public.booking_policies for all
 create policy "staff read assigned status history" on public.parking_status_history for select using (public.is_assigned_to_area(parking_area_id) or public.has_role('admin') or public.has_role('developer'));
 create policy "users read own evaluation answers" on public.evaluation_answers for select using (exists (select 1 from public.evaluations e where e.id = evaluation_id and (e.user_id = auth.uid() or public.has_role('admin'))));
 create policy "users create evaluation answers" on public.evaluation_answers for insert with check (exists (select 1 from public.evaluations e where e.id = evaluation_id and e.user_id = auth.uid()));
+create policy "developer read evaluation answers" on public.evaluation_answers for select using (public.has_role('developer'));
+
+-- Public forms can submit an anonymous record, while RLS keeps review data private.
+grant insert on public.feedback to anon, authenticated;
+grant insert on public.evaluations to anon, authenticated;
 
 -- Admin is the only role with full CRUD across the operational schema.
 -- Developer can inspect diagnostics and update reference/parking data, but
@@ -583,8 +829,8 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, preferred_locale)
-  values (new.id, new.raw_user_meta_data ->> 'full_name', coalesce(new.raw_user_meta_data ->> 'preferred_locale', 'th'))
+  insert into public.profiles (id, email, full_name, preferred_locale)
+  values (new.id, new.email, new.raw_user_meta_data ->> 'full_name', coalesce(new.raw_user_meta_data ->> 'preferred_locale', 'th'))
   on conflict (id) do nothing;
   return new;
 end;

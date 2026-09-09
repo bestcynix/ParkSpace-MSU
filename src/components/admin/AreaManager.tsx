@@ -1,0 +1,247 @@
+"use client";
+
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Check, Edit3, LoaderCircle, MapPinned, Plus, Save, Trash2 } from "lucide-react";
+import type { Locale } from "@/lib/i18n";
+import { getCopy } from "@/lib/i18n";
+import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+
+type ManagerRole = "admin" | "developer";
+type AreaStatus = "DRAFT" | "AWAITING_VERIFICATION" | "VERIFIED" | "OUTDATED";
+type CapacitySource = "UNVERIFIED" | "MOCKUP" | "VERIFIED_SURVEY";
+type SlotMode = "AREA_ONLY" | "INDIVIDUAL_SLOT";
+
+type AreaRow = {
+  id: string;
+  code: string;
+  name_th: string;
+  name_en: string;
+  description_th: string | null;
+  description_en: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  capacity: number | null;
+  capacity_source: CapacitySource;
+  capacity_verified: boolean;
+  slot_mode: SlotMode;
+  slot_layout_source: CapacitySource;
+  slot_layout_verified: boolean;
+  current_status: string;
+  data_status: AreaStatus;
+  source_reference: string | null;
+};
+
+type AreaDraft = {
+  code: string;
+  name_th: string;
+  name_en: string;
+  description_th: string;
+  description_en: string;
+  capacity: string;
+  capacity_source: CapacitySource;
+  slot_mode: SlotMode;
+  data_status: AreaStatus;
+  latitude: string;
+  longitude: string;
+  source_reference: string;
+};
+
+const emptyDraft: AreaDraft = {
+  code: "",
+  name_th: "",
+  name_en: "",
+  description_th: "",
+  description_en: "",
+  capacity: "100",
+  capacity_source: "MOCKUP",
+  slot_mode: "INDIVIDUAL_SLOT",
+  data_status: "AWAITING_VERIFICATION",
+  latitude: "",
+  longitude: "",
+  source_reference: "https://building.msu.ac.th/news-detail.php?id=23",
+};
+
+function draftFromArea(area: AreaRow): AreaDraft {
+  return {
+    code: area.code,
+    name_th: area.name_th,
+    name_en: area.name_en,
+    description_th: area.description_th ?? "",
+    description_en: area.description_en ?? "",
+    capacity: area.capacity == null ? "" : String(area.capacity),
+    capacity_source: area.capacity_source,
+    slot_mode: area.slot_mode,
+    data_status: area.data_status,
+    latitude: area.latitude == null ? "" : String(area.latitude),
+    longitude: area.longitude == null ? "" : String(area.longitude),
+    source_reference: area.source_reference ?? "",
+  };
+}
+
+const fields = "id, code, name_th, name_en, description_th, description_en, latitude, longitude, capacity, capacity_source, capacity_verified, slot_mode, slot_layout_source, slot_layout_verified, current_status, data_status, source_reference";
+
+export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRole }) {
+  const t = getCopy(locale);
+  const [areas, setAreas] = useState<AreaRow[]>([]);
+  const [draft, setDraft] = useState<AreaDraft>(emptyDraft);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const loadAreas = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setLoading(false);
+      setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await createSupabaseBrowserClient().from("parking_areas").select(fields).order("code");
+      if (error) throw error;
+      setAreas((data ?? []) as AreaRow[]);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t.operationalData);
+    } finally {
+      setLoading(false);
+    }
+  }, [t.accountNotConfigured, t.accountNotConfiguredEn, t.operationalData]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void loadAreas(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadAreas]);
+
+  function updateDraft<K extends keyof AreaDraft>(key: K, value: AreaDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function startEdit(area: AreaRow) {
+    setEditingId(area.id);
+    setDraft(draftFromArea(area));
+    setMessage("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startCreate() {
+    setEditingId(null);
+    setDraft(emptyDraft);
+    setMessage("");
+  }
+
+  async function writeAudit(action: string, entityId: string | null, beforeData: unknown, afterData: unknown) {
+    if (role !== "admin") return;
+    const supabase = createSupabaseBrowserClient();
+    const { data } = await supabase.auth.getUser();
+    const traceId = crypto.randomUUID();
+    await supabase.from("audit_logs").insert({
+      event_id: `admin-area-${traceId}`,
+      trace_id: traceId,
+      actor_type: "ADMIN",
+      actor_id: data.user?.id ?? null,
+      action,
+      entity_type: "parking_area",
+      entity_id: entityId,
+      before_data: beforeData,
+      after_data: afterData,
+      reason: "Parking area maintenance from Admin console",
+      result: "SUCCESS",
+    });
+  }
+
+  async function saveArea(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isSupabaseConfigured()) {
+      setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
+      return;
+    }
+    if (!draft.name_th.trim() || !draft.name_en.trim()) {
+      setMessage(locale === "th" ? "กรุณากรอกชื่อพื้นที่ทั้งสองภาษา" : "Enter the area name in both languages.");
+      return;
+    }
+    const normalizedCode = draft.code.trim().toUpperCase();
+    if (!/^P[0-9]{2}$/.test(normalizedCode)) {
+      setMessage(locale === "th" ? "รหัสพื้นที่ต้องเป็นรูปแบบ P01" : "Area code must use the P01 format.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    const payload = {
+      code: normalizedCode,
+      name_th: draft.name_th.trim(),
+      name_en: draft.name_en.trim(),
+      description_th: draft.description_th.trim() || null,
+      description_en: draft.description_en.trim() || null,
+      capacity: draft.capacity.trim() ? Number(draft.capacity) : null,
+      capacity_source: draft.capacity_source,
+      slot_mode: draft.slot_mode,
+      data_status: draft.data_status,
+      latitude: draft.latitude.trim() ? Number(draft.latitude) : null,
+      longitude: draft.longitude.trim() ? Number(draft.longitude) : null,
+      source_reference: draft.source_reference.trim() || null,
+    };
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const before = editingId ? areas.find((area) => area.id === editingId) ?? null : null;
+      const result = editingId
+        ? await supabase.from("parking_areas").update(payload).eq("id", editingId).select(fields).single()
+        : role === "admin"
+          ? await supabase.from("parking_areas").insert(payload).select(fields).single()
+          : { data: null, error: new Error("DEVELOPER_CANNOT_CREATE_AREA") };
+      if (result.error) throw result.error;
+      const nextArea = result.data as AreaRow;
+      await writeAudit(editingId ? "UPDATE_PARKING_AREA" : "CREATE_PARKING_AREA", nextArea.id, before, nextArea);
+      setAreas((current) => editingId ? current.map((area) => area.id === nextArea.id ? nextArea : area) : [...current, nextArea].sort((a, b) => a.code.localeCompare(b.code)));
+      setEditingId(nextArea.id);
+      setDraft(draftFromArea(nextArea));
+      setMessage(t.save);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t.operationalData);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteArea(area: AreaRow) {
+    if (role !== "admin" || !window.confirm(`${t.delete} ${area.code} · ${area.name_th}?`)) return;
+    setMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.from("parking_areas").delete().eq("id", area.id);
+      if (error) throw error;
+      await writeAudit("DELETE_PARKING_AREA", area.id, area, null);
+      setAreas((current) => current.filter((item) => item.id !== area.id));
+      if (editingId === area.id) startCreate();
+      setMessage(t.delete);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : t.operationalData);
+    }
+  }
+
+  return <div className="data-manager">
+    <div className="data-manager-heading"><div><p className="eyebrow">{role === "admin" ? t.admin : t.developer}</p><h2>{t.areas}</h2><p className="page-subtitle">{role === "admin" ? t.realMetrics : t.developer} · {t.sourceLabel}</p></div>{role === "admin" ? <button className="primary-button" type="button" onClick={startCreate}><Plus size={16} />{t.addArea}</button> : null}</div>
+    {message ? <div className="form-note" role="status">{message}</div> : null}
+    <div className="data-manager-layout">
+      <form className="form-card data-editor-card" onSubmit={(event) => void saveArea(event)}>
+        <div className="form-section-title"><MapPinned size={22} /><div><h2>{editingId ? t.edit : t.create}</h2><p>{role === "admin" ? t.admin : t.developer} · {t.noPrivateData}</p></div></div>
+        <div className="support-form-grid">
+          <div className="form-group"><label htmlFor="area-code">{t.area} / Code</label><input id="area-code" className="form-control" value={draft.code} onChange={(event) => updateDraft("code", event.target.value)} placeholder="P01" required disabled={Boolean(editingId)} /></div>
+          <div className="form-group"><label htmlFor="area-capacity">{t.estimatedCapacity}</label><input id="area-capacity" className="form-control" type="number" min="0" value={draft.capacity} onChange={(event) => updateDraft("capacity", event.target.value)} /></div>
+          <div className="form-group"><label htmlFor="area-name-th">{t.nameThai}</label><input id="area-name-th" className="form-control" value={draft.name_th} onChange={(event) => updateDraft("name_th", event.target.value)} required /></div>
+          <div className="form-group"><label htmlFor="area-name-en">{t.nameEnglish}</label><input id="area-name-en" className="form-control" value={draft.name_en} onChange={(event) => updateDraft("name_en", event.target.value)} required /></div>
+          <div className="form-group"><label htmlFor="area-source">{t.capacitySource}</label><select id="area-source" className="form-control" value={draft.capacity_source} onChange={(event) => updateDraft("capacity_source", event.target.value as CapacitySource)}><option value="UNVERIFIED">UNVERIFIED</option><option value="MOCKUP">MOCKUP</option><option value="VERIFIED_SURVEY">VERIFIED_SURVEY</option></select></div>
+          <div className="form-group"><label htmlFor="area-slot-mode">{t.slotMode}</label><select id="area-slot-mode" className="form-control" value={draft.slot_mode} onChange={(event) => updateDraft("slot_mode", event.target.value as SlotMode)}><option value="AREA_ONLY">{t.areaOnly}</option><option value="INDIVIDUAL_SLOT">{t.individualSlot}</option></select></div>
+          <div className="form-group"><label htmlFor="area-status">{t.dataStatus}</label><select id="area-status" className="form-control" value={draft.data_status} onChange={(event) => updateDraft("data_status", event.target.value as AreaStatus)}><option value="DRAFT">DRAFT</option><option value="AWAITING_VERIFICATION">AWAITING_VERIFICATION</option><option value="VERIFIED">VERIFIED</option><option value="OUTDATED">OUTDATED</option></select></div>
+          <div className="form-group"><label htmlFor="area-lat">{t.latitude}</label><input id="area-lat" className="form-control" type="number" step="any" value={draft.latitude} onChange={(event) => updateDraft("latitude", event.target.value)} /></div>
+          <div className="form-group"><label htmlFor="area-lon">{t.longitude}</label><input id="area-lon" className="form-control" type="number" step="any" value={draft.longitude} onChange={(event) => updateDraft("longitude", event.target.value)} /></div>
+        </div>
+        <div className="form-group"><label htmlFor="area-source-reference">{t.sourceReference}</label><input id="area-source-reference" className="form-control" type="url" value={draft.source_reference} onChange={(event) => updateDraft("source_reference", event.target.value)} /></div>
+        <div className="support-form-grid"><div className="form-group"><label htmlFor="area-description-th">{t.description} · TH</label><textarea id="area-description-th" className="form-control" rows={4} value={draft.description_th} onChange={(event) => updateDraft("description_th", event.target.value)} /></div><div className="form-group"><label htmlFor="area-description-en">{t.description} · EN</label><textarea id="area-description-en" className="form-control" rows={4} value={draft.description_en} onChange={(event) => updateDraft("description_en", event.target.value)} /></div></div>
+        <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving || role !== "admin" && !editingId}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
+        {role === "developer" ? <p className="form-note">{t.developer} · {locale === "th" ? "ตรวจสอบและแก้ไขข้อมูลได้ แต่สร้างหรือลบพื้นที่ไม่ได้" : "Can inspect and update data, but cannot create or delete areas."}</p> : null}
+      </form>
+      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.areas}</h2><p>{areas.length} · {t.realMetrics}</p></div><span className="data-badge">{t.noPrivateData}</span></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : areas.length ? <div className="data-list">{areas.map((area) => <article className="data-list-item" key={area.id}><div><strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong><small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small><small>{area.latitude ?? "—"}, {area.longitude ?? "—"}</small></div><div className="data-list-actions"><button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>{role === "admin" ? <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button> : <Check size={16} color="#2b9d65" />}</div></article>)}</div> : <div className="empty-card compact-empty"><div><MapPinned size={24} /><h2>{t.noRecords}</h2></div></div>}</section>
+    </div>
+  </div>;
+}

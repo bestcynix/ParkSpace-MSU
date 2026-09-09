@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, ClipboardList, Database, FileText, LayoutDashboard, MapPinned, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
+import { Activity, BarChart3, ClipboardList, Database, FileText, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
@@ -14,6 +14,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["bookings", t.bookings, ClipboardList, "/bookings"],
     ["users", t.users, Users, "/users"],
     ["analytics", t.analytics, BarChart3, "/analytics"],
+    ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
     ["audit", t.audit, ShieldCheck, "/audit-logs"],
     ["settings", t.settings, Settings, "/settings"],
   ] : role === "staff" ? [
@@ -24,8 +25,12 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
   ] : [
     ["health", t.systemHealth, Activity, "/health"],
     ["database", t.database, Database, "/database"],
+    ["areas", t.areas, MapPinned, "/parking-areas"],
+    ["users", t.users, Users, "/users"],
+    ["analytics", t.analytics, BarChart3, "/analytics"],
     ["traces", t.traceExplorer, Wrench, "/traces"],
     ["errors", t.errors, FileText, "/errors"],
+    ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
     ["settings", t.featureFlags, Settings, "/feature-flags"],
   ];
 

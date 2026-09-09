@@ -32,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="th" suppressHydrationWarning>
+    <html lang="th" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

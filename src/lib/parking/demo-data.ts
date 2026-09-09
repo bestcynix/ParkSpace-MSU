@@ -22,8 +22,8 @@ export type ParkingArea = {
 const officialSource = "https://building.msu.ac.th/news-detail.php?id=23";
 
 // Area names are transcribed from the MSU Building and Grounds Division
-// announcement graphic. Capacity, coordinates, photos, slot labels, and live
-// availability must come from Supabase after verification.
+// announcement graphic. The local catalog describes the requested mock layout;
+// live availability and real bookings must always come from Supabase.
 const officialAreas: Array<[string, string]> = [
   ["พื้นที่โซนโรงเรียนสาธิต (ฝ่ายมัธยม)", "Demonstration School Zone (Secondary Division)"],
   ["พื้นที่โซนสำนักงานอธิการบดี", "Office of the President Zone"],
@@ -62,13 +62,13 @@ export const parkingAreas: ParkingArea[] = officialAreas.map(([th, en], index) =
     code: `P${number}`,
     th,
     en,
-    detailTh: "ชื่อพื้นที่อ้างอิงจากประกาศกองอาคารสถานที่ มมส. พิกัด รูปภาพ ความจุ และสถานะช่องจอดรอตรวจสอบ",
-    detailEn: "Area name is sourced from the MSU Building and Grounds announcement. Coordinates, photos, capacity, and slot status await verification.",
+    detailTh: "ชื่อพื้นที่อ้างอิงจากประกาศกองอาคารสถานที่ มมส. ผัง A–G และจำนวน 100 ช่องเป็น Mockup ส่วนสถานะและการจองอ่านจากระบบจริง",
+    detailEn: "The area name is sourced from the MSU announcement. The A–G / 100-space layout is Mockup; statuses and bookings come from the real system.",
     status: "unverified",
-    estimatedCapacity: index === 14 ? 50 : undefined,
+    estimatedCapacity: 100,
     distance: undefined,
-    slotMode: "AREA_ONLY",
-    prototypeSlotGrid: index === 0,
+    slotMode: "INDIVIDUAL_SLOT",
+    prototypeSlotGrid: true,
     dataStatus: "AWAITING_VERIFICATION",
     sourceReference: officialSource,
   };

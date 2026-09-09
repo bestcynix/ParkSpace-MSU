@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Building2, Clock3, Map, MapPin, Navigation, ParkingSquare, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Building2, Clock3, MapPin, Navigation, ParkingSquare, ShieldCheck } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import type { ParkingArea } from "@/lib/parking/demo-data";
+import { parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
 import { MockupNotice } from "@/components/parking/MockupNotice";
 import { StatusBadge } from "@/components/parking/StatusBadge";
+import { InteractiveCampusMap } from "@/components/map/InteractiveCampusMap";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export function ParkingDetailClient({ locale, area }: { locale: Locale; area: ParkingArea }) {
@@ -50,7 +51,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
           <div className="tabs" role="tablist">
             {([["overview", t.overview], ["map", t.map], ["photos", t.photos], ["details", t.detailsTab]] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)} role="tab" aria-selected={tab === key}>{label}</button>)}
           </div>
-          {tab === "map" ? <div className="map-placeholder"><div><Map size={34} /><strong>{t.mapPending}</strong><span>{t.realDataNote}</span><a className="text-link" href={area.sourceReference} target="_blank" rel="noreferrer">{t.realSource}</a></div></div> : null}
+          {tab === "map" ? <InteractiveCampusMap locale={locale} areas={parkingAreas} selectedAreaCode={area.code} showAreaPicker={false} /> : null}
           {tab === "photos" ? <div className="empty-card" style={{ minHeight: 190 }}><div><div className="empty-icon"><MapPin size={24} /></div><h2>{t.pendingImage}</h2><p>{t.pendingImageEn}</p></div></div> : null}
           {tab === "overview" ? <>
             <p className="page-subtitle" style={{ marginTop: 18 }}>{detail}</p>

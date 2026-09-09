@@ -9,10 +9,10 @@ ParkSpace MSU is a bilingual Thai/English smart-parking web application and PWA 
 - Responsive user experience for phone, tablet, and desktop browsers.
 - Thai/English locale routes: `/th/*` and `/en/*`.
 - Public SEO routes, metadata, `sitemap.xml`, `robots.txt`, and PWA manifest.
-- User-facing home, parking search, official 28-area directory, parking detail, area booking, verified-slot selection workflow, profile, vehicle management, notifications, and legal pages.
+- User-facing home, parking search, official 28-area directory, parking detail, interactive map modes, A–G/100-slot booking preview, profile, vehicle management, notifications, feedback, and legal pages.
 - Staff, Admin, and Developer route shells with least-privilege boundaries ready for auth guards.
 - Supabase client/server helpers, booking conflict protection, availability RPC, vehicle records, role bootstrap script, and an initial schema/RLS migration.
-- Thai area names are transcribed from the official MSU announcement graphic. Locations, photos, coordinates, capacity, slot labels, and live occupancy remain explicitly awaiting verification. Only the estimated-capacity example is marked Mockup Data.
+- Thai area names are transcribed from the official MSU announcement graphic. The user-approved A–G / 100-space layout is stored as `MOCKUP` slot rows for all 28 areas so it can be booked in the real database; the mockup label is never presented as an MSU-verified survey. Locations, photos, exact coordinates, and official capacity remain awaiting verification.
 
 ## Run locally
 
@@ -33,9 +33,9 @@ Without Supabase environment variables, authentication and booking submission sh
 1. Create a Supabase project.
 2. Copy the project URL and publishable key into `.env.local`.
 3. Apply `supabase/migrations/202609090001_initial_schema.sql`.
-4. Run `supabase/seed.sql` to create/update the 28 source-labelled areas without overwriting verified records.
+4. Run `supabase/seed.sql` to create/update the 28 source-labelled areas and add 100 `MOCKUP` slot rows per area without overwriting verified records or operational booking status.
 5. After the two Auth accounts exist, run `supabase/bootstrap_roles.sql` as an owner/service-role operator to assign the requested Admin and Developer roles.
-6. Add verified MSU coordinates, images, capacity, and slot layout through the Admin workflow.
+6. Add verified MSU coordinates, images, capacity, and slot layout through the Admin workflow. Replacing the mockup layout requires a verified source and an audit record.
 
 ```powershell
 npx supabase init
@@ -45,11 +45,11 @@ npx supabase db push
 
 The service-role key is server-only and must never be included in browser or mobile code.
 
-## Important data rule
+## Data and booking rule
 
 Never replace a real MSU location photo with an AI-generated image. AI assets belong under `public/ai/` or an explicitly labelled storage folder and are limited to illustrations, onboarding, decorative artwork, or design drafts. Verified parking images belong in Supabase Storage with source and verification metadata.
 
-If individual slot data is not verified, use `slot_mode = AREA_ONLY` and reserve the parking area. Do not invent slot numbers.
+The explicit demo exception is the A–G / 100-space layout requested for this project: it is marked `capacity_source = MOCKUP`, `slot_layout_source = MOCKUP`, and `parking_slots.data_status = MOCKUP`. Those rows are real database records and can be booked; availability is calculated from real date/time bookings and never hard-coded in the UI. Exact MSU slot positions, capacity, photos, coordinates, and occupancy remain unverified until supplied by MSU.
 
 ## Mobile packaging
 
@@ -70,6 +70,7 @@ iOS compilation requires macOS/Xcode; Android can be opened in Android Studio on
 npm run typecheck
 npm run lint
 npm run build
+npm run e2e
 ```
 
 ## Folder map

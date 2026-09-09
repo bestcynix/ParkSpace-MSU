@@ -6,6 +6,7 @@ import { Eye, EyeOff, LockKeyhole, Mail, UserRound } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { ProjectCredits } from "@/components/project/ProjectCredits";
 
 export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "register" }) {
   const t = getCopy(locale);
@@ -65,6 +66,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       <button className="primary-button" type="submit" disabled={loading}>{loading ? "…" : isLogin ? t.login : t.createAccount}</button>
       <button className="secondary-button" type="button" onClick={continueWithGoogle}>◉ &nbsp;{t.continueGoogle}</button>
       {isLogin ? <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, fontSize: 12 }}><Link className="text-link" href={`/${locale}/forgot-password`}>{t.forgotPassword}</Link><span>{t.noAccount} <Link className="text-link" href={`/${locale}/register`}>{t.createAccount}</Link></span></div> : <div style={{ marginTop: 16, textAlign: "center", fontSize: 12 }}>{t.login} <Link className="text-link" href={`/${locale}/login`}>{t.login}</Link></div>}
+      <ProjectCredits locale={locale} compact />
     </form>
   );
 }

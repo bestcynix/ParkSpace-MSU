@@ -15,9 +15,10 @@ begin
   if admin_id is null then
     raise notice 'Admin account 69010518004@msu.ac.th does not exist yet; create/verify it in Supabase Auth first.';
   else
-    insert into public.profiles (id, full_name, user_type, university_id, faculty, major, preferred_locale)
-    values (admin_id, 'นายณัฐพล พันธ์ก้อน', 'admin', '69010518004', 'คณะศึกษาศาสตร์', 'วิทยาศาสตร์การกีฬา', 'th')
+    insert into public.profiles (id, email, full_name, user_type, university_id, faculty, major, preferred_locale)
+    values (admin_id, '69010518004@msu.ac.th', 'นายณัฐพล พันธ์ก้อน', 'admin', '69010518004', 'คณะศึกษาศาสตร์', 'วิทยาศาสตร์การกีฬา', 'th')
     on conflict (id) do update set
+      email = excluded.email,
       full_name = excluded.full_name,
       user_type = excluded.user_type,
       university_id = excluded.university_id,
@@ -38,9 +39,10 @@ begin
   if developer_id is null then
     raise notice 'Developer account 68011211206@msu.a.th does not exist yet; create/verify it in Supabase Auth first.';
   else
-    insert into public.profiles (id, user_type, university_id, preferred_locale)
-    values (developer_id, 'developer', '68011211206', 'th')
+    insert into public.profiles (id, email, user_type, university_id, preferred_locale)
+    values (developer_id, '68011211206@msu.a.th', 'developer', '68011211206', 'th')
     on conflict (id) do update set
+      email = excluded.email,
       user_type = excluded.user_type,
       university_id = excluded.university_id,
       updated_at = now();

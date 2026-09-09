@@ -7,6 +7,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import type { ParkingArea } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { QrPass } from "@/components/booking/QrPass";
 
 type BookingVehicle = {
   id: string;
@@ -30,7 +31,7 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
   const [loadingVehicles, setLoadingVehicles] = useState(false);
   const [acceptRules, setAcceptRules] = useState(false);
   const [message, setMessage] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<{ reference: string; qrPayload: string | null; expiresAt: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const title = locale === "th" ? area.th : area.en;
 
@@ -70,6 +71,10 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       setMessage(t.parkingRules);
       return;
     }
+    if (endTime <= startTime) {
+      setMessage(t.endTime);
+      return;
+    }
     if (!isSupabaseConfigured()) {
       setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
       return;
@@ -88,7 +93,7 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         return;
       }
       const selectedVehicle = vehicles.find((item) => item.id === vehicleId);
-      const { error } = await supabase.from("bookings").insert({
+      const { data: booking, error } = await supabase.from("bookings").insert({
         user_id: userData.user.id,
         parking_area_id: dbArea.id,
         booking_date: date,
@@ -99,9 +104,12 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, source: "MANUAL_ENTRY" },
         booking_mode: selectedSlot ? "INDIVIDUAL_SLOT" : area.slotMode,
         status: "PENDING",
-      });
+      }).select("id, reference").single();
       if (error) throw error;
-      setSuccess(true);
+      if (!booking) throw new Error("Booking was not returned by Supabase.");
+      const { data: qrData } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
+      const qrRow = (Array.isArray(qrData) ? qrData[0] : qrData) as { qr_payload?: string; expires_at?: string } | null;
+      setSuccess({ reference: booking.reference, qrPayload: qrRow?.qr_payload ?? null, expiresAt: qrRow?.expires_at ?? null });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Booking failed");
     } finally {
@@ -110,7 +118,7 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
   }
 
   if (success) {
-    return <div className="form-card"><div className="empty-icon" style={{ margin: "0 auto 15px" }}><ShieldCheck size={28} /></div><h1 style={{ textAlign: "center" }}>{locale === "th" ? "ส่งคำขอจองสำเร็จ" : "Booking request submitted"}</h1><p style={{ textAlign: "center" }}>{t.bookingReadySub}</p><div className="form-note">{t.bookingReference}: {locale === "th" ? "ระบบจะสร้างหลังยืนยัน" : "Generated after confirmation"}<br />{t.qrPass}: {t.comingSoon}</div><Link className="primary-button" href={`/${locale}/app/bookings`}>{t.bookings}</Link></div>;
+    return <div className="form-card booking-success-card"><div className="empty-icon" style={{ margin: "0 auto 15px" }}><ShieldCheck size={28} /></div><h1 style={{ textAlign: "center" }}>{locale === "th" ? "จองสำเร็จ!" : "Booking successful"}</h1><p style={{ textAlign: "center" }}>{t.qrReady}</p><div className="form-note">{t.bookingReference}: {success.reference}</div><QrPass locale={locale} payload={success.qrPayload} reference={success.reference} expiresAt={success.expiresAt} /><Link className="primary-button" href={`/${locale}/app/bookings`}>{t.bookings}</Link></div>;
   }
 
   return (

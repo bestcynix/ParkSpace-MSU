@@ -28,15 +28,24 @@ const statusIcon = {
   CLOSED: LockKeyhole,
 };
 
-const prototypeRows: Array<{ label: string; slots: Array<[string, SlotAvailability]> }> = [
-  { label: "A", slots: [["A-01", "AVAILABLE"], ["A-02", "AVAILABLE"], ["A-03", "RESERVED"], ["A-04", "AVAILABLE"], ["A-05", "OCCUPIED"], ["A-06", "AVAILABLE"], ["A-07", "CLOSED"], ["A-08", "AVAILABLE"]] },
-  { label: "B", slots: [["B-01", "AVAILABLE"], ["B-02", "OCCUPIED"], ["B-03", "AVAILABLE"], ["B-04", "RESERVED"], ["B-05", "AVAILABLE"], ["B-06", "AVAILABLE"], ["B-07", "CLOSED"], ["B-08", "AVAILABLE"]] },
-  { label: "C", slots: [["C-01", "AVAILABLE"], ["C-02", "AVAILABLE"], ["C-03", "AVAILABLE"], ["C-04", "OCCUPIED"], ["C-05", "RESERVED"], ["C-06", "AVAILABLE"], ["C-07", "AVAILABLE"], ["C-08", "AVAILABLE"]] },
-];
+const mockupRows = Array.from({ length: 7 }, (_, rowIndex) => {
+  const label = String.fromCharCode(65 + rowIndex);
+  const count = rowIndex < 2 ? 15 : 14;
+  return {
+    label,
+    slots: Array.from({ length: count }, (_, position) => `${label}-${String(position + 1).padStart(2, "0")}`),
+  };
+});
 
-function PrototypeSlotGrid({ locale }: { locale: Locale }) {
+function MockupSlotLayout({ locale }: { locale: Locale }) {
   const t = getCopy(locale);
-  return <><div className="mockup-note"><Info size={15} /><span><strong>{t.prototypeSlotTitle}</strong> — {t.prototypeSlotNote}</span></div><div className="slot-legend" aria-label={t.slotAvailability}><span className="slot-legend-item available"><i />{t.available}</span><span className="slot-legend-item reserved"><i />{t.reserved}</span><span className="slot-legend-item occupied"><i />{t.occupied}</span><span className="slot-legend-item closed"><i />{t.closed}</span></div><div className="slot-rows prototype-slot-rows">{prototypeRows.map((row) => <div className="slot-row" key={row.label}><span className="slot-row-label">{row.label}</span><div className="slot-cells">{row.slots.map(([code, availability]) => { const Icon = statusIcon[availability]; return <button className={`slot-cell ${availability.toLowerCase()} prototype`} type="button" key={code} disabled><Icon size={15} /><strong>{code}</strong><span>{availability === "AVAILABLE" ? t.available : availability === "RESERVED" ? t.reserved : availability === "OCCUPIED" ? t.occupied : t.closed}</span></button>; })}</div></div>)}</div></>;
+  return <div className="mockup-layout" aria-label={t.prototypeSlotTitle}>
+    <div className="mockup-note"><Info size={15} /><span><strong>{t.prototypeSlotTitle}</strong> — {t.mockupLayoutNote}</span></div>
+    <div className="mockup-layout-summary"><span>{t.area}: A–G</span><strong>100 {locale === "th" ? "ช่อง" : "spaces"}</strong><span>{t.realSlotStatusNote}</span></div>
+    <div className="slot-rows prototype-slot-rows">
+      {mockupRows.map((row) => <div className="slot-row" key={row.label}><span className="slot-row-label">{row.label}</span><div className="slot-cells mockup-slot-cells">{row.slots.map((code) => <span className="slot-cell prototype mockup-slot-cell" key={code}><strong>{code}</strong><span>{t.sampleData}</span></span>)}</div></div>)}
+    </div>
+  </div>;
 }
 
 function todayString() {
@@ -70,7 +79,7 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
       if (!configured) return;
       const supabase = createSupabaseBrowserClient();
       const { data } = await supabase.from("parking_areas").select("slot_mode").eq("code", area.code).maybeSingle();
-      if (active && data?.slot_mode === "INDIVIDUAL_SLOT") setMode("INDIVIDUAL_SLOT");
+      if (active && (data?.slot_mode === "INDIVIDUAL_SLOT" || data?.slot_mode === "AREA_ONLY")) setMode(data.slot_mode);
     }
     void loadLiveMode();
     return () => { active = false; };
@@ -127,8 +136,8 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
   if (mode !== "INDIVIDUAL_SLOT") {
     return (
       <section className="slot-panel" aria-label={t.areaOnly}>
-        <div className="slot-panel-heading"><Info size={20} /><div><strong>{area.prototypeSlotGrid ? t.prototypeSlotTitle : t.areaOnly}</strong><span>{area.prototypeSlotGrid ? t.slotDataPending : t.slotDataPending}</span></div></div>
-        {area.prototypeSlotGrid ? <PrototypeSlotGrid locale={locale} /> : null}
+        <div className="slot-panel-heading"><Info size={20} /><div><strong>{area.prototypeSlotGrid ? t.prototypeSlotTitle : t.areaOnly}</strong><span>{area.prototypeSlotGrid ? t.mockupLayoutNote : t.slotDataPending}</span></div></div>
+        {area.prototypeSlotGrid ? <MockupSlotLayout locale={locale} /> : null}
         <p className="form-note">{t.noSlotsConfigured}</p>
         <Link className="primary-button" href={`/${locale}/app/bookings/new?area=${area.id}`}>{t.reserveArea}</Link>
       </section>
@@ -145,6 +154,7 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
       </form>
       <div className="slot-legend" aria-label={t.slotAvailability}><span className="slot-legend-item available"><i />{t.available}</span><span className="slot-legend-item reserved"><i />{t.reserved}</span><span className="slot-legend-item occupied"><i />{t.occupied}</span><span className="slot-legend-item closed"><i />{t.closed}</span></div>
       {message ? <div className="form-note" role="status">{message}</div> : null}
+      {!slots.length ? <MockupSlotLayout locale={locale} /> : <div className="mockup-note live-slot-note"><Info size={15} /><span>{t.realSlotStatusNote}</span></div>}
       {!configured ? <div className="slot-empty"><Info size={22} /><strong>{t.setupRequired}</strong><span>{t.operationalData}</span></div> : null}
       {configured && !slots.length && !message ? <div className="slot-empty"><Info size={22} /><strong>{t.slotDataPending}</strong><span>{t.noSlotsConfigured}</span></div> : null}
       {groupedSlots.length ? <div className="slot-rows">{groupedSlots.map(([row, rowSlots]) => <div className="slot-row" key={row}><span className="slot-row-label">{row}</span><div className="slot-cells">{rowSlots.map((slot) => { const Icon = statusIcon[slot.availability]; const available = slot.availability === "AVAILABLE"; return <button className={`slot-cell ${slot.availability.toLowerCase()} ${selectedSlot?.id === slot.id ? "selected" : ""}`} type="button" key={slot.id} disabled={!available} onClick={() => setSelectedSlot(slot)} aria-pressed={selectedSlot?.id === slot.id}><Icon size={15} /><strong>{slot.slot_code}</strong><span>{slot.availability === "AVAILABLE" ? t.available : slot.availability === "RESERVED" ? t.reserved : slot.availability === "OCCUPIED" ? t.occupied : t.closed}</span></button>; })}</div></div>)}</div> : null}

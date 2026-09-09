@@ -3,7 +3,7 @@ import { OperationsPage } from "@/components/admin/OperationsPage";
 import { isLocale, type Locale } from "@/lib/i18n";
 
 export function generateStaticParams() {
-  return ["health", "database", "traces", "errors", "feature-flags"].map((section) => ({ section }));
+  return ["health", "database", "parking-areas", "users", "analytics", "traces", "errors", "feedback", "feature-flags"].map((section) => ({ section }));
 }
 
 export async function generateMetadata(): Promise<Metadata> { return { title: "Developer Console", robots: { index: false, follow: false } }; }

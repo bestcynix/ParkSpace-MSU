@@ -12,9 +12,9 @@ Build one product named **ParkSpace MSU** for Mahasarakham University:
 ## Non-negotiable truth rules
 
 1. Real MSU place names, photos, buildings, coordinates, and map data require a source and verification record.
-2. Only unverified capacity/estimated capacity may be marked `MOCKUP`.
+2. Capacity and the explicitly requested demo slot layout may be marked `MOCKUP`; never label those values as MSU-verified.
 3. Booking, QR, users, vehicles, scans, check-in/out, sessions, incidents, notifications, feedback, consent, and audit history are real system records from Supabase.
-4. If individual slot data is not verified, set `slot_mode = AREA_ONLY`; never invent slot numbers.
+4. The approved demo layout is A–G / 100 slots for each of the 28 areas. Store it as `MOCKUP` rows in Supabase so real booking/status workflows can run, but do not present it as a verified survey. Any other unverified slot layout must remain `AREA_ONLY`.
 5. Never present an AI-generated image as a real MSU place. If a verified image is unavailable, show the awaiting-verification placeholder.
 6. Never place passwords, service-role keys, QR personal data, or private booking data in public pages, URLs, logs, SEO, or QR payloads.
 
@@ -34,6 +34,7 @@ Do not embed Thai or English text inside an image unless separate localized imag
 ## Route locations
 
 Public/indexable: `src/app/[locale]/page.tsx`, `parking/`, `map/`, `about-project/`, `team/`, `privacy/`, `terms/`, `cookies/`, `help/`.
+Public utility/noindex: `report-bug/`, `feedback/`, authentication routes.
 
 Private/noindex: `app/`, `staff/`, `admin/`, and `developer/`. These must be protected by authentication and role checks; RLS remains the final data boundary.
 
@@ -48,6 +49,7 @@ Feature code belongs under `src/features/` as it grows. Shared UI belongs under 
 - Logo/PWA icons: `public/brand/`, `src/app/manifest.ts`.
 - Parking name/photo/location/capacity: Admin > Parking Areas, then Supabase `parking_areas`/`parking_images`; do not hard-code production records.
 - Booking rules: Supabase `booking_policies` and the Admin settings UI.
+- Mockup slot layout: `supabase/seed.sql`; live availability and overlap protection: `get_available_parking_slots` and the `bookings` exclusion constraint.
 - Permissions/RLS: migration SQL plus server/Edge Function authorization.
 - Web routes/SEO: `src/app/[locale]/...`, `sitemap.ts`, `robots.ts`.
 - Mobile packaging: `capacitor.config.ts`, `android/`, `ios/`.
