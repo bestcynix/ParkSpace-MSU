@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowRight, Brain, Lightbulb, PencilRuler, Search, TestTube2 } from "lucide-react";
+import { ArrowRight, Brain, Lightbulb, PencilRuler, Search, TestTube2, UserRound } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PageTopbar } from "@/components/layout/PageTopbar";
 import { PublicFooter } from "@/components/layout/PublicFooter";
@@ -52,11 +52,29 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
           <section className="project-info-card" aria-labelledby="project-summary-title">
             <p className="eyebrow">{t.projectCourse}</p>
             <h2 id="project-summary-title">{t.projectTitle}</h2>
-            <p>{t.semester} · {t.teamMembersLabel} 1</p>
-            <div className="project-meta">
-              <span>{teamMemberName}</span>
-              <span>{projectInfo.teamMember.studentId}</span>
-              <span>{t.teamMemberStudy}</span>
+            <p className="project-summary-meta"><span>{t.semester}</span><span aria-hidden="true">·</span><span>{t.teamMembersLabel} 1</span></p>
+          </section>
+
+          <section className="project-team-section" aria-labelledby="about-team-title">
+            <div className="section-heading">
+              <div>
+                <h2 id="about-team-title">{t.teamMembersLabel}</h2>
+                <p>1</p>
+              </div>
+            </div>
+            <div className="team-grid team-grid-single">
+              <article className="team-card team-member-card">
+                <span className="team-number">1</span>
+                <div className="team-member-heading">
+                  <span className="team-avatar" aria-hidden="true"><UserRound size={20} /></span>
+                  <div>
+                    <strong>{teamMemberName}</strong>
+                    <span>{projectInfo.teamMember.studentId}</span>
+                  </div>
+                </div>
+                <span>{t.teamMemberStudy}</span>
+                <div className="data-badge team-role-badge">{locale === "th" ? "สมาชิกทีม" : "Team member"}</div>
+              </article>
             </div>
           </section>
 
@@ -66,10 +84,12 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
               {steps.map(([Icon, title, subtitle], index) => (
                 <div className="team-card" key={title}>
                   <span className="team-number">{index + 1}</span>
-                  <Icon size={20} color="#9a7800" style={{ display: "block", marginTop: 14 }} />
+                  <div className="process-card-icon-row">
+                    <Icon size={20} color="#9a7800" aria-hidden="true" />
+                    {index < steps.length - 1 ? <ArrowRight size={14} color="#d0a900" aria-hidden="true" /> : <span aria-hidden="true" />}
+                  </div>
                   <strong>{title}</strong>
-                  <span>{subtitle}</span>
-                  {index < steps.length - 1 ? <ArrowRight size={14} color="#d0a900" style={{ float: "right", marginTop: -15 }} /> : null}
+                  <span className="process-card-subtitle">{subtitle}</span>
                 </div>
               ))}
             </div>

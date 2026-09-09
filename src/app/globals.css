@@ -1456,6 +1456,13 @@ button {
   line-height: 1.6;
 }
 
+.project-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .project-meta {
   display: flex;
   flex-wrap: wrap;
@@ -1477,6 +1484,37 @@ button {
   color: var(--muted);
   font-size: 10px;
   text-align: center;
+}
+
+.project-team-section {
+  margin-top: 22px;
+}
+
+.project-team-section .team-grid {
+  margin-top: 14px;
+}
+
+.team-role-badge {
+  margin-top: 10px;
+}
+
+.process-card-icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+  margin-top: 14px;
+}
+
+.process-card-icon-row > span {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.process-card-subtitle {
+  margin-top: 5px !important;
 }
 
 .project-credits {
@@ -2493,6 +2531,11 @@ button.role-chip:disabled {
 .support-page {
   max-width: 780px;
   margin: 20px auto 0;
+}
+
+.support-page > .support-form {
+  width: min(100%, 560px);
+  margin-inline: auto;
 }
 
 .support-page-grid {
