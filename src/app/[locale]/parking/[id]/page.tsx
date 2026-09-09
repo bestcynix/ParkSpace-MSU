@@ -12,8 +12,8 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
   const area = getParkingArea(id);
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   return {
-    title: locale === "th" ? `${area.code} ${area.th} | ข้อมูลรอตรวจสอบ` : `${area.code} ${area.en} | Awaiting verification`,
-    description: locale === "th" ? "รายละเอียดพื้นที่จอดรถ ParkSpace MSU โดยข้อมูลสถานที่จริงจะแสดงหลังการตรวจสอบ" : "ParkSpace MSU parking area details; verified location data will be published after review.",
+    title: locale === "th" ? `${area.code} ${area.th} | ParkSpace MSU` : `${area.code} ${area.en} | ParkSpace MSU`,
+    description: locale === "th" ? "พื้นที่จอดรถจากประกาศกองอาคารสถานที่ มหาวิทยาลัยมหาสารคาม พร้อมระบบเลือกช่องและจองผ่าน Supabase" : "Mahasarakham University parking area from the official announcement, with Supabase-backed slot selection and booking.",
   };
 }
 

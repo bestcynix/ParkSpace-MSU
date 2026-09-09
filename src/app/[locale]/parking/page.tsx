@@ -24,7 +24,7 @@ export default async function ParkingPage({ params }: { params: Promise<{ locale
         <PageTopbar locale={locale} title={t.parking} subtitle={t.allAreas} />
         <ParkingBrowser locale={locale} />
         <MockupNotice locale={locale} />
-        <div className="location-strip" style={{ marginTop: 18 }}><span className="location-icon"><Map size={19} /></span><span className="location-copy"><strong>{t.realMap}</strong><span>{t.mapPending}</span></span><MapPin size={17} color="#89919b" style={{ marginLeft: "auto" }} /></div>
+        <div className="location-strip" style={{ marginTop: 18 }}><span className="location-icon"><Map size={19} /></span><span className="location-copy"><strong>{t.realMap}</strong><span>{t.mapAreaNote}</span></span><MapPin size={17} color="#89919b" style={{ marginLeft: "auto" }} /></div>
         <PublicFooter locale={locale} />
       </div>
       <BottomNav locale={locale} active="parking" />

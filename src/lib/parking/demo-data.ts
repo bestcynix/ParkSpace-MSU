@@ -19,7 +19,9 @@ export type ParkingArea = {
   sourceReference: string;
 };
 
-const officialSource = "https://building.msu.ac.th/news-detail.php?id=23";
+export const officialSource = "https://building.msu.ac.th/news-detail.php?id=23";
+export const officialMapImage = "https://building.msu.ac.th/uploads/news/news_img_20260623_041630_d386e933.png";
+export const campusCenter = "16.24704,103.24936";
 
 // Area names are transcribed from the MSU Building and Grounds Division
 // announcement graphic. The local catalog describes the requested mock layout;
@@ -84,4 +86,9 @@ export function getAreaName(area: ParkingArea, locale: Locale) {
 
 export function getAreaDetail(area: ParkingArea, locale: Locale) {
   return locale === "th" ? area.detailTh : area.detailEn;
+}
+
+export function getGoogleMapsSearchUrl(area: ParkingArea) {
+  const query = `${area.code} ${area.th} ${area.en} มหาวิทยาลัยมหาสารคาม เขตพื้นที่ขามเรียง`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }

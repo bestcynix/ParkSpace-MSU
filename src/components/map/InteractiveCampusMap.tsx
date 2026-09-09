@@ -5,15 +5,12 @@ import { ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, ZoomIn, Zoo
 import { useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import type { ParkingArea } from "@/lib/parking/demo-data";
+import { campusCenter, officialMapImage, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
 
 type MapMode = "google" | "satellite" | "diagram";
 
-const officialMapImage = "https://building.msu.ac.th/uploads/news/news_img_20260623_041630_d386e933.png";
 const officialGoogleMyMap = "https://www.google.com/maps/d/embed?mid=19EPtHszwxadv8Jst4jps9NbMakAC4rq1";
 const officialGoogleMyMapLink = "https://www.google.com/maps/d/viewer?mid=19EPtHszwxadv8Jst4jps9NbMakAC4rq1";
-const campusCenter = "16.24704,103.24936";
-const mapSource = "https://building.msu.ac.th/news-detail.php?id=23";
 
 export function InteractiveCampusMap({
   locale,
@@ -28,7 +25,7 @@ export function InteractiveCampusMap({
 }) {
   const t = getCopy(locale);
   const firstCode = selectedAreaCode ?? areas[0]?.code ?? "P01";
-  const [mode, setMode] = useState<MapMode>("diagram");
+  const [mode, setMode] = useState<MapMode>("google");
   const [focusCode, setFocusCode] = useState(firstCode);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -138,7 +135,7 @@ export function InteractiveCampusMap({
             </div>
             <span className="diagram-map-hint">{t.dragMap}</span>
           </div>
-          <div className="map-embed-footer"><span>{t.officialMap}</span><a className="text-link" href={mapSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
+          <div className="map-embed-footer"><span>{t.officialMap}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 

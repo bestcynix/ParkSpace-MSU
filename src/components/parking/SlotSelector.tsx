@@ -58,7 +58,7 @@ function todayString() {
 export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingArea }) {
   const t = getCopy(locale);
   const [mode, setMode] = useState<SlotMode>(area.slotMode);
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(todayString());
   const [startTime, setStartTime] = useState("10:00");
   const [endTime, setEndTime] = useState("13:00");
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
@@ -84,6 +84,13 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
     void loadLiveMode();
     return () => { active = false; };
   }, [area.code, configured]);
+
+  useEffect(() => {
+    if (!configured || mode !== "INDIVIDUAL_SLOT") return;
+    void refreshSlots();
+    // refreshSlots reads the current date/time fields and is intentionally run when the live mode becomes available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured, mode]);
 
   async function refreshSlots(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();

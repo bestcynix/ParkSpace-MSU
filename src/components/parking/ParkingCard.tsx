@@ -1,10 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, MapPin } from "lucide-react";
+import { ArrowRight, ExternalLink, MapPin } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { getAreaDetail, getAreaName, type ParkingArea } from "@/lib/parking/demo-data";
-import { MockupNotice } from "@/components/parking/MockupNotice";
-import { StatusBadge } from "@/components/parking/StatusBadge";
+import { getAreaDetail, getAreaName, getGoogleMapsSearchUrl, officialMapImage, type ParkingArea } from "@/lib/parking/demo-data";
+import { LiveAreaStatus } from "@/components/parking/LiveAreaStatus";
 
 export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Locale }) {
   const t = getCopy(locale);
@@ -12,8 +11,10 @@ export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Local
   const reserveLabel = area.slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid ? t.selectSlot : t.reserve;
   return (
     <article className="parking-card">
-      <div className="parking-image" aria-label={`${t.pendingImage} / ${t.pendingImageEn}`}>
-        <span className="image-label">{t.pendingImage}</span>
+      <div className="parking-image">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={officialMapImage} alt={`${t.officialMap} · ${getAreaName(area, locale)}`} loading="lazy" />
+        <span className="image-label">{t.officialMap}</span>
       </div>
       <div className="parking-card-body">
         <div className="parking-card-top">
@@ -21,12 +22,12 @@ export function ParkingCard({ area, locale }: { area: ParkingArea; locale: Local
             {area.code} · {getAreaName(area, locale)}
             <span>{getAreaDetail(area, locale)}</span>
           </h3>
-          <StatusBadge status={area.status} locale={locale} />
-        </div>
-        <div className="parking-detail-line"><MapPin size={13} />{area.distance ?? t.awaitingVerification}</div>
+          <LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} />
+          </div>
+        <a className="parking-detail-line text-link" href={getGoogleMapsSearchUrl(area)} target="_blank" rel="noreferrer"><MapPin size={13} />{t.openGoogleMaps}<ExternalLink size={12} /></a>
         {area.estimatedCapacity ? <div className="parking-detail-line">{t.estimatedCapacity}: {area.estimatedCapacity} {locale === "th" ? "คัน" : "vehicles"}</div> : null}
         <div className="inline-actions" style={{ marginTop: 10 }}>
-          <span className="data-badge">{t.awaitingVerification}</span>
+          <span className="data-badge">{t.officialMap}</span>
           {area.estimatedCapacity ? <span className="mockup-badge">{t.sampleData}</span> : null}
         </div>
         <div className="card-actions">

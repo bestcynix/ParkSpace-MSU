@@ -18,6 +18,12 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+  function getNextPath() {
+    if (typeof window === "undefined") return `/${locale}/app`;
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next && next.startsWith("/") && !next.startsWith("//") ? next : `/${locale}/app`;
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -33,6 +39,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
         : await supabase.auth.signUp({ email, password, options: { data: { full_name: name, preferred_locale: locale } } });
       if (result.error) throw result.error;
       setMessage(isLogin ? t.ready : t.verifyEmail);
+      if (isLogin) window.location.assign(getNextPath());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Authentication failed");
     } finally {
@@ -46,7 +53,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       return;
     }
     const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/${locale}/app` } });
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}${getNextPath()}` } });
   }
 
   return (

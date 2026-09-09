@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { PageTopbar } from "@/components/layout/PageTopbar";
 import { getCopy, isLocale, type Locale } from "@/lib/i18n";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 
 export async function generateMetadata(): Promise<Metadata> { return { title: "Profile" }; }
 
@@ -21,5 +22,5 @@ export default async function ProfilePage({ params }: { params: Promise<{ locale
     [ShieldCheck, t.privacy, `/${locale}/privacy`],
     [CircleHelp, t.help, `/${locale}/help`],
   ] as const;
-  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.profile} subtitle={t.signInRequired} /><div className="profile-card"><span className="profile-avatar"><UserRound size={28} /></span><div><strong>{t.signInRequired}</strong><span>{t.accountNotConfigured} / {t.accountNotConfiguredEn}</span></div></div><div className="menu-list">{items.map(([Icon, label, href]) => <Link href={href} key={label}><Icon size={18} /><span>{label}</span><ChevronRight className="menu-arrow" size={16} /></Link>)}<button type="button"><LogOut size={18} /><span>{locale === "th" ? "ออกจากระบบ" : "Log out"}</span><ChevronRight className="menu-arrow" size={16} /></button></div><p className="footer-note">{t.noPrivateData}</p></div><BottomNav locale={locale} active="profile" /></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.profile} subtitle={t.signInRequired} /><RequireAuth locale={locale} target={`/${locale}/app/profile`}><div className="profile-card"><span className="profile-avatar"><UserRound size={28} /></span><div><strong>{t.profile}</strong><span>{t.realDataNote}</span></div></div><div className="menu-list">{items.map(([Icon, label, href]) => <Link href={href} key={label}><Icon size={18} /><span>{label}</span><ChevronRight className="menu-arrow" size={16} /></Link>)}<button type="button"><LogOut size={18} /><span>{locale === "th" ? "ออกจากระบบ" : "Log out"}</span><ChevronRight className="menu-arrow" size={16} /></button></div><p className="footer-note">{t.noPrivateData}</p></RequireAuth></div><BottomNav locale={locale} active="profile" /></div>;
 }
