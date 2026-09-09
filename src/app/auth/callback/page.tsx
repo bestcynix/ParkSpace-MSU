@@ -31,7 +31,7 @@ export default function OAuthCallbackPage() {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
-        console.error("[auth] OAuth callback failed", { name: error.name, message: error.message });
+        console.error(`[auth] OAuth callback failed: ${error.name}: ${error.message}`);
         router.replace(`/${locale}/login?error=oauth`);
         return;
       }
@@ -49,7 +49,7 @@ export default function OAuthCallbackPage() {
       window.location.assign(new URL(`/${locale}/auth/complete?provider=google&next=${encodeURIComponent(next)}`, window.location.origin).toString());
     }
     void completeOAuth().catch((error: unknown) => {
-      console.error("[auth] OAuth callback exception", error);
+      console.error(`[auth] OAuth callback exception: ${error instanceof Error ? `${error.name}: ${error.message}` : "unknown error"}`);
       const next = safeNextPath(searchParams.get("next"));
       router.replace(`/${localeForPath(next)}/login?error=oauth`);
     });
