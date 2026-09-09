@@ -3557,12 +3557,21 @@ button.role-chip:disabled {
 .team-member-heading strong { margin: 0; }
 .team-avatar { display: grid; width: 42px; height: 42px; margin: 0 !important; place-items: center; border-radius: 14px; background: var(--gold-soft); color: #806400; }
 .team-avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.team-avatar-editor { grid-column: 1 / -1; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: #fbfcfc; }
+.team-avatar-upload-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.team-avatar-file-button { position: relative; min-height: 34px; padding: 0 12px; cursor: pointer; }
+.team-avatar-file-button input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+.team-avatar-upload-row .icon-button { flex: 0 0 auto; }
+.team-avatar-editor .field-hint { display: block; margin-top: 7px; }
+.team-avatar-url-label { display: block; margin-top: 12px; color: var(--muted); font-size: 10px; }
 .team-member-card.hidden-member { opacity: 0.65; }
 .team-editor-actions { display: flex; align-items: center; gap: 5px; margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
 .team-editor-actions .icon-button { width: 30px; height: 30px; border-radius: 10px; font-size: 15px; }
 .team-visibility { margin-left: auto !important; color: var(--muted) !important; }
 .team-editor-form { width: 100%; max-width: none; margin-top: 16px; }
 .inline-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 14px; color: var(--muted); font-size: 11px; }
+.team-live-hint { grid-column: 1 / -1; text-align: center; }
+.team-preview-count { display: inline-grid; min-width: 30px; min-height: 30px; margin: 0 0 10px; place-items: center; border-radius: 10px; background: var(--gold-soft); color: #806400; font-size: 14px; font-weight: 800; }
 
 @media (max-width: 900px) {
   .parking-grid,

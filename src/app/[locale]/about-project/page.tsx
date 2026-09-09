@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { ArrowRight, Brain, Lightbulb, PencilRuler, Search, TestTube2, UserRound } from "lucide-react";
+import { ArrowRight, Brain, Lightbulb, PencilRuler, Search, TestTube2 } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PageTopbar } from "@/components/layout/PageTopbar";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
-import { projectInfo } from "@/lib/project-info";
+import { ProjectTeamPreview } from "@/components/project/ProjectTeamPreview";
 
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
@@ -30,8 +30,6 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
     [PencilRuler, "Prototype", locale === "th" ? "สร้างต้นแบบ" : "Build a prototype"],
     [TestTube2, "Test", locale === "th" ? "ทดสอบและปรับปรุง" : "Test and improve"],
   ] as const;
-  const teamMemberName = locale === "th" ? projectInfo.teamMember.name : "Natthaphon Phankon";
-
   return (
     <div className="app-frame">
       <div className="page-wrap">
@@ -53,29 +51,16 @@ export default async function AboutProjectPage({ params }: { params: Promise<{ l
           <section className="project-info-card" aria-labelledby="project-summary-title">
             <p className="eyebrow">{t.projectCourse}</p>
             <h2 id="project-summary-title">{t.projectTitle}</h2>
-            <p className="project-summary-meta"><span>{t.semester}</span><span aria-hidden="true">·</span><span>{t.teamMembersLabel} 1</span></p>
+            <p className="project-summary-meta"><span>{t.semester}</span></p>
           </section>
 
           <section className="project-team-section" aria-labelledby="about-team-title">
             <div className="section-heading">
               <div>
                 <h2 id="about-team-title">{t.teamMembersLabel}</h2>
-                <p>1</p>
               </div>
             </div>
-            <div className="team-grid team-grid-single">
-              <article className="team-card team-member-card">
-                <div className="team-member-heading">
-                  <span className="team-avatar" aria-hidden="true"><UserRound size={20} /></span>
-                  <div>
-                    <strong>{teamMemberName}</strong>
-                    <span>{projectInfo.teamMember.studentId}</span>
-                  </div>
-                </div>
-                <span>{t.teamMemberStudy}</span>
-                <div className="data-badge team-role-badge">{locale === "th" ? "สมาชิกทีม" : "Team member"}</div>
-              </article>
-            </div>
+            <ProjectTeamPreview locale={locale} />
           </section>
 
           <section className="info-card" style={{ padding: 20, marginTop: 18 }} aria-labelledby="design-thinking-title">
