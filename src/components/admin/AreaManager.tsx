@@ -160,13 +160,13 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   async function writeAudit(action: string, entityId: string | null, beforeData: unknown, afterData: unknown) {
     if (role !== "admin") return;
     const supabase = createSupabaseBrowserClient();
-    const { data } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getSession();
     const traceId = crypto.randomUUID();
     await supabase.from("audit_logs").insert({
       event_id: `admin-area-${traceId}`,
       trace_id: traceId,
       actor_type: "ADMIN",
-      actor_id: data.user?.id ?? null,
+      actor_id: data.session?.user.id ?? null,
       action,
       entity_type: "parking_area",
       entity_id: entityId,

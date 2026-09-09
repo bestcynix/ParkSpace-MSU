@@ -47,8 +47,8 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       setLoadingVehicles(true);
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) return;
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) return;
         const { data, error } = await supabase.from("vehicles").select("id, plate, province, vehicle_type, brand, model, color, usage_type, is_default").order("is_default", { ascending: false }).order("created_at", { ascending: false });
         if (error) throw error;
         if (!active) return;
@@ -91,8 +91,8 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
     setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
         setMessage(t.signInRequired);
         notify({ title: t.signInRequired, kind: "warning" });
         return;
@@ -111,7 +111,7 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         return;
       }
       const { data: booking, error } = await supabase.from("bookings").insert({
-        user_id: userData.user.id,
+        user_id: sessionData.session.user.id,
         parking_area_id: dbArea.id,
         booking_date: date,
         parking_slot_id: selectedSlot?.id ?? null,

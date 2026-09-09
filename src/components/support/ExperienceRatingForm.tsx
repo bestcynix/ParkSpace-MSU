@@ -35,9 +35,9 @@ export function ExperienceRatingForm({ locale }: { locale: Locale }) {
     setStatusMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: sessionData } = await supabase.auth.getSession();
       const { error } = await supabase.from("evaluations").insert({
-        user_id: userData.user?.id ?? null,
+        user_id: sessionData.session?.user.id ?? null,
         overall_rating: ratings.overall,
         comment: comment || null,
         answers: { type: "SYSTEM_EXPERIENCE", locale, systems: ratings },

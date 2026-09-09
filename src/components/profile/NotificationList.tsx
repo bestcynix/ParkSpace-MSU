@@ -22,9 +22,9 @@ export function NotificationList({ locale }: { locale: Locale }) {
     }
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) return;
-      const { data, error } = await supabase.from("notifications").select("id, notification_type, title_th, title_en, body_th, body_en, read_at, created_at").eq("user_id", userData.user.id).order("created_at", { ascending: false }).limit(100);
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) return;
+      const { data, error } = await supabase.from("notifications").select("id, notification_type, title_th, title_en, body_th, body_en, read_at, created_at").eq("user_id", sessionData.session.user.id).order("created_at", { ascending: false }).limit(100);
       if (error) throw error;
       setItems((data ?? []) as NotificationRow[]);
     } catch (error) {

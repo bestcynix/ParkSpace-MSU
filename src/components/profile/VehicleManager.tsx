@@ -43,8 +43,8 @@ export function VehicleManager({ locale }: { locale: Locale }) {
       }
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
           if (active) setMessage(t.signInRequired);
           return;
         }
@@ -75,18 +75,18 @@ export function VehicleManager({ locale }: { locale: Locale }) {
     setSaving(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
         setMessage(t.signInRequired);
         return;
       }
       const shouldBeDefault = vehicles.length === 0 || form.usage_type === "PERSONAL" && vehicles.every((vehicle) => !vehicle.is_default);
       if (shouldBeDefault) {
-        const { error } = await supabase.from("vehicles").update({ is_default: false }).eq("user_id", userData.user.id);
+        const { error } = await supabase.from("vehicles").update({ is_default: false }).eq("user_id", sessionData.session.user.id);
         if (error) throw error;
       }
       const { data, error } = await supabase.from("vehicles").insert({
-        user_id: userData.user.id,
+        user_id: sessionData.session.user.id,
         plate: form.plate.trim(),
         province: form.province.trim() || null,
         vehicle_type: form.vehicle_type,
@@ -114,14 +114,14 @@ export function VehicleManager({ locale }: { locale: Locale }) {
     setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
         setMessage(t.signInRequired);
         return;
       }
-      const { error: clearError } = await supabase.from("vehicles").update({ is_default: false }).eq("user_id", userData.user.id);
+      const { error: clearError } = await supabase.from("vehicles").update({ is_default: false }).eq("user_id", sessionData.session.user.id);
       if (clearError) throw clearError;
-      const { error } = await supabase.from("vehicles").update({ is_default: true }).eq("id", vehicle.id).eq("user_id", userData.user.id);
+      const { error } = await supabase.from("vehicles").update({ is_default: true }).eq("id", vehicle.id).eq("user_id", sessionData.session.user.id);
       if (error) throw error;
       setVehicles((current) => current.map((item) => ({ ...item, is_default: item.id === vehicle.id })));
     } catch (error) {

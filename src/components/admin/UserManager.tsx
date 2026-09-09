@@ -143,13 +143,13 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
   async function audit(action: string, userId: string, metadata: Record<string, unknown>) {
     if (role !== "admin") return;
     const supabase = createSupabaseBrowserClient();
-    const { data } = await supabase.auth.getUser();
+    const { data } = await supabase.auth.getSession();
     const traceId = crypto.randomUUID();
     await supabase.from("audit_logs").insert({
       event_id: `admin-user-${traceId}`,
       trace_id: traceId,
       actor_type: "ADMIN",
-      actor_id: data.user?.id ?? null,
+      actor_id: data.session?.user.id ?? null,
       action,
       entity_type: "profile",
       entity_id: userId,
@@ -184,8 +184,8 @@ export function UserManager({ locale, role }: { locale: Locale; role: ManagerRol
     setMessage("");
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: actor } = await supabase.auth.getUser();
-      const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: roleToGrant, granted_by: actor.user?.id ?? null });
+      const { data: actor } = await supabase.auth.getSession();
+      const { error } = await supabase.from("user_roles").insert({ user_id: user.id, role: roleToGrant, granted_by: actor.session?.user.id ?? null });
       if (error) throw error;
       setUsers((current) => current.map((item) => item.id === user.id ? { ...item, roles: [...item.roles, roleToGrant] } : item));
       await audit("GRANT_ROLE", user.id, { role: roleToGrant });

@@ -42,8 +42,8 @@ export function BookingsList({ locale }: { locale: Locale }) {
     }
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
         setMessage(copy.signInRequired);
         return;
       }

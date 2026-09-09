@@ -52,8 +52,8 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
     setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
         setMessage(t.signInRequired);
         return;
       }

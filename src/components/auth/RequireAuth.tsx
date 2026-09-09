@@ -20,9 +20,9 @@ export function RequireAuth({ locale, target, children }: { locale: Locale; targ
         return;
       }
       try {
-        const { data } = await createSupabaseBrowserClient().auth.getUser();
-        if (active && data.user) setAllowed(true);
-        if (active && !data.user) window.location.replace(loginHref);
+        const { data } = await createSupabaseBrowserClient().auth.getSession();
+        if (active && data.session) setAllowed(true);
+        if (active && !data.session) window.location.replace(loginHref);
       } catch {
         window.location.replace(loginHref);
       }

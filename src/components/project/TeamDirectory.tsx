@@ -171,12 +171,12 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       setDataState(nextMembers.length ? "supabase" : "fallback");
       setEditorRole(null);
 
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
         const { data: roles } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", userData.user.id);
+          .eq("user_id", sessionData.session.user.id);
         const roleValues = (roles ?? [])
           .map((item: { role?: unknown }) => item.role)
           .filter((role: unknown): role is EditorRole => role === "admin" || role === "developer");

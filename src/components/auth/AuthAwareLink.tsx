@@ -21,8 +21,8 @@ export function AuthAwareLink({ locale, target, className, ariaLabel, children }
       return;
     }
     try {
-      const { data } = await createSupabaseBrowserClient().auth.getUser();
-      if (data.user) router.push(target);
+      const { data } = await createSupabaseBrowserClient().auth.getSession();
+      if (data.session) router.push(target);
       else {
         notify({ title: t.signInRequired, message: t.loginHint, kind: "info" });
         router.push(loginHref);

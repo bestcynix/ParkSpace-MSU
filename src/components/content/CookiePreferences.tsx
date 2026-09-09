@@ -27,9 +27,9 @@ export function CookiePreferences({ locale }: { locale: Locale }) {
       if (storedValue) next = { ...next, ...(JSON.parse(storedValue) as Partial<Preferences>) };
       if (isSupabaseConfigured()) {
         const supabase = createSupabaseBrowserClient();
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
-          const { data } = await supabase.from("cookie_preferences").select("necessary, analytics, preferences, performance").eq("user_id", userData.user.id).maybeSingle();
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          const { data } = await supabase.from("cookie_preferences").select("necessary, analytics, preferences, performance").eq("user_id", sessionData.session.user.id).maybeSingle();
           if (data) next = { ...next, ...(data as Partial<Preferences>), necessary: true };
         }
       }
@@ -59,9 +59,9 @@ export function CookiePreferences({ locale }: { locale: Locale }) {
       document.cookie = `${cookieKey}=${encodeURIComponent(JSON.stringify(next))}; Max-Age=31536000; Path=/; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
       if (isSupabaseConfigured()) {
         const supabase = createSupabaseBrowserClient();
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
-          const { error } = await supabase.from("cookie_preferences").upsert({ user_id: userData.user.id, ...next, updated_at: new Date().toISOString() });
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          const { error } = await supabase.from("cookie_preferences").upsert({ user_id: sessionData.session.user.id, ...next, updated_at: new Date().toISOString() });
           if (error) throw error;
         }
       }

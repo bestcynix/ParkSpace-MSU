@@ -117,13 +117,13 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
   async function audit(action: string, entityId: string, beforeData: unknown, afterData: unknown) {
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.auth.getUser();
+      const { data } = await supabase.auth.getSession();
       const traceId = crypto.randomUUID();
       await supabase.from("audit_logs").insert({
         event_id: `layout-${traceId}`,
         trace_id: traceId,
         actor_type: role.toUpperCase(),
-        actor_id: data.user?.id ?? null,
+        actor_id: data.session?.user.id ?? null,
         action,
         entity_type: "parking_layout",
         entity_id: entityId,

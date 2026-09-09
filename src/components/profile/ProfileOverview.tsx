@@ -44,19 +44,20 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
     setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) throw userError ?? new Error(t.signInRequired);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) throw sessionError ?? new Error(t.signInRequired);
+      const user = sessionData.session.user;
       const [profileResult, roleResult] = await Promise.all([
-        supabase.from("profiles").select(profileFields).eq("id", userData.user.id).maybeSingle(),
-        supabase.from("user_roles").select("role").eq("user_id", userData.user.id),
+        supabase.from("profiles").select(profileFields).eq("id", user.id).maybeSingle(),
+        supabase.from("user_roles").select("role").eq("user_id", user.id),
       ]);
       if (profileResult.error) throw profileResult.error;
       if (roleResult.error) throw roleResult.error;
-      const nextProfile = (profileResult.data ?? { id: userData.user.id, email: userData.user.email ?? null }) as Profile;
+      const nextProfile = (profileResult.data ?? { id: user.id, email: user.email ?? null }) as Profile;
       setProfile(nextProfile);
       setDraft({ full_name: nextProfile.full_name ?? "", university_id: nextProfile.university_id ?? "", faculty: nextProfile.faculty ?? "", major: nextProfile.major ?? "", department: nextProfile.department ?? "", phone: nextProfile.phone ?? "" });
       setRoles(((roleResult.data ?? []) as Array<{ role: Role }>).map((item) => item.role));
-      setEmailVerified(Boolean(userData.user.email_confirmed_at) || Boolean(userData.user.identities?.some((identity: { provider?: string }) => identity.provider === "google")));
+      setEmailVerified(Boolean(user.email_confirmed_at) || Boolean(user.identities?.some((identity: { provider?: string }) => identity.provider === "google")));
       if (nextProfile.avatar_path) {
         const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(nextProfile.avatar_path, 3600);
         setAvatarUrl(signed?.signedUrl ?? "");

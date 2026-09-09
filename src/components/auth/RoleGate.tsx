@@ -22,12 +22,12 @@ export function RoleGate({ locale, role, children }: { locale: Locale; role: Pro
       }
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data: userData } = await supabase.auth.getUser();
-        if (!userData.user) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
           if (mounted) setState("blocked");
           return;
         }
-        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", userData.user.id).eq("role", role).maybeSingle();
+        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", sessionData.session.user.id).eq("role", role).maybeSingle();
         if (mounted) setState(roleData ? "allowed" : "blocked");
       } catch {
         if (mounted) setState("blocked");
