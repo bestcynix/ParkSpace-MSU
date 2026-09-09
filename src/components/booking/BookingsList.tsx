@@ -55,11 +55,11 @@ export function BookingsList({ locale }: { locale: Locale }) {
     } catch (error) {
       if (error && typeof error === "object") {
         const detail = error as { code?: unknown; status?: unknown; message?: unknown };
-        console.error("[bookings] Supabase read failed", {
+        console.error("[bookings] Supabase read failed", JSON.stringify({
           code: typeof detail.code === "string" ? detail.code : undefined,
           status: typeof detail.status === "number" ? detail.status : undefined,
           message: typeof detail.message === "string" ? detail.message : undefined,
-        });
+        }));
       }
       setMessage(error instanceof Error ? error.message : copy.operationalData);
     } finally {
