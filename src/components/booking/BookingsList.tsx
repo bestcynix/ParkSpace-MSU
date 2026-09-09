@@ -53,6 +53,14 @@ export function BookingsList({ locale }: { locale: Locale }) {
       const { data: areas } = await supabase.from("parking_areas").select("id, code, name_th, name_en");
       setAreaNames(Object.fromEntries(((areas ?? []) as Array<{ id: string; code: string; name_th: string; name_en: string }>).map((area) => [area.id, { code: area.code, name: locale === "th" ? area.name_th : area.name_en }])));
     } catch (error) {
+      if (error && typeof error === "object") {
+        const detail = error as { code?: unknown; status?: unknown; message?: unknown };
+        console.error("[bookings] Supabase read failed", {
+          code: typeof detail.code === "string" ? detail.code : undefined,
+          status: typeof detail.status === "number" ? detail.status : undefined,
+          message: typeof detail.message === "string" ? detail.message : undefined,
+        });
+      }
       setMessage(error instanceof Error ? error.message : copy.operationalData);
     } finally {
       setLoading(false);
