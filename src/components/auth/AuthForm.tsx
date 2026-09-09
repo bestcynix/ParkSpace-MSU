@@ -50,6 +50,9 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
         ? await supabase.auth.signInWithPassword({ email: authEmail, password })
         : await supabase.auth.signUp({ email: authEmail, password, options: { data: { full_name: name, preferred_locale: locale }, emailRedirectTo: `${window.location.origin}/${locale}/verify-email` } });
       if (result.error) throw result.error;
+      if (isLogin && result.data.user && !result.data.user.user_metadata?.parkspace_google_password_setup_completed_at) {
+        await supabase.auth.updateUser({ data: { ...result.data.user.user_metadata, parkspace_google_password_setup_completed_at: new Date().toISOString() } });
+      }
       setMessage(isLogin ? t.ready : t.verifyEmail);
       notify({ title: isLogin ? t.accountConnected : t.verifyEmail, kind: "success" });
       if (isLogin) window.location.assign(getNextPath());
