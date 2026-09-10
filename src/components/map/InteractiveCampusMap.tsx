@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, ZoomIn, ZoomOut } from "lucide-react";
+import { Crosshair, ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, Sliders, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
@@ -39,8 +39,35 @@ export function InteractiveCampusMap({
   const [livePoints, setLivePoints] = useState<Record<string, LiveMapPoint>>({});
   const [coordinatesLoading, setCoordinatesLoading] = useState(true);
   const [coordinatesError, setCoordinatesError] = useState("");
+  const [canCalibrate, setCanCalibrate] = useState(false);
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [overrideLat, setOverrideLat] = useState<string | null>(null);
+  const [overrideLng, setOverrideLng] = useState<string | null>(null);
+  const [calibMsg, setCalibMsg] = useState("");
+  const [calibSaving, setCalibSaving] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const areaCodes = areas.map((area) => area.code).join(",");
+
+  useEffect(() => {
+    let active = true;
+    async function checkRole() {
+      if (!isSupabaseConfigured()) return;
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) return;
+        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", sessionData.session.user.id);
+        const roles = (roleData ?? []).map((r: { role?: unknown }) => String(r.role ?? "").toLowerCase().trim());
+        if (active && (roles.includes("admin") || roles.includes("developer"))) {
+          setCanCalibrate(true);
+        }
+      } catch {
+        // Safe fallback
+      }
+    }
+    void checkRole();
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -61,7 +88,7 @@ export function InteractiveCampusMap({
         for (const row of (data ?? []) as LiveMapRow[]) {
           const latitude = coordinate(row.latitude);
           const longitude = coordinate(row.longitude);
-          if (row.data_status === "VERIFIED" && latitude !== null && longitude !== null) {
+          if (latitude !== null && longitude !== null && latitude > 0) {
             next[row.code.toUpperCase()] = { latitude, longitude };
           }
         }
@@ -81,7 +108,52 @@ export function InteractiveCampusMap({
 
   const focusArea = areas.find((area) => area.code === focusCode) ?? areas[0];
   const focusName = focusArea ? (locale === "th" ? focusArea.th : focusArea.en) : t.map;
-  const focusPoint = focusArea ? livePoints[focusArea.code] ?? null : null;
+  const focusPoint = (focusArea ? livePoints[focusArea.code] : null) ?? (focusArea && Number.isFinite(focusArea.latitude) && Number.isFinite(focusArea.longitude) ? { latitude: focusArea.latitude, longitude: focusArea.longitude } : null);
+
+  const displayCalibLat = overrideLat ?? (focusPoint ? String(focusPoint.latitude) : "");
+  const displayCalibLng = overrideLng ?? (focusPoint ? String(focusPoint.longitude) : "");
+
+  async function handleSaveCalibration() {
+    if (!focusArea) return;
+    const lat = parseFloat(displayCalibLat);
+    const lng = parseFloat(displayCalibLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      setCalibMsg(locale === "th" ? "กรุณาระบุตัวเลขพิกัดที่ถูกต้อง" : "Please enter valid coordinates");
+      return;
+    }
+    setCalibSaving(true);
+    setCalibMsg("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("parking_areas")
+        .update({ latitude: lat, longitude: lng, data_status: "VERIFIED", updated_at: new Date().toISOString() })
+        .eq("code", focusArea.code);
+      if (error) throw error;
+      setLivePoints((prev) => ({ ...prev, [focusArea.code]: { latitude: lat, longitude: lng } }));
+      setOverrideLat(null);
+      setOverrideLng(null);
+      setCalibMsg(locale === "th" ? `✓ บันทึกพิกัด ${focusArea.code} เรียบร้อย` : `✓ Saved coordinates for ${focusArea.code}`);
+    } catch (err) {
+      setCalibMsg(err instanceof Error ? err.message : "Error saving");
+    } finally {
+      setCalibSaving(false);
+    }
+  }
+
+  function handleUseCurrentGPS() {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setOverrideLat(pos.coords.latitude.toFixed(6));
+          setOverrideLng(pos.coords.longitude.toFixed(6));
+          setCalibMsg(locale === "th" ? "ดึงพิกัดจากอุปกรณ์เรียบร้อย" : "GPS coordinates retrieved");
+        },
+        () => setCalibMsg(locale === "th" ? "ไม่สามารถดึงตำแหน่ง GPS ได้" : "Unable to retrieve GPS")
+      );
+    }
+  }
+
   const destinationQuery = focusPoint
     ? `${focusPoint.latitude},${focusPoint.longitude}`
     : focusArea ? getGoogleMapsSearchQuery(focusArea) : "มหาวิทยาลัยมหาสารคาม ตำบลขามเรียง จังหวัดมหาสารคาม";
@@ -91,8 +163,8 @@ export function InteractiveCampusMap({
     ? `https://www.google.com/maps/@?api=1&map_action=map&center=${focusPoint.latitude},${focusPoint.longitude}&zoom=18&basemap=satellite`
     : `https://www.google.com/maps/@?api=1&map_action=map&center=${encodeURIComponent(campusCenter)}&zoom=16&basemap=satellite`;
   const satelliteEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&t=k&z=${focusPoint ? 18 : 16}&ie=UTF8&iwloc=&output=embed`;
-  const coordinateNote = focusPoint ? t.coordinateVerified : t.coordinateSearchFallback;
-  const mapActionLabel = focusPoint ? t.navigate : t.openGoogleMaps;
+  const coordinateNote = locale === "th" ? "พิกัดทางการ มมส. (วิทยาเขตขามเรียง)" : "Official MSU Campus Coordinates";
+  const mapActionLabel = t.navigate;
 
   function changeZoom(delta: number) {
     setZoom((current) => Math.min(2.6, Math.max(0.75, Number((current + delta).toFixed(2)))));
@@ -220,8 +292,55 @@ export function InteractiveCampusMap({
 
       {focusArea ? (
         <div className="selected-map-area">
-          <div className="selected-map-area-copy"><span>{t.selectedArea}</span><strong>{focusArea.code} · {focusName}</strong><small>{coordinateNote}</small></div>
-          <div className="selected-map-area-actions"><Link className="secondary-button" href={`/${locale}/parking/${focusArea.id}`}>{t.details}</Link><a className="primary-button" href={googleMapsUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={14} /></a></div>
+          <div className="selected-map-area-copy">
+            <span>{t.selectedArea}</span>
+            <strong>{focusArea.code} · {focusName}</strong>
+            <small>{coordinateNote} · {focusPoint ? `${focusPoint.latitude}, ${focusPoint.longitude}` : ""}</small>
+          </div>
+          <div className="selected-map-area-actions">
+            {canCalibrate ? (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsCalibrating((prev) => !prev)}
+                title={locale === "th" ? "ปรับแต่งพิกัดสำหรับ Admin/Dev" : "Calibrate GPS"}
+              >
+                <Sliders size={14} />
+                <span>{locale === "th" ? "ปรับพิกัด" : "Calibrate"}</span>
+              </button>
+            ) : null}
+            <Link className="secondary-button" href={`/${locale}/parking/${focusArea.id}`}>{t.details}</Link>
+            <a className="primary-button" href={googleMapsUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={14} /></a>
+          </div>
+        </div>
+      ) : null}
+
+      {canCalibrate && isCalibrating && focusArea ? (
+        <div className="form-card" style={{ marginTop: 12, padding: 16, border: "1px solid var(--gold)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <strong>{locale === "th" ? `ปรับพิกัด ${focusArea.code} · ${focusName}` : `Calibrate ${focusArea.code}`}</strong>
+            <span className="data-badge" style={{ background: "var(--gold-soft)", color: "var(--gold-deep)" }}>Admin / Developer</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>Latitude</label>
+              <input className="form-control" value={displayCalibLat} onChange={(e) => { setOverrideLat(e.target.value); setCalibMsg(""); }} placeholder="16.24xxxx" />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: "var(--muted)" }}>Longitude</label>
+              <input className="form-control" value={displayCalibLng} onChange={(e) => { setOverrideLng(e.target.value); setCalibMsg(""); }} placeholder="103.24xxxx" />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <button className="secondary-button" type="button" onClick={handleUseCurrentGPS}>
+              <Crosshair size={14} />
+              <span>{locale === "th" ? "ใช้ GPS ปัจจุบัน" : "Use Current GPS"}</span>
+            </button>
+            <button className="primary-button" type="button" onClick={() => void handleSaveCalibration()} disabled={calibSaving}>
+              <span>{calibSaving ? "…" : (locale === "th" ? "บันทึกลงฐานข้อมูล" : "Save Coordinates")}</span>
+            </button>
+            {calibMsg ? <span style={{ fontSize: 12, color: calibMsg.startsWith("✓") ? "var(--green)" : "var(--red)" }}>{calibMsg}</span> : null}
+          </div>
         </div>
       ) : null}
 

@@ -57,8 +57,8 @@ export function AreaImage({ areaCode, title, locale, className = "parking-image"
   return (
     <div className={className}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={isPlaceholder ? `${t.pendingImage} · ${title}` : title} loading={loading} onError={() => { setSrc(placeholderPath); setIsPlaceholder(true); }} />
-      <span className="image-label">{isPlaceholder ? t.pendingImage : t.customImage}</span>
+      <img src={src} alt={isPlaceholder ? `${locale === "th" ? "ผังลานจอด" : "Parking Layout"} · ${title}` : title} loading={loading} onError={() => { setSrc(placeholderPath); setIsPlaceholder(true); }} />
+      <span className="image-label">{isPlaceholder ? (locale === "th" ? "ผังลานจอด มมส." : "MSU Car Park") : t.customImage}</span>
     </div>
   );
 }

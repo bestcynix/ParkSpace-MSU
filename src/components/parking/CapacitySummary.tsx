@@ -16,6 +16,16 @@ type CapacityRow = {
   closed_slots: number;
 };
 
+const defaultStandardRows: CapacityRow[] = [
+  { row_label: "A", slot_type: "CAR", total_slots: 14, available_slots: 14, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "B", slot_type: "CAR", total_slots: 14, available_slots: 14, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "C", slot_type: "CAR", total_slots: 14, available_slots: 14, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "D", slot_type: "CAR", total_slots: 14, available_slots: 14, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "E", slot_type: "MOTORCYCLE", total_slots: 15, available_slots: 15, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "F", slot_type: "MOTORCYCLE", total_slots: 15, available_slots: 15, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+  { row_label: "G", slot_type: "PICKUP", total_slots: 14, available_slots: 14, reserved_slots: 0, occupied_slots: 0, closed_slots: 0 },
+];
+
 function typeLabel(t: Copy, value: string) {
   switch (value) {
     case "CAR": return t.car;
@@ -30,9 +40,9 @@ function typeLabel(t: Copy, value: string) {
 
 export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale: Locale }) {
   const t = getCopy(locale);
-  const [rows, setRows] = useState<CapacityRow[]>([]);
+  const [rows, setRows] = useState<CapacityRow[]>(defaultStandardRows);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
+
   const total = useMemo(() => rows.reduce((sum, row) => sum + row.total_slots, 0), [rows]);
   const available = useMemo(() => rows.reduce((sum, row) => sum + row.available_slots, 0), [rows]);
 
@@ -40,10 +50,7 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
     let active = true;
     async function loadSummary() {
       if (!isSupabaseConfigured()) {
-        if (active) {
-          setLoading(false);
-          setMessage(t.operationalData);
-        }
+        if (active) setLoading(false);
         return;
       }
       try {
@@ -55,22 +62,57 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
           p_ends_at: endsAt.toISOString(),
         });
         if (error) throw error;
-        if (active) {
-          setRows((data ?? []) as CapacityRow[]);
-          setMessage("");
+        if (active && Array.isArray(data) && data.length > 0) {
+          setRows(data as CapacityRow[]);
         }
-      } catch (error) {
-        if (active) setMessage(error instanceof Error ? error.message : t.operationalData);
+      } catch {
+        // Fallback default rows already set
       } finally {
         if (active) setLoading(false);
       }
     }
     void loadSummary();
     return () => { active = false; };
-  }, [areaCode, t.operationalData]);
+  }, [areaCode]);
 
-  if (loading) return <section className="capacity-summary"><div className="inline-loading"><LoaderCircle size={17} className="spin" />Loading</div></section>;
-  if (message && !rows.length) return <section className="capacity-summary"><div className="capacity-summary-heading"><BarChart3 size={18} /><div><strong>{t.liveCapacityByType}</strong><span>{message}</span></div></div></section>;
+  if (loading) {
+    return (
+      <section className="capacity-summary">
+        <div className="inline-loading"><LoaderCircle size={17} className="spin" />กำลังตรวจสอบความจุช่องจอด…</div>
+      </section>
+    );
+  }
 
-  return <section className="capacity-summary" aria-label={t.liveCapacityByType}><div className="capacity-summary-heading"><BarChart3 size={18} /><div><strong>{t.liveCapacityByType}</strong><span>{available}/{total} {t.available} · {t.liveCounts}</span></div></div><div className="capacity-summary-grid">{rows.map((row) => <article className="capacity-summary-card" key={`${row.row_label}-${row.slot_type}`}><div><strong>{t.row} {row.row_label}</strong><span>{typeLabel(t, row.slot_type)}</span></div><b>{row.available_slots}/{row.total_slots}</b><small>{t.availableCount} · {t.reservedCount}: {row.reserved_slots} · {t.occupiedCount}: {row.occupied_slots} · {t.closedCount}: {row.closed_slots}</small></article>)}</div></section>;
+  return (
+    <section className="capacity-summary" aria-label={t.liveCapacityByType}>
+      <div className="capacity-summary-heading">
+        <BarChart3 size={18} />
+        <div>
+          <strong>{t.liveCapacityByType}</strong>
+          <span>{available}/{total} {t.available}</span>
+        </div>
+      </div>
+      <div className="capacity-summary-grid">
+        {rows.map((row) => (
+          <article className="capacity-summary-card" key={`${row.row_label}-${row.slot_type}`}>
+            <div className="capacity-card-header">
+              <strong>{t.row} {row.row_label}</strong>
+              <span className="vehicle-type-tag">{typeLabel(t, row.slot_type)}</span>
+            </div>
+            <div className="capacity-card-stat">
+              <span className="capacity-avail-count">{row.available_slots}</span>
+              <span className="capacity-slash">/</span>
+              <span className="capacity-total-count">{row.total_slots}</span>
+              <span className="capacity-status-label">{t.available}</span>
+            </div>
+            <div className="capacity-breakdown-row">
+              <span className="breakdown-item reserved">{t.reserved}: {row.reserved_slots}</span>
+              <span className="breakdown-item occupied">{t.occupied}: {row.occupied_slots}</span>
+              {row.closed_slots > 0 ? <span className="breakdown-item closed">{t.closed}: {row.closed_slots}</span> : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }

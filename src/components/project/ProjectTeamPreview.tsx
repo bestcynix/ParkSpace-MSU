@@ -124,21 +124,24 @@ export function ProjectTeamPreview({ locale }: { locale: Locale }) {
   }, []);
 
   const displayMembers = members.length ? members : [fallbackMember];
-  return <div aria-busy={loading}>
-    <p className="team-preview-count" aria-live="polite">{loading ? "…" : displayMembers.length}</p>
-    <div className="team-grid team-grid-single">
-    {displayMembers.map((member) => {
-      const name = locale === "th" ? member.name_th : member.name_en;
-      const study = [locale === "th" ? member.major_th : member.major_en, locale === "th" ? member.faculty_th : member.faculty_en].filter(Boolean).join(" · ");
-      const role = (locale === "th" ? member.role_th : member.role_en) ?? (locale === "th" ? "สมาชิกทีม" : "Team member");
-      return <article className="team-card team-member-card" key={member.id}>
-        <div className="team-member-heading"><TeamAvatar path={member.avatar_path} /><div><strong>{name}</strong><span>{member.student_id ?? "—"}</span></div></div>
-        {study ? <span>{study}</span> : null}
-        <div className="data-badge team-role-badge">{role}</div>
-      </article>;
-    })}
-    {loading ? <span className="field-hint team-live-hint">{locale === "th" ? "กำลังตรวจสอบข้อมูลทีมจากระบบ…" : "Checking the live team directory…"}</span> : null}
-    {!members.length && !loading ? <span className="field-hint team-live-hint">{t.noPrivateData}</span> : null}
+  return (
+    <div aria-busy={loading}>
+      <div className="team-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
+        {displayMembers.map((member) => {
+          const name = locale === "th" ? member.name_th : member.name_en;
+          const study = [locale === "th" ? member.major_th : member.major_en, locale === "th" ? member.faculty_th : member.faculty_en].filter(Boolean).join(" · ");
+          const role = (locale === "th" ? member.role_th : member.role_en) ?? (locale === "th" ? "สมาชิกทีม" : "Team member");
+          return (
+            <article className="team-card team-member-card" key={member.id}>
+              <div className="team-member-heading"><TeamAvatar path={member.avatar_path} /><div><strong>{name}</strong><span>{member.student_id ?? "—"}</span></div></div>
+              {study ? <span>{study}</span> : null}
+              <div className="data-badge team-role-badge">{role}</div>
+            </article>
+          );
+        })}
+        {loading ? <span className="field-hint team-live-hint">{locale === "th" ? "กำลังตรวจสอบข้อมูลทีมจากระบบ…" : "Checking the live team directory…"}</span> : null}
+        {!members.length && !loading ? <span className="field-hint team-live-hint">{t.noPrivateData}</span> : null}
+      </div>
     </div>
-  </div>;
+  );
 }

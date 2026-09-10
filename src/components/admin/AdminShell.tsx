@@ -11,12 +11,17 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
   const items = role === "admin" ? [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
     ["operations", t.liveOperations, Activity, "/operations"],
+    ["scan", locale === "th" ? "สแกนบัตรผ่าน" : "Scan Pass", QrCode, "/scan"],
     ["areas", t.areas, MapPinned, "/parking-areas"],
     ["bookings", t.bookings, ClipboardList, "/bookings"],
     ["users", t.users, Users, "/users"],
+    ["database", t.database, Database, "/database"],
+    ["traces", t.traceExplorer, Wrench, "/traces"],
     ["analytics", t.analytics, BarChart3, "/analytics"],
     ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
     ["audit", t.audit, ShieldCheck, "/audit-logs"],
+    ["flags", t.featureFlags, Settings, "/feature-flags"],
+    ["team", t.teamMembersLabel, Users, "/team"],
     ["settings", t.settings, Settings, "/settings"],
   ] : role === "staff" ? [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
@@ -25,8 +30,12 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["incidents", "Incidents", FileText, "/incidents"],
   ] : [
     ["health", t.systemHealth, Activity, "/health"],
+    ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
+    ["operations", t.liveOperations, Activity, "/operations"],
+    ["scan", locale === "th" ? "สแกนบัตรผ่าน" : "Scan Pass", QrCode, "/scan"],
     ["database", t.database, Database, "/database"],
     ["areas", t.areas, MapPinned, "/parking-areas"],
+    ["bookings", t.bookings, ClipboardList, "/bookings"],
     ["users", t.users, Users, "/users"],
     ["analytics", t.analytics, BarChart3, "/analytics"],
     ["audit", t.audit, ShieldCheck, "/audit-logs"],
@@ -34,6 +43,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["errors", t.errors, FileText, "/errors"],
     ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
     ["settings", t.featureFlags, Settings, "/feature-flags"],
+    ["team", t.teamMembersLabel, Users, "/team"],
   ];
 
   return (

@@ -37,6 +37,30 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th" data-scroll-behavior="smooth" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              function isIgnored(err){
+                var str = (err && (err.message || err.stack || '' + err)) || '';
+                return str.indexOf('startTime') !== -1 || str.indexOf('reportAllChanges') !== -1;
+              }
+              window.addEventListener('error', function(e){
+                if (isIgnored(e.error) || isIgnored(e.message)) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                }
+              }, true);
+              window.addEventListener('unhandledrejection', function(e){
+                if (isIgnored(e.reason)) {
+                  e.preventDefault();
+                  e.stopImmediatePropagation();
+                }
+              });
+            })();`,
+          }}
+        />
+      </head>
       <body><SystemConsoleNotice />{children}</body>
     </html>
   );

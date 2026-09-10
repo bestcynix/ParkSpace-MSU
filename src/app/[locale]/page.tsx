@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { ParkingCard } from "@/components/parking/ParkingCard";
 import { SearchCombobox } from "@/components/parking/SearchCombobox";
+import { RoleQuickActions } from "@/components/auth/RoleQuickActions";
 import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
 import { parkingAreas } from "@/lib/parking/demo-data";
 
@@ -28,6 +29,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <div className="page-wrap">
         <AppHeader locale={locale} />
         <main>
+          <RoleQuickActions locale={locale} />
           <section className="hero">
             <div className="hero-content">
               <p className="eyebrow">Mahasarakham University</p>

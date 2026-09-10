@@ -154,6 +154,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   const [loading, setLoading] = useState(true);
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [removeCurrentAvatar, setRemoveCurrentAvatar] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const avatarPreview = useMemo(() => pendingAvatar ? URL.createObjectURL(pendingAvatar) : "", [pendingAvatar]);
 
@@ -242,6 +243,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
     setEditingId(member.id);
     setPendingAvatar(null);
     setRemoveCurrentAvatar(false);
+    setIsFormOpen(true);
     setDraft({
       name_th: member.name_th,
       name_en: member.name_en,
@@ -339,6 +341,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       setDraft(emptyDraft);
       setPendingAvatar(null);
       setRemoveCurrentAvatar(false);
+      setIsFormOpen(false);
       await load();
       notify({ title: t.save, kind: "success" });
     } catch (error) {
@@ -397,7 +400,6 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       <div className="section-heading">
         <div>
           <h2 id="team-directory-heading">{t.teamMembersLabel}</h2>
-          <p aria-live="polite">{count}</p>
         </div>
         {editorRole ? <span className="data-badge">{t.teamEditor} · {editorRoleLabel}</span> : null}
       </div>
@@ -443,7 +445,26 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
         </div>
       )}
 
-      {editorRole ? (
+      {editorRole && !isFormOpen ? (
+        <div style={{ marginTop: 24, display: "flex", justifyContent: "center" }}>
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setDraft(emptyDraft);
+              setPendingAvatar(null);
+              setRemoveCurrentAvatar(false);
+              setIsFormOpen(true);
+            }}
+          >
+            <Plus size={16} />
+            {t.addMember}
+          </button>
+        </div>
+      ) : null}
+
+      {editorRole && isFormOpen ? (
         <form className="form-card team-editor-form" onSubmit={(event) => void save(event)}>
           <div className="form-section-title">
             <Plus size={20} />
@@ -467,7 +488,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
           <label className="inline-checkbox"><input type="checkbox" checked={draft.visible} onChange={(event) => updateDraft("visible", event.target.checked)} />{t.visible}</label>
           <div className="support-form-actions">
             <button className="primary-button" type="submit"><Save size={15} />{t.save}</button>
-            {editingId ? <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setDraft(emptyDraft); setPendingAvatar(null); setRemoveCurrentAvatar(false); }}><X size={15} />{t.close}</button> : null}
+            <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setDraft(emptyDraft); setPendingAvatar(null); setRemoveCurrentAvatar(false); setIsFormOpen(false); }}><X size={15} />{t.close}</button>
           </div>
         </form>
       ) : null}

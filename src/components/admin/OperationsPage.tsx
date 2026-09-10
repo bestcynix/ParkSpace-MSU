@@ -14,6 +14,7 @@ import { AuditLogPanel } from "@/components/admin/AuditLogPanel";
 import { DatabaseExplorer } from "@/components/admin/DatabaseExplorer";
 import { TraceExplorer } from "@/components/admin/TraceExplorer";
 import { FeatureFlagsManager } from "@/components/admin/FeatureFlagsManager";
+import { TeamDirectory } from "@/components/project/TeamDirectory";
 import { ConsoleLiveData, type ConsoleView } from "@/components/admin/ConsoleLiveData";
 
 type Role = "admin" | "staff" | "developer";
@@ -35,10 +36,11 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
     : section === "feature-flags" ? t.featureFlags
     : section === "errors" ? t.errors
     : section === "feedback" ? t.feedbackCenter
+    : section === "team" ? t.teamMembersLabel
     : section.replaceAll("-", " ");
 
-  const isFeedbackReview = role === "admin" && section === "feedback";
-  const isDeveloperReview = role === "developer" && (section === "feedback" || section === "errors");
+  const isFeedbackReview = (role === "admin" || role === "developer") && section === "feedback";
+  const isDeveloperReview = (role === "admin" || role === "developer") && section === "errors";
   const isAreaManager = (role === "admin" || role === "developer") && section === "parking-areas";
   const isUserManager = (role === "admin" || role === "developer") && section === "users";
   const isAnalytics = (role === "admin" || role === "developer") && section === "analytics";
@@ -46,6 +48,9 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
   const isDatabase = (role === "admin" || role === "developer") && section === "database";
   const isTraces = (role === "admin" || role === "developer") && section === "traces";
   const isFeatureFlags = (role === "admin" || role === "developer") && section === "feature-flags";
+  const isScan = section === "scan";
+  const isTeam = (role === "admin" || role === "developer") && section === "team";
+  const isIncidents = section === "incidents";
 
   const hasDedicatedSection =
     isAreaManager ||
@@ -57,7 +62,9 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
     isFeatureFlags ||
     isFeedbackReview ||
     isDeveloperReview ||
-    (role === "staff" && (section === "scan" || section === "incidents"));
+    isScan ||
+    isTeam ||
+    isIncidents;
 
   const consoleView: ConsoleView = hasDedicatedSection ? "summary" : role === "admin" ? "operations" : role === "staff" ? "staff" : "health";
   const dashboardLink = role === "developer" ? `/${locale}/developer/health` : `/${locale}/${role}/dashboard`;
@@ -84,9 +91,10 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
           : isDatabase ? <DatabaseExplorer locale={locale} role={role === "admin" ? "admin" : "developer"} />
           : isTraces ? <TraceExplorer locale={locale} role={role === "admin" ? "admin" : "developer"} />
           : isFeatureFlags ? <FeatureFlagsManager locale={locale} role={role === "admin" ? "admin" : "developer"} />
-          : isFeedbackReview || isDeveloperReview ? <FeedbackReview locale={locale} role={role === "admin" ? "admin" : "developer"} includeErrors={role === "developer" && section === "errors"} />
-          : role === "staff" && section === "scan" ? <StaffScanner locale={locale} role={role} />
-          : role === "staff" && section === "incidents" ? <IncidentForm locale={locale} />
+          : isFeedbackReview || isDeveloperReview ? <FeedbackReview locale={locale} role={role === "admin" ? "admin" : "developer"} includeErrors={section === "errors"} />
+          : isScan ? <StaffScanner locale={locale} role={role} />
+          : isIncidents ? <IncidentForm locale={locale} />
+          : isTeam ? <TeamDirectory locale={locale} />
           : null}
       </RoleGate>
     </AdminShell>
