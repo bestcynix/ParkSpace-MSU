@@ -6,6 +6,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { projectInfo } from "@/lib/project-info";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { resolveImageSource } from "@/lib/image-helpers";
 
 type TeamMember = {
   id: string;
@@ -70,27 +71,26 @@ function normalizeMembers(value: unknown) {
   }).sort((first, second) => first.display_order - second.display_order);
 }
 
-function avatarSource(path: string | null) {
-  const value = path?.trim();
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value) || value.startsWith("/")) return value;
-  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  if (!baseUrl) return null;
-  if (value.startsWith(`${teamAvatarBucket}/`)) {
-    const storagePath = value.slice(`${teamAvatarBucket}/`.length).split("/").map(encodeURIComponent).join("/");
-    return `${baseUrl}/storage/v1/object/public/${teamAvatarBucket}/${storagePath}`;
-  }
-  if (value.startsWith("storage/v1/")) return `${baseUrl}/${value}`;
-  return null;
-}
-
-function TeamAvatar({ path }: { path: string | null }) {
+function TeamAvatar({ path, name }: { path: string | null; name?: string }) {
   const [failed, setFailed] = useState(false);
-  const source = avatarSource(path);
-  return <span className="team-avatar" aria-hidden={source && !failed ? undefined : true}>{source && !failed ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={source} alt="" onError={() => setFailed(true)} />
-  ) : <UserRound size={20} aria-hidden="true" />}</span>;
+  const source = resolveImageSource(path, teamAvatarBucket);
+  return (
+    <span className="team-avatar" aria-hidden={source && !failed ? undefined : true}>
+      {source && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={source}
+          alt={name ? `รูปประจำตัว ${name}` : ""}
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+        />
+      ) : (
+        <span className="team-avatar-placeholder">
+          <UserRound size={28} aria-hidden="true" />
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function ProjectTeamPreview({ locale }: { locale: Locale }) {
@@ -126,16 +126,51 @@ export function ProjectTeamPreview({ locale }: { locale: Locale }) {
   const displayMembers = members.length ? members : [fallbackMember];
   return (
     <div aria-busy={loading}>
-      <div className="team-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
-        {displayMembers.map((member) => {
+      <div className="team-grid">
+        {displayMembers.map((member, index) => {
           const name = locale === "th" ? member.name_th : member.name_en;
-          const study = [locale === "th" ? member.major_th : member.major_en, locale === "th" ? member.faculty_th : member.faculty_en].filter(Boolean).join(" · ");
+          const faculty = locale === "th" ? member.faculty_th : member.faculty_en;
+          const major = locale === "th" ? member.major_th : member.major_en;
           const role = (locale === "th" ? member.role_th : member.role_en) ?? (locale === "th" ? "สมาชิกทีม" : "Team member");
+
           return (
             <article className="team-card team-member-card" key={member.id}>
-              <div className="team-member-heading"><TeamAvatar path={member.avatar_path} /><div><strong>{name}</strong><span>{member.student_id ?? "—"}</span></div></div>
-              {study ? <span>{study}</span> : null}
-              <div className="data-badge team-role-badge">{role}</div>
+              {/* Header: Ordinal Number Badge + Role */}
+              <div className="team-card-top">
+                <div className="team-order-badge">
+                  <span className="order-number-tag">#{index + 1}</span>
+                  <span className="order-text">{locale === "th" ? `ลำดับที่ ${index + 1}` : `Member #${index + 1}`}</span>
+                </div>
+                <div className="data-badge team-role-badge">{role}</div>
+              </div>
+
+              {/* Profile Heading: Avatar + Name + Student ID */}
+              <div className="team-member-heading">
+                <TeamAvatar path={member.avatar_path} name={name} />
+                <div className="team-member-info">
+                  <strong className="team-member-name">{name}</strong>
+                  <div className="team-member-id-pill">
+                    <span className="id-icon">🆔</span>
+                    <span>{member.student_id ? (locale === "th" ? `รหัสนิสิต ${member.student_id}` : `ID: ${member.student_id}`) : "—"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Faculty & Major Details with Emojis */}
+              <div className="team-member-details">
+                {faculty ? (
+                  <div className="team-detail-row">
+                    <span className="detail-icon">🎓</span>
+                    <span className="detail-text">{faculty}</span>
+                  </div>
+                ) : null}
+                {major ? (
+                  <div className="team-detail-row">
+                    <span className="detail-icon">📚</span>
+                    <span className="detail-text">{major}</span>
+                  </div>
+                ) : null}
+              </div>
             </article>
           );
         })}

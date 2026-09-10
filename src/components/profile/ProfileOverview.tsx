@@ -12,6 +12,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  Crop,
   Edit3,
   ExternalLink,
   Eye,
@@ -37,6 +38,8 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { ImageCropperModal } from "@/components/ui/ImageCropperModal";
+import { resolveImageSource, uploadOrFallbackImage } from "@/lib/image-helpers";
 
 type Profile = {
   id: string;
@@ -80,6 +83,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [removeCurrentAvatar, setRemoveCurrentAvatar] = useState(false);
+  const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [draft, setDraft] = useState({ full_name: "", university_id: "", faculty: "", major: "", department: "", phone: "" });
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -152,8 +156,17 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       setEmailVerified(Boolean(user.email_confirmed_at) || Boolean(user.identities?.some((identity: { provider?: string }) => identity.provider === "google")));
 
       if (profileData.avatar_path) {
-        const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(profileData.avatar_path, 3600);
-        setAvatarUrl(signed?.signedUrl ?? "");
+        const resolved = resolveImageSource(profileData.avatar_path, "profile-avatars");
+        if (resolved && (resolved.startsWith("data:") || resolved.startsWith("blob:") || /^https?:\/\//i.test(resolved) || resolved.startsWith("/"))) {
+          setAvatarUrl(resolved);
+        } else {
+          try {
+            const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(profileData.avatar_path, 3600);
+            setAvatarUrl(signed?.signedUrl || resolved || "");
+          } catch {
+            setAvatarUrl(resolved || "");
+          }
+        }
       } else {
         setAvatarUrl("");
       }
@@ -195,14 +208,14 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       let nextAvatarPath = profile.avatar_path;
       if (pendingAvatar) {
         const extension = avatarExtension(pendingAvatar);
-        uploadedAvatarPath = `${profile.id}/${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("profile-avatars").upload(uploadedAvatarPath, pendingAvatar, {
-          contentType: pendingAvatar.type,
-          cacheControl: "3600",
-          upsert: false,
+        const objectPath = `${profile.id}/${crypto.randomUUID()}.${extension}`;
+        const { pathOrUrl } = await uploadOrFallbackImage({
+          fileOrBlob: pendingAvatar,
+          bucket: "profile-avatars",
+          objectPath,
         });
-        if (uploadError) throw uploadError;
-        nextAvatarPath = uploadedAvatarPath;
+        nextAvatarPath = pathOrUrl;
+        uploadedAvatarPath = pathOrUrl;
       } else if (removeCurrentAvatar) {
         nextAvatarPath = null;
       }
@@ -213,13 +226,17 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       };
       const { data, error } = await supabase.from("profiles").update(payload).eq("id", profile.id).select(profileFields).single();
       if (error) throw error;
-      if (profile.avatar_path && profile.avatar_path !== nextAvatarPath) {
-        await supabase.storage.from("profile-avatars").remove([profile.avatar_path]);
+      if (profile.avatar_path && profile.avatar_path !== nextAvatarPath && !profile.avatar_path.startsWith("data:")) {
+        try {
+          await supabase.storage.from("profile-avatars").remove([profile.avatar_path]);
+        } catch {
+          // ignore storage cleanup
+        }
       }
       setProfile(data as Profile);
       if (nextAvatarPath) {
-        const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(nextAvatarPath, 3600);
-        setAvatarUrl(signed?.signedUrl ?? "");
+        const resolved = resolveImageSource(nextAvatarPath, "profile-avatars");
+        setAvatarUrl(resolved || nextAvatarPath);
       } else {
         setAvatarUrl("");
       }
@@ -228,8 +245,12 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       setEditing(false);
       notify({ title: t.saveProfile, kind: "success" });
     } catch (error) {
-      if (uploadedAvatarPath) {
-        await createSupabaseBrowserClient().storage.from("profile-avatars").remove([uploadedAvatarPath]);
+      if (uploadedAvatarPath && !uploadedAvatarPath.startsWith("data:")) {
+        try {
+          await createSupabaseBrowserClient().storage.from("profile-avatars").remove([uploadedAvatarPath]);
+        } catch {
+          // ignore
+        }
       }
       notify({ title: t.saveProfile, message: error instanceof Error ? error.message : t.operationalData, kind: "error" });
     } finally {
@@ -242,11 +263,20 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
     if (!file || !profile || !editing) return;
     if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
       notify({ title: t.profileImage, message: locale === "th" ? "ใช้ไฟล์รูปภาพขนาดไม่เกิน 5 MB" : "Choose an image file up to 5 MB.", kind: "warning" });
+      event.target.value = "";
       return;
     }
-    setPendingAvatar(file);
-    setRemoveCurrentAvatar(false);
+    const objectUrl = URL.createObjectURL(file);
+    setCropperSrc(objectUrl);
     event.target.value = "";
+  }
+
+  function handleCropperConfirm(dataUrl: string, blob: Blob) {
+    setCropperSrc(null);
+    const file = new File([blob], "profile-avatar.jpg", { type: "image/jpeg" });
+    setPendingAvatar(file);
+    setAvatarUrl(dataUrl);
+    setRemoveCurrentAvatar(false);
     notify({ title: t.profileImage, message: t.imageReadyToSave, kind: "info" });
   }
 
@@ -450,12 +480,24 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             <span className="profile-avatar"><UserRound size={32} /></span>
           )}
           <div className="profile-avatar-actions">
-            <label className={`avatar-upload-button ${!editing ? "is-disabled" : ""}`} aria-label={t.uploadImage}>
+            <label className={`avatar-upload-button ${!editing ? "is-disabled" : ""}`} aria-label={t.uploadImage} title={t.uploadImage}>
               <Camera size={14} />
               <input type="file" accept="image/*" onChange={chooseAvatar} disabled={!editing || saving} />
             </label>
+            {editing && displayedAvatarUrl ? (
+              <button
+                className="avatar-action-button"
+                type="button"
+                onClick={() => setCropperSrc(displayedAvatarUrl)}
+                disabled={saving}
+                aria-label={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
+                title={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
+              >
+                <Crop size={13} />
+              </button>
+            ) : null}
             {editing && (profile.avatar_path || pendingAvatar) ? (
-              <button className="avatar-remove-button" type="button" onClick={removeAvatar} disabled={saving} aria-label={t.removeImage}>
+              <button className="avatar-remove-button" type="button" onClick={removeAvatar} disabled={saving} aria-label={t.removeImage} title={t.removeImage}>
                 <Trash2 size={13} />
               </button>
             ) : null}
@@ -506,7 +548,19 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             </div>
             <div className="form-group">
               <label htmlFor="profile-phone">{t.phone}</label>
-              <input id="profile-phone" className="form-control" type="tel" value={draft.phone} onChange={(event) => updateField("phone", event.target.value)} disabled={!editing || saving} />
+              <input
+                id="profile-phone"
+                className="form-control"
+                type="tel"
+                maxLength={10}
+                placeholder="08XXXXXXXX"
+                value={draft.phone}
+                onChange={(event) => updateField("phone", event.target.value.replace(/\D/g, "").slice(0, 10))}
+                disabled={!editing || saving}
+              />
+              <small className="field-hint" style={{ fontSize: 11 }}>
+                {locale === "th" ? "ตัวเลขไม่เกิน 10 หลัก" : "Maximum 10 digits"}
+              </small>
             </div>
           </div>
           <div className="profile-two-columns">
@@ -899,6 +953,17 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
           </div>
         ) : null}
       </section>
+
+      {cropperSrc ? (
+        <ImageCropperModal
+          imageSrc={cropperSrc}
+          aspectRatio={1}
+          circularCrop={true}
+          locale={locale}
+          onConfirm={handleCropperConfirm}
+          onCancel={() => setCropperSrc(null)}
+        />
+      ) : null}
     </div>
   );
 }

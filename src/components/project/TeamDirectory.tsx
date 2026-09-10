@@ -1,12 +1,14 @@
 "use client";
 
-import { Camera, Edit3, Eye, EyeOff, Plus, Save, Trash2, UserRound, X } from "lucide-react";
+import { Camera, Crop, Edit3, Eye, EyeOff, Plus, Save, Trash2, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { projectInfo } from "@/lib/project-info";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { resolveImageSource, uploadOrFallbackImage } from "@/lib/image-helpers";
+import { ImageCropperModal } from "@/components/ui/ImageCropperModal";
 
 type TeamMember = {
   id: string;
@@ -100,39 +102,24 @@ function normalizeMembers(data: unknown): TeamMember[] {
     .sort((first, second) => first.display_order - second.display_order);
 }
 
-function avatarSource(path: string | null) {
-  const value = path?.trim();
-  if (!value) return null;
-  if (/^https?:\/\//i.test(value) || value.startsWith("/")) return value;
-  if (value.startsWith(`${teamAvatarBucket}/`)) {
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-    const storagePath = value.slice(`${teamAvatarBucket}/`.length).split("/").map(encodeURIComponent).join("/");
-    return baseUrl ? `${baseUrl}/storage/v1/object/public/${teamAvatarBucket}/${storagePath}` : null;
-  }
-  if (value.startsWith("storage/v1/")) {
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-    return baseUrl ? `${baseUrl}/${value}` : null;
-  }
-  return null;
-}
-
-function storageObjectPath(path: string | null) {
-  const value = path?.trim();
-  const prefix = `${teamAvatarBucket}/`;
-  return value?.startsWith(prefix) ? value.slice(prefix.length) : null;
-}
-
-function TeamAvatar({ path, preview }: { path: string | null; preview?: string }) {
+function TeamAvatar({ path, preview, name }: { path: string | null; preview?: string; name?: string }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const source = preview || avatarSource(path);
+  const source = preview || resolveImageSource(path, teamAvatarBucket);
 
   return (
     <span className="team-avatar" aria-hidden={source && !imageFailed ? undefined : true}>
       {source && !imageFailed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={source} alt="" onError={() => setImageFailed(true)} />
+        <img
+          src={source}
+          alt={name ? `รูปประจำตัว ${name}` : ""}
+          onError={() => setImageFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "inherit" }}
+        />
       ) : (
-        <UserRound size={20} aria-hidden="true" />
+        <span className="team-avatar-placeholder">
+          <UserRound size={28} aria-hidden="true" />
+        </span>
       )}
     </span>
   );
@@ -155,6 +142,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   const [pendingAvatar, setPendingAvatar] = useState<File | null>(null);
   const [removeCurrentAvatar, setRemoveCurrentAvatar] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [cropperSource, setCropperSource] = useState<string | null>(null);
 
   const avatarPreview = useMemo(() => pendingAvatar ? URL.createObjectURL(pendingAvatar) : "", [pendingAvatar]);
 
@@ -204,9 +192,6 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       setDataState(nextMembers.length ? "supabase" : "fallback");
       setEditorRole(null);
 
-      // Public team content should not wait for the optional auth lock. This
-      // keeps the directory usable for signed-out visitors while the role
-      // check runs in the background and enables editor controls when ready.
       void (async () => {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
@@ -223,12 +208,10 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
             .filter((role: string): role is EditorRole => role === "admin");
           setEditorRole(roleValues.includes("admin") ? "admin" : null);
         } catch {
-          // The public directory does not depend on the optional role check.
+          // Public directory continues
         }
       })();
     } catch {
-      // Keep the course-project record visible if the public team table is
-      // unavailable, while retaining the live table as the source of truth.
       setMembers([]);
       setEditorRole(null);
       setDataState("fallback");
@@ -274,10 +257,24 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       event.target.value = "";
       return;
     }
+    const objectUrl = URL.createObjectURL(file);
+    setCropperSource(objectUrl);
+    event.target.value = "";
+  }
+
+  function handleCropperConfirm(dataUrl: string, blob: Blob) {
+    setCropperSource(null);
+    const file = new File([blob], "team-avatar.jpg", { type: "image/jpeg" });
     setPendingAvatar(file);
     setRemoveCurrentAvatar(false);
-    event.target.value = "";
     notify({ title: t.uploadAvatar, message: t.imageReadyToSave, kind: "info" });
+  }
+
+  function openCropperForCurrent() {
+    const current = avatarPreview || resolveImageSource(draft.avatar_path, teamAvatarBucket);
+    if (current) {
+      setCropperSource(current);
+    }
   }
 
   function removeAvatar() {
@@ -301,8 +298,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       Object.entries(draft).map(([key, value]) => [key, typeof value === "string" ? value.trim() || null : value]),
     );
     if (removeCurrentAvatar) payload.avatar_path = null;
-    let uploadedAvatarPath: string | null = null;
-    let savedMemberId: string | null = null;
+
     try {
       const supabase = createSupabaseBrowserClient();
       const result = editingId
@@ -310,20 +306,17 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
         : await supabase.from("project_team_members").insert({ ...payload, display_order: members.length ? Math.max(...members.map((member) => member.display_order)) + 1 : 1 }).select(fields).single();
       if (result.error) throw result.error;
       const savedMember = result.data as TeamMember;
-      savedMemberId = savedMember.id;
 
       let nextAvatarPath = removeCurrentAvatar ? null : nullableText(payload.avatar_path);
       if (pendingAvatar) {
         const extension = avatarExtension(pendingAvatar);
         const objectPath = `members/${savedMember.id}/${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from(teamAvatarBucket).upload(objectPath, pendingAvatar, {
-          contentType: pendingAvatar.type,
-          cacheControl: "3600",
-          upsert: false,
+        const { pathOrUrl } = await uploadOrFallbackImage({
+          fileOrBlob: pendingAvatar,
+          bucket: teamAvatarBucket,
+          objectPath,
         });
-        if (uploadError) throw uploadError;
-        uploadedAvatarPath = objectPath;
-        nextAvatarPath = `${teamAvatarBucket}/${objectPath}`;
+        nextAvatarPath = pathOrUrl;
       }
 
       if (nextAvatarPath !== savedMember.avatar_path) {
@@ -336,10 +329,15 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
         if (avatarResult.error) throw avatarResult.error;
       }
 
-      const oldStoragePath = storageObjectPath(previousAvatarPath);
-      if (oldStoragePath && oldStoragePath !== storageObjectPath(nextAvatarPath)) {
-        await supabase.storage.from(teamAvatarBucket).remove([oldStoragePath]);
+      if (previousAvatarPath && previousAvatarPath !== nextAvatarPath && !previousAvatarPath.startsWith("data:")) {
+        try {
+          const cleanPath = previousAvatarPath.replace(/^team-avatars\//, "");
+          await supabase.storage.from(teamAvatarBucket).remove([cleanPath]);
+        } catch {
+          // ignore storage cleanup
+        }
       }
+
       setEditingId(null);
       setDraft(emptyDraft);
       setPendingAvatar(null);
@@ -348,12 +346,6 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       await load();
       notify({ title: t.save, kind: "success" });
     } catch (error) {
-      if (uploadedAvatarPath) {
-        await createSupabaseBrowserClient().storage.from(teamAvatarBucket).remove([uploadedAvatarPath]);
-      }
-      if (savedMemberId && !editingId) {
-        await createSupabaseBrowserClient().from("project_team_members").delete().eq("id", savedMemberId);
-      }
       notify({ title: t.teamEditor, message: error instanceof Error ? error.message : t.operationalData, kind: "error" });
     }
   }
@@ -396,7 +388,6 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   }
 
   const editorRoleLabel = t.admin;
-  const count = dataState === "fallback" ? 1 : loading ? "…" : visibleMembers.length;
 
   return (
     <section className="team-directory" aria-labelledby="team-directory-heading" aria-busy={loading} data-source={dataState}>
@@ -408,32 +399,59 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
       </div>
 
       {displayMembers.length ? (
-        <div className="team-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
+        <div className="team-grid">
           {displayMembers.map((member, index) => {
             const name = locale === "th" ? member.name_th : member.name_en;
-            const study = [
-              locale === "th" ? member.major_th : member.major_en,
-              locale === "th" ? member.faculty_th : member.faculty_en,
-            ].filter(Boolean).join(" · ");
+            const faculty = locale === "th" ? member.faculty_th : member.faculty_en;
+            const major = locale === "th" ? member.major_th : member.major_en;
             const role = (locale === "th" ? member.role_th : member.role_en) ?? (locale === "th" ? "สมาชิกทีม" : "Team member");
 
             return (
               <article className={`team-card team-member-card ${member.visible ? "" : "hidden-member"}`} key={member.id}>
+                {/* Header: Ordinal Number Badge + Role */}
+                <div className="team-card-top">
+                  <div className="team-order-badge">
+                    <span className="order-number-tag">#{index + 1}</span>
+                    <span className="order-text">{locale === "th" ? `ลำดับที่ ${index + 1}` : `Member #${index + 1}`}</span>
+                  </div>
+                  <div className="data-badge team-role-badge">{role}</div>
+                </div>
+
+                {/* Profile Heading: Avatar + Name + Student ID */}
                 <div className="team-member-heading">
-                  <TeamAvatar key={`${member.id}:${member.avatar_path ?? "placeholder"}`} path={member.avatar_path} />
-                  <div>
-                    <strong>{name}</strong>
-                    <span>{member.student_id ?? "—"}</span>
+                  <TeamAvatar key={`${member.id}:${member.avatar_path ?? "placeholder"}`} path={member.avatar_path} name={name} />
+                  <div className="team-member-info">
+                    <strong className="team-member-name">{name}</strong>
+                    <div className="team-member-id-pill">
+                      <span className="id-icon">🆔</span>
+                      <span>{member.student_id ? (locale === "th" ? `รหัสนิสิต ${member.student_id}` : `ID: ${member.student_id}`) : "—"}</span>
+                    </div>
                   </div>
                 </div>
-                {study ? <span>{study}</span> : null}
-                <div className="data-badge" aria-label={role}>{role}</div>
+
+                {/* Faculty & Major Details with Emojis */}
+                <div className="team-member-details">
+                  {faculty ? (
+                    <div className="team-detail-row">
+                      <span className="detail-icon">🎓</span>
+                      <span className="detail-text">{faculty}</span>
+                    </div>
+                  ) : null}
+                  {major ? (
+                    <div className="team-detail-row">
+                      <span className="detail-icon">📚</span>
+                      <span className="detail-text">{major}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Admin Actions */}
                 {editorRole && member.id !== fallbackMember.id ? (
                   <div className="team-editor-actions">
-                    <button className="icon-button" type="button" onClick={() => void move(member, -1)} disabled={index === 0} aria-label={t.moveUp}>↑</button>
-                    <button className="icon-button" type="button" onClick={() => void move(member, 1)} disabled={index === displayMembers.length - 1} aria-label={t.moveDown}>↓</button>
-                    <button className="icon-button" type="button" onClick={() => edit(member)} aria-label={t.edit}><Edit3 size={15} /></button>
-                    <button className="icon-button danger" type="button" onClick={() => void remove(member)} aria-label={t.delete}><Trash2 size={15} /></button>
+                    <button className="icon-button" type="button" onClick={() => void move(member, -1)} disabled={index === 0} aria-label={t.moveUp} title={t.moveUp}>↑</button>
+                    <button className="icon-button" type="button" onClick={() => void move(member, 1)} disabled={index === displayMembers.length - 1} aria-label={t.moveDown} title={t.moveDown}>↓</button>
+                    <button className="icon-button" type="button" onClick={() => edit(member)} aria-label={t.edit} title={t.edit}><Edit3 size={15} /></button>
+                    <button className="icon-button danger" type="button" onClick={() => void remove(member)} aria-label={t.delete} title={t.delete}><Trash2 size={15} /></button>
                     <span className="team-visibility" aria-label={member.visible ? t.visible : t.disabled}>{member.visible ? <Eye size={14} /> : <EyeOff size={14} />}</span>
                   </div>
                 ) : null}
@@ -486,7 +504,46 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
             <div className="form-group"><label htmlFor="team-major-en">{t.major} · EN</label><input id="team-major-en" className="form-control" value={draft.major_en ?? ""} onChange={(event) => updateDraft("major_en", event.target.value)} /></div>
             <div className="form-group"><label htmlFor="team-faculty-th">{t.faculty} · TH</label><input id="team-faculty-th" className="form-control" value={draft.faculty_th ?? ""} onChange={(event) => updateDraft("faculty_th", event.target.value)} /></div>
             <div className="form-group"><label htmlFor="team-faculty-en">{t.faculty} · EN</label><input id="team-faculty-en" className="form-control" value={draft.faculty_en ?? ""} onChange={(event) => updateDraft("faculty_en", event.target.value)} /></div>
-            <div className="form-group team-avatar-editor"><label htmlFor="team-avatar-upload">{t.uploadAvatar}</label><div className="team-avatar-upload-row"><TeamAvatar key={removeCurrentAvatar ? "removed" : avatarPreview || draft.avatar_path || "placeholder"} path={removeCurrentAvatar ? null : draft.avatar_path || null} preview={removeCurrentAvatar ? undefined : avatarPreview || undefined} /><label className="secondary-button team-avatar-file-button" htmlFor="team-avatar-upload"><Camera size={15} />{t.uploadAvatar}<input id="team-avatar-upload" type="file" accept="image/*" onChange={chooseAvatar} /></label>{(draft.avatar_path || pendingAvatar) ? <button className="icon-button danger" type="button" onClick={removeAvatar} aria-label={t.removeImage}><Trash2 size={15} /></button> : null}</div><small className="field-hint">{t.avatarUploadHint}</small><label className="team-avatar-url-label" htmlFor="team-avatar-path">{t.avatarUrl} · {locale === "th" ? "สำรอง" : "Fallback"}</label><input id="team-avatar-path" className="form-control" value={draft.avatar_path ?? ""} onChange={(event) => { updateDraft("avatar_path", event.target.value); setRemoveCurrentAvatar(false); setPendingAvatar(null); }} /></div>
+            <div className="form-group team-avatar-editor">
+              <label htmlFor="team-avatar-upload">{t.uploadAvatar}</label>
+              <div className="team-avatar-upload-row">
+                <TeamAvatar
+                  key={removeCurrentAvatar ? "removed" : avatarPreview || draft.avatar_path || "placeholder"}
+                  path={removeCurrentAvatar ? null : draft.avatar_path || null}
+                  preview={removeCurrentAvatar ? undefined : avatarPreview || undefined}
+                />
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <label className="secondary-button team-avatar-file-button" htmlFor="team-avatar-upload">
+                    <Camera size={15} />
+                    {t.uploadAvatar}
+                    <input id="team-avatar-upload" type="file" accept="image/*" onChange={chooseAvatar} />
+                  </label>
+                  {(draft.avatar_path || pendingAvatar) ? (
+                    <button className="secondary-button compact-btn" type="button" onClick={openCropperForCurrent} title="ครอบ / ปรับภาพ">
+                      <Crop size={14} />
+                      <span>{locale === "th" ? "ครอบ / ปรับภาพ" : "Crop / Adjust"}</span>
+                    </button>
+                  ) : null}
+                  {(draft.avatar_path || pendingAvatar) ? (
+                    <button className="icon-button danger" type="button" onClick={removeAvatar} aria-label={t.removeImage} title={t.removeImage}>
+                      <Trash2 size={15} />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              <small className="field-hint">{t.avatarUploadHint}</small>
+              <label className="team-avatar-url-label" htmlFor="team-avatar-path">{t.avatarUrl} · {locale === "th" ? "สำรอง" : "Fallback"}</label>
+              <input
+                id="team-avatar-path"
+                className="form-control"
+                value={draft.avatar_path ?? ""}
+                onChange={(event) => {
+                  updateDraft("avatar_path", event.target.value);
+                  setRemoveCurrentAvatar(false);
+                  setPendingAvatar(null);
+                }}
+              />
+            </div>
           </div>
           <label className="inline-checkbox"><input type="checkbox" checked={draft.visible} onChange={(event) => updateDraft("visible", event.target.checked)} />{t.visible}</label>
           <div className="support-form-actions">
@@ -494,6 +551,17 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
             <button className="secondary-button" type="button" onClick={() => { setEditingId(null); setDraft(emptyDraft); setPendingAvatar(null); setRemoveCurrentAvatar(false); setIsFormOpen(false); }}><X size={15} />{t.close}</button>
           </div>
         </form>
+      ) : null}
+
+      {cropperSource ? (
+        <ImageCropperModal
+          imageSrc={cropperSource}
+          aspectRatio={1}
+          circularCrop={false}
+          locale={locale}
+          onConfirm={handleCropperConfirm}
+          onCancel={() => setCropperSource(null)}
+        />
       ) : null}
     </section>
   );

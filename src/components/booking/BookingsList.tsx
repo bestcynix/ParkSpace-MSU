@@ -155,72 +155,27 @@ export function BookingsList({ locale }: { locale: Locale }) {
       return;
     }
 
-    // Check local session storage cache first to prevent regenerating new QR on every click
     const cacheKey = `parkspace_qr_${booking.id}`;
-    try {
-      const cached = sessionStorage.getItem(cacheKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.reference && parsed.payload) {
-          setQrPass({
-            bookingId: booking.id,
-            reference: parsed.reference,
-            payload: parsed.payload,
-            expiresAt: parsed.expiresAt ?? null,
-          });
-          return;
-        }
-      }
-    } catch {
-      // Storage unavailable, continue
-    }
-
     setQrLoadingId(booking.id);
     try {
-      const supabase = createSupabaseBrowserClient();
-
-      // Query existing active QR token from qr_tokens table
-      const { data: existingTokens } = await supabase
-        .from("qr_tokens")
-        .select("qr_payload, expires_at, reference")
-        .eq("booking_id", booking.id)
-        .eq("status", "ACTIVE")
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      const existing = existingTokens?.[0];
-      if (existing?.qr_payload) {
-        const payloadData = {
-          bookingId: booking.id,
-          reference: existing.reference ?? booking.reference,
-          payload: existing.qr_payload,
-          expiresAt: existing.expires_at ?? null,
-        };
-        setQrPass(payloadData);
-        try {
-          sessionStorage.setItem(cacheKey, JSON.stringify(payloadData));
-        } catch {
-          // ignore
-        }
-        return;
-      }
-
-      // Issue new QR token via RPC only if none exists
-      const { data, error } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
-      if (error) throw error;
-      const row = (Array.isArray(data) ? data[0] : data) as QrRow | undefined;
-      const newQrData = {
+      // Use canonical booking.reference as payload so QR codes are 100% identical between booking confirmation and QR pass
+      const canonicalPayload = booking.reference;
+      const payloadData = {
         bookingId: booking.id,
-        reference: row?.qr_reference ?? booking.reference,
-        payload: row?.qr_payload ?? null,
-        expiresAt: row?.expires_at ?? null,
+        reference: booking.reference,
+        payload: canonicalPayload,
+        expiresAt: booking.ends_at ?? null,
       };
-      setQrPass(newQrData);
+      setQrPass(payloadData);
       try {
-        sessionStorage.setItem(cacheKey, JSON.stringify(newQrData));
+        sessionStorage.setItem(cacheKey, JSON.stringify(payloadData));
       } catch {
         // ignore
       }
+
+      // Background ensure token exists in database for scanner validation
+      const supabase = createSupabaseBrowserClient();
+      void supabase.rpc("issue_booking_qr", { p_booking_id: booking.id }).catch(() => {});
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.qrUnavailable);
     } finally {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { resolveImageSource } from "@/lib/image-helpers";
 
 const placeholderPath = "/parking/parking-placeholder.svg";
 
@@ -14,16 +15,6 @@ type AreaImageProps = {
   className?: string;
   loading?: "eager" | "lazy";
 };
-
-function resolveStoragePath(path: string) {
-  const trimmed = path.trim();
-  if (!trimmed) return placeholderPath;
-  if (trimmed.startsWith("/") || /^https?:\/\//i.test(trimmed)) return trimmed;
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return placeholderPath;
-  const encodedPath = trimmed.split("/").map((part) => encodeURIComponent(part)).join("/");
-  return `${base}/storage/v1/object/public/parking-media/${encodedPath}`;
-}
 
 export function AreaImage({ areaCode, title, locale, className = "parking-image", loading = "lazy" }: AreaImageProps) {
   const t = getCopy(locale);
@@ -43,8 +34,11 @@ export function AreaImage({ areaCode, title, locale, className = "parking-image"
           imagePath = image?.storage_path as string | null | undefined;
         }
         if (active && imagePath) {
-          setSrc(resolveStoragePath(imagePath));
-          setIsPlaceholder(false);
+          const resolved = resolveImageSource(imagePath, "parking-images") || resolveImageSource(imagePath, "parking-media");
+          if (resolved) {
+            setSrc(resolved);
+            setIsPlaceholder(false);
+          }
         }
       } catch {
         // The local placeholder is the safe fallback when the public catalog is offline.
@@ -55,9 +49,15 @@ export function AreaImage({ areaCode, title, locale, className = "parking-image"
   }, [areaCode]);
 
   return (
-    <div className={className}>
+    <div className={className} style={{ position: "relative", overflow: "hidden", aspectRatio: "16 / 9" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt={isPlaceholder ? `${locale === "th" ? "ผังลานจอด" : "Parking Layout"} · ${title}` : title} loading={loading} onError={() => { setSrc(placeholderPath); setIsPlaceholder(true); }} />
+      <img
+        src={src}
+        alt={isPlaceholder ? `${locale === "th" ? "ผังลานจอด" : "Parking Layout"} · ${title}` : title}
+        loading={loading}
+        onError={() => { setSrc(placeholderPath); setIsPlaceholder(true); }}
+        style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }}
+      />
       <span className="image-label">{isPlaceholder ? (locale === "th" ? "ผังลานจอด มมส." : "MSU Car Park") : t.customImage}</span>
     </div>
   );

@@ -817,7 +817,21 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                     <div className="form-group"><label htmlFor="user-faculty">{locale === "th" ? "คณะ" : "Faculty"}</label><input id="user-faculty" className="form-control" value={profileDraft.faculty} onChange={(event) => updateDraft("faculty", event.target.value)} /></div>
                     <div className="form-group"><label htmlFor="user-major">{locale === "th" ? "สาขา" : "Major"}</label><input id="user-major" className="form-control" value={profileDraft.major} onChange={(event) => updateDraft("major", event.target.value)} /></div>
                     <div className="form-group"><label htmlFor="user-department">{locale === "th" ? "หน่วยงาน" : "Department"}</label><input id="user-department" className="form-control" value={profileDraft.department} onChange={(event) => updateDraft("department", event.target.value)} /></div>
-                    <div className="form-group"><label htmlFor="user-phone">{t.phone}</label><input id="user-phone" className="form-control" type="tel" value={profileDraft.phone} onChange={(event) => updateDraft("phone", event.target.value)} /></div>
+                    <div className="form-group">
+                      <label htmlFor="user-phone">{t.phone}</label>
+                      <input
+                        id="user-phone"
+                        className="form-control"
+                        type="tel"
+                        maxLength={10}
+                        placeholder="08XXXXXXXX"
+                        value={profileDraft.phone}
+                        onChange={(event) => updateDraft("phone", event.target.value.replace(/\D/g, "").slice(0, 10))}
+                      />
+                      <small className="field-hint" style={{ fontSize: 11 }}>
+                        {locale === "th" ? "ตัวเลขไม่เกิน 10 หลัก" : "Maximum 10 digits"}
+                      </small>
+                    </div>
                   </div>
                   <button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{t.save}</button>
                 </form>

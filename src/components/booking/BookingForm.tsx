@@ -175,10 +175,22 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       }
 
       if (!booking) throw new Error("Booking was not created.");
-      const { data: qrData, error: qrError } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
-      const qrRow = (Array.isArray(qrData) ? qrData[0] : qrData) as { qr_payload?: string; expires_at?: string } | null;
-      setSuccess({ reference: booking.reference, qrPayload: qrRow?.qr_payload ?? null, expiresAt: qrRow?.expires_at ?? null });
-      notify({ title: t.bookingSaved, message: qrError ? t.qrUnavailable : booking.reference, kind: qrError ? "warning" : "success", duration: 8000 });
+      void supabase.rpc("issue_booking_qr", { p_booking_id: booking.id }).catch(() => {});
+      const endsAtDate = new Date(`${date}T${endTime}:00`);
+      const expiresAtIso = Number.isNaN(endsAtDate.getTime()) ? null : endsAtDate.toISOString();
+      const canonicalPayload = booking.reference;
+      setSuccess({ reference: booking.reference, qrPayload: canonicalPayload, expiresAt: expiresAtIso });
+      try {
+        sessionStorage.setItem(`parkspace_qr_${booking.id}`, JSON.stringify({
+          bookingId: booking.id,
+          reference: booking.reference,
+          payload: canonicalPayload,
+          expiresAt: expiresAtIso,
+        }));
+      } catch {
+        // ignore
+      }
+      notify({ title: t.bookingSaved, message: booking.reference, kind: "success", duration: 8000 });
     } catch (error) {
       const detail = error instanceof Error ? error.message : t.bookingFailed;
       setMessage(detail);
