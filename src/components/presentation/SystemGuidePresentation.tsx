@@ -73,6 +73,7 @@ interface StepItem {
   imageAlt: string;
   badgeColor: string;
   badgeBg: string;
+  gallery?: { src: string; alt: string; labelTh: string; labelEn: string }[];
 }
 
 interface SitemapItem {
@@ -103,9 +104,14 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
   const [sitemapCategory, setSitemapCategory] = useState<string>("all");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<{ src: string; title: string } | null>(null);
+  const [selectedImageOverride, setSelectedImageOverride] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setSelectedImageOverride(null);
+  }, [currentStep]);
 
   // 1. Definition of Step-by-Step Lifecycle Presentation Slides
   const steps: StepItem[] = useMemo(
@@ -141,10 +147,24 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/parking`,
         urlLabelTh: "ทดลองเปิดหน้าลานจอด 28 จุด 🚀",
         urlLabelEn: "Explore 28 Parking Lots 🚀",
-        imageSrc: "/guide/campus-map-interactive.png",
-        imageAlt: "Campus Map Overview 28 Points",
+        imageSrc: "/guide/home-landing-hero.png",
+        imageAlt: "ParkSpace MSU Homepage & Navigation",
         badgeColor: "#0284c7",
         badgeBg: "#e0f2fe",
+        gallery: [
+          {
+            src: "/guide/parking-p01-detail.png",
+            alt: "Area P01 Detail & Capacity",
+            labelTh: "หน้ารายละเอียดจุด P01",
+            labelEn: "P01 Detail View",
+          },
+          {
+            src: "/guide/campus-map-interactive.png",
+            alt: "Campus Map Overview 28 Points",
+            labelTh: "แผนที่ภาพรวม 28 จุด",
+            labelEn: "28-Area Campus Map",
+          },
+        ],
       },
       {
         id: 2,
@@ -249,10 +269,18 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/parking/p01`,
         urlLabelTh: "ตัวอย่างหน้าข้อมูลและพิกัดนำทาง P01 📍",
         urlLabelEn: "Example Area P01 Navigation Details 📍",
-        imageSrc: "/guide/msu-map-overview.jpg",
-        imageAlt: "MSU Campus Navigation Map",
+        imageSrc: "/guide/parking-p01-map.png",
+        imageAlt: "Area P01 Interactive Google Maps & Route Navigation",
         badgeColor: "#15803d",
         badgeBg: "#dcfce7",
+        gallery: [
+          {
+            src: "/guide/parking-p01-detail.png",
+            alt: "Area P01 Details & Live Capacity",
+            labelTh: "ข้อมูลลานจอดและสิ่งอำนวยความสะดวก",
+            labelEn: "Area & Amenities Info",
+          },
+        ],
       },
       {
         id: 5,
@@ -285,10 +313,18 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/staff/scan`,
         urlLabelTh: "เปิดหน้าจอเครื่องสแกนของเจ้าหน้าที่ 📷",
         urlLabelEn: "Open Staff Pass Scanner 📷",
-        imageSrc: "/guide/staff-scanner.png",
-        imageAlt: "Staff Duty Station Scanner",
+        imageSrc: "/guide/staff-scanner-duty.png",
+        imageAlt: "Staff Duty Station Assignment & QR Scanner",
         badgeColor: "#d97706",
         badgeBg: "#fef3c7",
+        gallery: [
+          {
+            src: "/guide/staff-operations-live.png",
+            alt: "Staff Realtime Operations Dashboard",
+            labelTh: "ศูนย์ควบคุมปฏิบัติการสด",
+            labelEn: "Live Ops Dashboard",
+          },
+        ],
       },
       {
         id: 6,
@@ -321,10 +357,18 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/staff/operations`,
         urlLabelTh: "ดูสถานะปฏิบัติการแบบเรียลไทม์ ⚡",
         urlLabelEn: "View Real-Time Operations ⚡",
-        imageSrc: "/guide/staff-scanner.png",
-        imageAlt: "Staff Scanner Re-slotting Modal",
+        imageSrc: "/guide/staff-operations-live.png",
+        imageAlt: "Staff Realtime Operations Dashboard",
         badgeColor: "#d97706",
         badgeBg: "#fef3c7",
+        gallery: [
+          {
+            src: "/guide/staff-scanner-duty.png",
+            alt: "Staff Duty Station Scanner",
+            labelTh: "จุดสแกนประจำลานจอด",
+            labelEn: "Duty Station Scanner",
+          },
+        ],
       },
       {
         id: 7,
@@ -1230,73 +1274,159 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
                 minHeight: 400,
               }}
             >
-              <div
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  maxWidth: 520,
-                  borderRadius: 14,
-                  overflow: "hidden",
-                  boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
-                  border: "2px solid rgba(255,255,255,0.1)",
-                  cursor: "zoom-in",
-                }}
-                onClick={() => setLightboxImage({ src: activeStepData.imageSrc, title: isTh ? activeStepData.titleTh : activeStepData.titleEn })}
-              >
-                {/* Browser-like Mockup Header */}
-                <div
-                  style={{
-                    background: "#090d16",
-                    padding: "8px 12px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    borderBottom: "1px solid rgba(255,255,255,0.08)",
-                  }}
-                >
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
-                  <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 8, fontFamily: "monospace" }}>
-                    parkspace-msu.vercel.app{activeStepData.targetUrl}
-                  </span>
-                </div>
+              {(() => {
+                const currentImgSrc = selectedImageOverride || activeStepData.imageSrc;
+                return (
+                  <>
+                    <div
+                      style={{
+                        position: "relative",
+                        width: "100%",
+                        maxWidth: 520,
+                        borderRadius: 14,
+                        overflow: "hidden",
+                        boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+                        border: "2px solid rgba(255,255,255,0.1)",
+                        cursor: "zoom-in",
+                      }}
+                      onClick={() =>
+                        setLightboxImage({
+                          src: currentImgSrc,
+                          title: isTh ? activeStepData.titleTh : activeStepData.titleEn,
+                        })
+                      }
+                    >
+                      {/* Browser-like Mockup Header */}
+                      <div
+                        style={{
+                          background: "#090d16",
+                          padding: "8px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          borderBottom: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ef4444" }} />
+                        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#f59e0b" }} />
+                        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#10b981" }} />
+                        <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 8, fontFamily: "monospace" }}>
+                          parkspace-msu.vercel.app{activeStepData.targetUrl}
+                        </span>
+                      </div>
 
-                <img
-                  src={activeStepData.imageSrc}
-                  alt={activeStepData.imageAlt}
-                  style={{
-                    width: "100%",
-                    height: "auto",
-                    maxHeight: 380,
-                    objectFit: "contain",
-                    display: "block",
-                    background: "#020617",
-                  }}
-                />
+                      <img
+                        src={currentImgSrc}
+                        alt={activeStepData.imageAlt}
+                        style={{
+                          width: "100%",
+                          height: "auto",
+                          maxHeight: 380,
+                          objectFit: "contain",
+                          display: "block",
+                          background: "#020617",
+                        }}
+                      />
 
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: 8,
-                    right: 8,
-                    background: "rgba(0,0,0,0.65)",
-                    backdropFilter: "blur(4px)",
-                    color: "#fff",
-                    padding: "4px 8px",
-                    borderRadius: 6,
-                    fontSize: 10,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  <Eye size={12} />
-                  <span>{isTh ? "คลิกเพื่อขยายภาพ" : "Click to Enlarge"}</span>
-                </div>
-              </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 8,
+                          right: 8,
+                          background: "rgba(0,0,0,0.65)",
+                          backdropFilter: "blur(4px)",
+                          color: "#fff",
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          fontSize: 10,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <Eye size={12} />
+                        <span>{isTh ? "คลิกเพื่อขยายภาพ" : "Click to Enlarge"}</span>
+                      </div>
+                    </div>
 
-              <span style={{ color: "#94a3b8", fontSize: 11, marginTop: 12 }}>
+                    {/* Gallery View Switcher */}
+                    {activeStepData.gallery && activeStepData.gallery.length > 0 && (
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          marginTop: 10,
+                          flexWrap: "wrap",
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ fontSize: 10, color: "#94a3b8", marginRight: 2 }}>
+                          {isTh ? "มุมมอง:" : "Views:"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImageOverride(activeStepData.imageSrc);
+                          }}
+                          style={{
+                            padding: "4px 9px",
+                            borderRadius: 6,
+                            fontSize: 11,
+                            cursor: "pointer",
+                            border:
+                              currentImgSrc === activeStepData.imageSrc
+                                ? "1px solid #38bdf8"
+                                : "1px solid rgba(255,255,255,0.15)",
+                            background:
+                              currentImgSrc === activeStepData.imageSrc
+                                ? "rgba(56,189,248,0.2)"
+                                : "rgba(255,255,255,0.06)",
+                            color: currentImgSrc === activeStepData.imageSrc ? "#38bdf8" : "#94a3b8",
+                            fontWeight: currentImgSrc === activeStepData.imageSrc ? 700 : 500,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {isTh ? "ภาพหลัก" : "Primary"}
+                        </button>
+                        {activeStepData.gallery.map((g, idx) => {
+                          const isSelected = currentImgSrc === g.src;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedImageOverride(g.src);
+                              }}
+                              style={{
+                                padding: "4px 9px",
+                                borderRadius: 6,
+                                fontSize: 11,
+                                cursor: "pointer",
+                                border: isSelected
+                                  ? "1px solid #38bdf8"
+                                  : "1px solid rgba(255,255,255,0.15)",
+                                background: isSelected
+                                  ? "rgba(56,189,248,0.2)"
+                                  : "rgba(255,255,255,0.06)",
+                                color: isSelected ? "#38bdf8" : "#94a3b8",
+                                fontWeight: isSelected ? 700 : 500,
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              {isTh ? g.labelTh : g.labelEn}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+
+              <span style={{ color: "#94a3b8", fontSize: 11, marginTop: 10 }}>
                 {isTh ? "ภาพหน้าจอจริงของระบบในขั้นตอนนี้" : "Actual verified production screenshot"}
               </span>
             </div>
