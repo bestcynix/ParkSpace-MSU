@@ -9,6 +9,12 @@ import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabas
 
 type ProtectedRole = "staff" | "admin" | "developer";
 
+const ROLE_HIERARCHY: Record<ProtectedRole, string[]> = {
+  staff: ["staff", "admin", "developer"],
+  admin: ["admin", "developer"],
+  developer: ["developer"],
+};
+
 export function RoleGate({ locale, role, children }: { locale: Locale; role: ProtectedRole; children: React.ReactNode }) {
   const t = getCopy(locale);
   const [state, setState] = useState<"checking" | "allowed" | "blocked" | "setup">("checking");
@@ -27,8 +33,18 @@ export function RoleGate({ locale, role, children }: { locale: Locale; role: Pro
           if (mounted) setState("blocked");
           return;
         }
-        const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", sessionData.session.user.id).eq("role", role).maybeSingle();
-        if (mounted) setState(roleData ? "allowed" : "blocked");
+        const { data: roleData, error } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", sessionData.session.user.id);
+        if (error) {
+          if (mounted) setState("blocked");
+          return;
+        }
+        const userRoles = ((roleData ?? []) as Array<{ role?: unknown }>).map((item) => String(item.role ?? "").toLowerCase().trim());
+        const satisfyingRoles: string[] = ROLE_HIERARCHY[role] ?? [role];
+        const hasAccess = userRoles.some((userRole: string) => satisfyingRoles.includes(userRole));
+        if (mounted) setState(hasAccess ? "allowed" : "blocked");
       } catch {
         if (mounted) setState("blocked");
       }

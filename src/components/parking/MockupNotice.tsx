@@ -5,12 +5,14 @@ import { getCopy } from "@/lib/i18n";
 export function MockupNotice({ locale, compact = false }: { locale: Locale; compact?: boolean }) {
   const t = getCopy(locale);
   return (
-    <div className="mockup-note" role="note">
+    <div className="status-note mockup-note" role="note">
       <Info size={15} />
       <span>
         <strong>{t.sampleData} / {t.sampleDataEn}</strong>{compact ? " " : " — "}
-        {!compact && t.estimateNote}
+        {t.estimateNote}
       </span>
     </div>
   );
 }
+
+export const LiveDataNotice = MockupNotice;

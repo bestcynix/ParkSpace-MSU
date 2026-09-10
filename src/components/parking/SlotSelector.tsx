@@ -44,26 +44,6 @@ function slotTypeLabel(locale: Locale, value: string) {
   }
 }
 
-const mockupRows = Array.from({ length: 7 }, (_, rowIndex) => {
-  const label = String.fromCharCode(65 + rowIndex);
-  const count = rowIndex < 2 ? 15 : 14;
-  return {
-    label,
-    slots: Array.from({ length: count }, (_, position) => `${label}-${String(position + 1).padStart(2, "0")}`),
-  };
-});
-
-function MockupSlotLayout({ locale }: { locale: Locale }) {
-  const t = getCopy(locale);
-  return <div className="mockup-layout" aria-label={t.prototypeSlotTitle}>
-    <div className="mockup-note"><Info size={15} /><span><strong>{t.prototypeSlotTitle}</strong> — {t.mockupLayoutNote}</span></div>
-    <div className="mockup-layout-summary"><span>{t.area}: A–G</span><strong>100 {locale === "th" ? "ช่อง" : "spaces"}</strong><span>{t.realSlotStatusNote}</span></div>
-    <div className="slot-rows prototype-slot-rows">
-      {mockupRows.map((row) => <div className="slot-row" key={row.label}><span className="slot-row-label">{row.label}</span><div className="slot-cells mockup-slot-cells">{row.slots.map((code) => <span className="slot-cell prototype mockup-slot-cell" key={code}><strong>{code}</strong><span>{t.sampleData}</span></span>)}</div></div>)}
-    </div>
-  </div>;
-}
-
 function todayString() {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -170,8 +150,7 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
   if (mode !== "INDIVIDUAL_SLOT") {
     return (
       <section className="slot-panel" aria-label={t.areaOnly}>
-        <div className="slot-panel-heading"><Info size={20} /><div><strong>{area.prototypeSlotGrid ? t.prototypeSlotTitle : t.areaOnly}</strong><span>{area.prototypeSlotGrid ? t.mockupLayoutNote : t.slotDataPending}</span></div></div>
-        {area.prototypeSlotGrid ? <MockupSlotLayout locale={locale} /> : null}
+        <div className="slot-panel-heading"><Info size={20} /><div><strong>{t.areaOnly}</strong><span>{t.noSlotsConfigured}</span></div></div>
         <p className="form-note">{t.noSlotsConfigured}</p>
         <Link className="primary-button" href={`/${locale}/app/bookings/new?area=${area.id}`}>{t.reserveArea}</Link>
       </section>
@@ -189,7 +168,7 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
       </form>
       <div className="slot-legend" aria-label={t.slotAvailability}><span className="slot-legend-item available"><i />{t.available}</span><span className="slot-legend-item reserved"><i />{t.reserved}</span><span className="slot-legend-item occupied"><i />{t.occupied}</span><span className="slot-legend-item closed"><i />{t.closed}</span></div>
       {message ? <div className="form-note" role="status">{message}</div> : null}
-      {!slots.length ? <MockupSlotLayout locale={locale} /> : <div className="mockup-note live-slot-note"><Info size={15} /><span>{t.realSlotStatusNote} · {vehicleFilter === "ALL" ? t.all : slotTypeLabel(locale, vehicleFilter)}</span></div>}
+      {slots.length ? <div className="status-note live-slot-note"><Info size={15} /><span>{t.realSlotStatusNote} · {vehicleFilter === "ALL" ? t.all : slotTypeLabel(locale, vehicleFilter)}</span></div> : null}
       {!configured ? <div className="slot-empty"><Info size={22} /><strong>{t.setupRequired}</strong><span>{t.operationalData}</span></div> : null}
       {configured && !slots.length && !message ? <div className="slot-empty"><Info size={22} /><strong>{t.slotDataPending}</strong><span>{t.noSlotsConfigured}</span></div> : null}
       {groupedSlots.length ? <div className="slot-rows">{groupedSlots.map(([row, rowSlots]) => <div className="slot-row" key={row}><span className="slot-row-label">{row}</span><div className="slot-cells">{rowSlots.map((slot) => { const Icon = statusIcon[slot.availability]; const available = slot.availability === "AVAILABLE"; return <button className={`slot-cell ${slot.availability.toLowerCase()} ${selectedSlot?.id === slot.id ? "selected" : ""}`} type="button" key={slot.id} disabled={!available} onClick={() => setSelectedSlot(slot)} aria-pressed={selectedSlot?.id === slot.id} aria-label={`${slot.slot_code} · ${slotTypeLabel(locale, slot.slot_type)} · ${slot.availability}`}><Icon size={15} /><strong>{slot.slot_code}</strong><span>{slotTypeLabel(locale, slot.slot_type)} · {slot.availability === "AVAILABLE" ? t.available : slot.availability === "RESERVED" ? t.reserved : slot.availability === "OCCUPIED" ? t.occupied : t.closed}</span></button>; })}</div></div>)}</div> : null}

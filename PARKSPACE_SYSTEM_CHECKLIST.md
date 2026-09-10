@@ -55,9 +55,27 @@
 - [x] Vercel production ใช้ `https://parkspace-msu.vercel.app/` และ Supabase project เดิม
 - [x] ตรวจ production: Google callback/session, Team/About, profile form, vehicle form และเลือกช่องจริงโดยไม่สร้าง booking ทดสอบ
 
+## การปรับปรุงล่าสุด (Developer Console, สิทธิ์, รูปภาพ, และการจอง)
+
+- [x] Database Explorer (`/developer/database`) รองรับตารางจริง 10 ตาราง พร้อมค้นหา กรอง สคีมา และ Badge `< N >`
+- [x] Trace Explorer (`/developer/traces`) ติดตาม Distributed Traces, Latency, Status พร้อม Badge `< N >`
+- [x] Feature Flags Manager (`/developer/feature-flags`) ควบคุมฟีเจอร์ระบบพร้อมระบบค้นหาและกรอง
+- [x] Universal Image Upload (`ImageInputWithUpload.tsx`) รองรับทั้ง URL และอัปโหลดไฟล์ พร้อม Preview และ Base64/Storage fallback
+- [x] Area Manager (`/developer/parking-areas`) รองรับภาพหลักและ Entrance ด้วยตัวอัปโหลดภาพ ค้นหา กรอง และลบคำว่า MOCKUP ออก 100%
+- [x] User Management (`/developer/users`) ปรับยศได้ทุกยศ (`DEV`, `ADMIN`, `STAFF`, `USER`) ด้วย 1-click Quick Role Buttons พร้อมประวัติ Audit Log และ Badge `< N >`
+- [x] Role Hierarchy & Gates: Developer และ Admin เข้าถึงหน้าคอนโซลได้ครบตามระดับสิทธิ์
+- [x] แก้ไข Auth 422 Google Password Loop พร้อมปุ่มข้ามเข้าสู่แอปทันที
+- [x] ป้องกัน Booking 403 Forbidden ด้วย Server-side API endpoint `/api/bookings` และ Migration Permissions
+- [x] Global Error Boundary ระงับข้อผิดพลาดภายนอก `startTime` จาก Browser Extension
+- [x] ระบบแสดงจำนวนข้อมูลมาตรฐาน `< N >` ในทุกจุดข้อมูลหนาแน่น
+
 ## สิ่งที่ต้องยืนยันจากผู้ดูแลระบบ/มมส.
 
-- [ ] รัน migration รูปทีมใน Supabase SQL Editor ก่อนใช้การอัปโหลดรูปสมาชิก
+- [ ] รัน SQL Script รวมใน Supabase SQL Editor:
+  1. `202609100003_team_avatar_storage.sql` (สร้าง bucket team-avatars)
+  2. `202609100004_managed_user_roles.sql` (ฟังก์ชัน manage_user_roles)
+  3. `202609100005_parking_images_storage.sql` (สร้าง bucket parking-images)
+  4. `202609100006_grant_booking_permissions.sql` (grant สิทธิ์ bookings & qr)
 - [ ] ยืนยันชื่อพื้นที่ รูปภาพ พิกัด GPS เวลาเปิดบริการ ประเภทรถ และจำนวนช่องจริงของแต่ละ P01–P28
 - [ ] ตั้ง Google Cloud OAuth consent screen/ผู้ใช้ทดสอบหรือเผยแพร่ หากต้องการให้บัญชี Google ภายนอกองค์กรเข้าใช้
 - [ ] ทดสอบการบันทึก booking จริงในเวลาที่อนุญาต โดยผู้มีสิทธิ์และรถทดสอบที่ตกลงกัน

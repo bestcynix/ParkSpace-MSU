@@ -110,7 +110,8 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         notify({ title: t.vehicleSlotMismatch, message: `${t.slotType}: ${slotTypeLabel(locale, selectedSlot.type)}`, kind: "warning" });
         return;
       }
-      const { data: booking, error } = await supabase.from("bookings").insert({
+      let booking: { id: string; reference: string } | null = null;
+      const bookingPayload = {
         user_id: sessionData.session.user.id,
         parking_area_id: dbArea.id,
         booking_date: date,
@@ -121,9 +122,39 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, vehicle_type: selectedVehicleType, source: "MANUAL_ENTRY" },
         booking_mode: selectedSlot ? "INDIVIDUAL_SLOT" : area.slotMode,
         status: "PENDING",
-      }).select("id, reference").single();
-      if (error) throw error;
-      if (!booking) throw new Error("Booking was not returned by Supabase.");
+      };
+
+      const { data: directBooking, error: directError } = await supabase
+        .from("bookings")
+        .insert(bookingPayload)
+        .select("id, reference")
+        .single();
+
+      if (!directError && directBooking) {
+        booking = directBooking;
+      } else {
+        // Fallback to server endpoint if direct client insert is forbidden or fails
+        try {
+          const apiRes = await fetch("/api/bookings", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${sessionData.session.access_token}`,
+            },
+            body: JSON.stringify(bookingPayload),
+          });
+          const apiJson = await apiRes.json();
+          if (apiRes.ok && apiJson.booking) {
+            booking = apiJson.booking;
+          } else {
+            throw new Error(apiJson.error || directError?.message || t.bookingFailed);
+          }
+        } catch (fallbackErr) {
+          throw directError || fallbackErr;
+        }
+      }
+
+      if (!booking) throw new Error("Booking was not created.");
       const { data: qrData, error: qrError } = await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
       const qrRow = (Array.isArray(qrData) ? qrData[0] : qrData) as { qr_payload?: string; expires_at?: string } | null;
       setSuccess({ reference: booking.reference, qrPayload: qrRow?.qr_payload ?? null, expiresAt: qrRow?.expires_at ?? null });

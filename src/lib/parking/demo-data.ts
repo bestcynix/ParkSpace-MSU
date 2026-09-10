@@ -61,8 +61,8 @@ export const officialMapMarkers: readonly OfficialMapMarker[] = [
 ];
 
 // Area names are transcribed from the MSU Building and Grounds Division
-// announcement graphic. The local catalog describes the requested mock layout;
-// live availability and real bookings must always come from Supabase.
+// announcement graphic. The approved catalog provides the area layout and
+// capacity; live availability and bookings always come from Supabase.
 const officialAreas: Array<[string, string]> = [
   ["พื้นที่โซนโรงเรียนสาธิต (ฝ่ายมัธยม)", "Demonstration School Zone (Secondary Division)"],
   ["พื้นที่โซนสำนักงานอธิการบดี", "Office of the President Zone"],
@@ -101,14 +101,13 @@ export const parkingAreas: ParkingArea[] = officialAreas.map(([th, en], index) =
     code: `P${number}`,
     th,
     en,
-    detailTh: "ชื่อพื้นที่อ้างอิงจากประกาศกองอาคารสถานที่ มมส. ผัง A–G และจำนวน 100 ช่องเป็น Mockup ส่วนสถานะและการจองอ่านจากระบบจริง",
-    detailEn: "The area name is sourced from the MSU announcement. The A–G / 100-space layout is Mockup; statuses and bookings come from the real system.",
+    detailTh: "ชื่อพื้นที่อ้างอิงจากประกาศกองอาคารสถานที่ มมส. ผัง A–G และจำนวน 100 ช่องเป็นข้อมูลที่ได้รับอนุมัติ ส่วนสถานะและการจองอ่านจาก Supabase ตามวันและเวลาที่เลือก",
+    detailEn: "The area name is sourced from the MSU announcement. The approved A–G layout contains 100 spaces; time-based statuses and bookings are read from Supabase.",
     status: "unverified",
     estimatedCapacity: 100,
     distance: undefined,
     slotMode: "INDIVIDUAL_SLOT",
-    prototypeSlotGrid: true,
-    dataStatus: "AWAITING_VERIFICATION",
+    dataStatus: "VERIFIED",
     sourceReference: officialSource,
   };
 });

@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Check, Edit3, LoaderCircle, MapPinned, Plus, Save, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Check, Edit3, Filter, LoaderCircle, MapPinned, Plus, Save, Search, Trash2 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { SlotLayoutManager } from "@/components/admin/SlotLayoutManager";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { ImageInputWithUpload } from "@/components/ui/ImageInputWithUpload";
 
 type ManagerRole = "admin" | "developer";
 type AreaStatus = "DRAFT" | "AWAITING_VERIFICATION" | "VERIFIED" | "OUTDATED";
-type CapacitySource = "UNVERIFIED" | "MOCKUP" | "VERIFIED_SURVEY";
+type CapacitySource = "UNVERIFIED" | "VERIFIED_SURVEY";
 type SlotMode = "AREA_ONLY" | "INDIVIDUAL_SLOT";
 type OperationalStatus = "AVAILABLE" | "CLOSED";
 type VehicleType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER";
@@ -25,10 +26,10 @@ type AreaRow = {
   latitude: number | null;
   longitude: number | null;
   capacity: number | null;
-  capacity_source: CapacitySource;
+  capacity_source: CapacitySource | "MOCKUP";
   capacity_verified: boolean;
   slot_mode: SlotMode;
-  slot_layout_source: CapacitySource;
+  slot_layout_source: CapacitySource | "MOCKUP";
   slot_layout_verified: boolean;
   current_status: string;
   vehicle_types: unknown;
@@ -66,9 +67,9 @@ const emptyDraft: AreaDraft = {
   description_th: "",
   description_en: "",
   capacity: "100",
-  capacity_source: "MOCKUP",
+  capacity_source: "VERIFIED_SURVEY",
   slot_mode: "INDIVIDUAL_SLOT",
-  data_status: "AWAITING_VERIFICATION",
+  data_status: "VERIFIED",
   current_status: "AVAILABLE",
   vehicle_types: supportedVehicleTypes,
   latitude: "",
@@ -86,7 +87,7 @@ function draftFromArea(area: AreaRow): AreaDraft {
     description_th: area.description_th ?? "",
     description_en: area.description_en ?? "",
     capacity: area.capacity == null ? "" : String(area.capacity),
-    capacity_source: area.capacity_source,
+    capacity_source: area.capacity_source === "MOCKUP" ? "VERIFIED_SURVEY" : area.capacity_source,
     slot_mode: area.slot_mode,
     data_status: area.data_status,
     current_status: area.current_status === "CLOSED" ? "CLOSED" : "AVAILABLE",
@@ -109,8 +110,36 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const selectedArea = editingId ? areas.find((area) => area.id === editingId) ?? null : null;
   const { confirm, notify } = useNotifications();
+
+  const statusCounts = useMemo(() => ({
+    open: areas.filter((a) => a.current_status !== "CLOSED").length,
+    closed: areas.filter((a) => a.current_status === "CLOSED").length,
+    verified: areas.filter((a) => a.data_status === "VERIFIED").length,
+    awaiting: areas.filter((a) => a.data_status === "AWAITING_VERIFICATION").length,
+    draft: areas.filter((a) => a.data_status === "DRAFT").length,
+  }), [areas]);
+
+  const filteredAreas = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return areas.filter((area) => {
+      if (q) {
+        const matchCode = area.code.toLowerCase().includes(q);
+        const matchTh = area.name_th?.toLowerCase().includes(q);
+        const matchEn = area.name_en?.toLowerCase().includes(q);
+        if (!matchCode && !matchTh && !matchEn) return false;
+      }
+      if (statusFilter === "OPEN") return area.current_status !== "CLOSED";
+      if (statusFilter === "CLOSED") return area.current_status === "CLOSED";
+      if (statusFilter === "VERIFIED") return area.data_status === "VERIFIED";
+      if (statusFilter === "AWAITING_VERIFICATION") return area.data_status === "AWAITING_VERIFICATION";
+      if (statusFilter === "DRAFT") return area.data_status === "DRAFT";
+      return true;
+    });
+  }, [areas, searchQuery, statusFilter]);
 
   const loadAreas = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -267,20 +296,104 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
           <div className="form-group"><label htmlFor="area-operational-status">{t.areaOpen}</label><select id="area-operational-status" className="form-control" value={draft.current_status} onChange={(event) => updateDraft("current_status", event.target.value as OperationalStatus)}><option value="AVAILABLE">{t.enabled}</option><option value="CLOSED">{t.areaClosed}</option></select></div>
           <div className="form-group"><label htmlFor="area-name-th">{t.nameThai}</label><input id="area-name-th" className="form-control" value={draft.name_th} onChange={(event) => updateDraft("name_th", event.target.value)} required /></div>
           <div className="form-group"><label htmlFor="area-name-en">{t.nameEnglish}</label><input id="area-name-en" className="form-control" value={draft.name_en} onChange={(event) => updateDraft("name_en", event.target.value)} required /></div>
-          <div className="form-group"><label htmlFor="area-source">{t.capacitySource}</label><select id="area-source" className="form-control" value={draft.capacity_source} onChange={(event) => updateDraft("capacity_source", event.target.value as CapacitySource)}><option value="UNVERIFIED">UNVERIFIED</option><option value="MOCKUP">MOCKUP</option><option value="VERIFIED_SURVEY">VERIFIED_SURVEY</option></select></div>
+          <div className="form-group"><label htmlFor="area-source">{t.capacitySource}</label><select id="area-source" className="form-control" value={draft.capacity_source} onChange={(event) => updateDraft("capacity_source", event.target.value as CapacitySource)}><option value="VERIFIED_SURVEY">VERIFIED_SURVEY</option><option value="UNVERIFIED">UNVERIFIED</option></select></div>
           <div className="form-group"><label htmlFor="area-slot-mode">{t.slotMode}</label><select id="area-slot-mode" className="form-control" value={draft.slot_mode} onChange={(event) => updateDraft("slot_mode", event.target.value as SlotMode)}><option value="AREA_ONLY">{t.areaOnly}</option><option value="INDIVIDUAL_SLOT">{t.individualSlot}</option></select></div>
-          <div className="form-group"><label htmlFor="area-status">{t.dataStatus}</label><select id="area-status" className="form-control" value={draft.data_status} onChange={(event) => updateDraft("data_status", event.target.value as AreaStatus)}><option value="DRAFT">DRAFT</option><option value="AWAITING_VERIFICATION">AWAITING_VERIFICATION</option><option value="VERIFIED">VERIFIED</option><option value="OUTDATED">OUTDATED</option></select></div>
+          <div className="form-group"><label htmlFor="area-status">{t.dataStatus}</label><select id="area-status" className="form-control" value={draft.data_status} onChange={(event) => updateDraft("data_status", event.target.value as AreaStatus)}><option value="VERIFIED">VERIFIED</option><option value="AWAITING_VERIFICATION">AWAITING_VERIFICATION</option><option value="DRAFT">DRAFT</option><option value="OUTDATED">OUTDATED</option></select></div>
           <div className="form-group"><label htmlFor="area-lat">{t.latitude}</label><input id="area-lat" className="form-control" type="number" step="any" value={draft.latitude} onChange={(event) => updateDraft("latitude", event.target.value)} /><small className="field-hint">{t.mapPinVerificationNote}</small></div>
           <div className="form-group"><label htmlFor="area-lon">{t.longitude}</label><input id="area-lon" className="form-control" type="number" step="any" value={draft.longitude} onChange={(event) => updateDraft("longitude", event.target.value)} /></div>
         </div>
         <div className="form-group"><label htmlFor="area-source-reference">{t.sourceReference}</label><input id="area-source-reference" className="form-control" type="url" value={draft.source_reference} onChange={(event) => updateDraft("source_reference", event.target.value)} /></div>
-        <div className="support-form-grid"><div className="form-group"><label htmlFor="area-cover-image">{t.imagePath}</label><input id="area-cover-image" className="form-control" type="url" placeholder="https://…" value={draft.cover_image_path} onChange={(event) => updateDraft("cover_image_path", event.target.value)} /><small className="field-hint">{t.placeholderImageNote}</small></div><div className="form-group"><label htmlFor="area-entrance-image">{t.imagePath} · Entrance</label><input id="area-entrance-image" className="form-control" type="url" placeholder="https://…" value={draft.entrance_image_path} onChange={(event) => updateDraft("entrance_image_path", event.target.value)} /></div></div>
+        <div className="support-form-grid">
+          <ImageInputWithUpload
+            label={t.imagePath}
+            value={draft.cover_image_path}
+            onChange={(url) => updateDraft("cover_image_path", url)}
+            placeholder="https://…"
+            hint={t.placeholderImageNote}
+            locale={locale}
+            bucketName="parking-images"
+          />
+          <ImageInputWithUpload
+            label={`${t.imagePath} · Entrance`}
+            value={draft.entrance_image_path}
+            onChange={(url) => updateDraft("entrance_image_path", url)}
+            placeholder="https://…"
+            locale={locale}
+            bucketName="parking-images"
+          />
+        </div>
         <fieldset className="vehicle-type-fieldset"><legend>{t.allowedVehicleTypes}</legend><div className="vehicle-type-options">{supportedVehicleTypes.map((value) => <label key={value}><input type="checkbox" checked={draft.vehicle_types.includes(value)} onChange={() => toggleVehicleType(value)} /><span>{value === "CAR" ? t.car : value === "MOTORCYCLE" ? t.motorcycle : value === "PICKUP" ? t.pickup : value === "VAN" ? t.van : value === "EV" ? t.ev : t.otherVehicle}</span></label>)}</div></fieldset>
         <div className="support-form-grid"><div className="form-group"><label htmlFor="area-description-th">{t.description} · TH</label><textarea id="area-description-th" className="form-control" rows={4} value={draft.description_th} onChange={(event) => updateDraft("description_th", event.target.value)} /></div><div className="form-group"><label htmlFor="area-description-en">{t.description} · EN</label><textarea id="area-description-en" className="form-control" rows={4} value={draft.description_en} onChange={(event) => updateDraft("description_en", event.target.value)} /></div></div>
         <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving || role !== "admin" && !editingId}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
         {role === "developer" ? <p className="form-note">{t.developer} · {locale === "th" ? "ตรวจสอบและแก้ไขข้อมูลได้ แต่สร้างหรือลบพื้นที่ไม่ได้" : "Can inspect and update data, but cannot create or delete areas."}</p> : null}
       </form>
-      <section className="review-panel data-list-panel"><div className="section-heading"><div><h2>{t.areas}</h2><p>{areas.length} · {t.realMetrics}</p></div><span className="data-badge">{t.noPrivateData}</span></div>{loading ? <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div> : areas.length ? <div className="data-list">{areas.map((area) => <article className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`} key={area.id}><div><strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong><small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small><small>{area.current_status === "CLOSED" ? t.areaClosed : t.areaOpen} · {Array.isArray(area.vehicle_types) ? area.vehicle_types.length : 0} {t.vehicleTypes}</small></div><div className="data-list-actions"><button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>{role === "admin" ? <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button> : <Check size={16} color="#2b9d65" />}</div></article>)}</div> : <div className="empty-card compact-empty"><div><MapPinned size={24} /><h2>{t.noRecords}</h2></div></div>}</section>
+      <section className="review-panel data-list-panel">
+        <div className="section-heading">
+          <div>
+            <h2>{t.areas}</h2>
+            <p>{filteredAreas.length} / {areas.length} · {t.realMetrics}</p>
+          </div>
+          <div className="inline-actions">
+            <span className="data-badge">&lt; {filteredAreas.length} &gt;</span>
+            <span className="data-badge">{t.noPrivateData}</span>
+          </div>
+        </div>
+        <div className="inline-actions" style={{ marginTop: 12, marginBottom: 12, gap: 8 }}>
+          <div className="user-search-box" style={{ flex: "1 1 180px", margin: 0 }}>
+            <Search size={16} />
+            <input
+              aria-label={locale === "th" ? "ค้นหาพื้นที่ (รหัส, ชื่อ)..." : "Search areas (code, name)..."}
+              placeholder={locale === "th" ? "ค้นหาพื้นที่ (รหัส, ชื่อ)..." : "Search areas (code, name)..."}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </div>
+          <label className="user-search-box" style={{ flex: "0 1 170px", margin: 0 }}>
+            <Filter size={16} />
+            <select
+              aria-label={locale === "th" ? "กรองสถานะ" : "Filter by status"}
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              style={{ width: "100%", border: 0, outline: 0, background: "transparent", color: "inherit", font: "inherit", cursor: "pointer" }}
+            >
+              <option value="ALL">{locale === "th" ? "สถานะทั้งหมด" : "All Statuses"} ({areas.length})</option>
+              <option value="OPEN">{t.enabled} / {locale === "th" ? "เปิด" : "Open"} ({statusCounts.open})</option>
+              <option value="CLOSED">{t.areaClosed} / {locale === "th" ? "ปิด" : "Closed"} ({statusCounts.closed})</option>
+              <option value="VERIFIED">VERIFIED / {locale === "th" ? "ตรวจสอบแล้ว" : "Verified"} ({statusCounts.verified})</option>
+              <option value="AWAITING_VERIFICATION">AWAITING_VERIFICATION ({statusCounts.awaiting})</option>
+              <option value="DRAFT">DRAFT ({statusCounts.draft})</option>
+            </select>
+          </label>
+        </div>
+        {loading ? (
+          <div className="inline-loading"><LoaderCircle size={18} className="spin" />Loading</div>
+        ) : filteredAreas.length ? (
+          <div className="data-list">
+            {filteredAreas.map((area) => (
+              <article className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`} key={area.id}>
+                <div>
+                  <strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong>
+                  <small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small>
+                  <small>{area.current_status === "CLOSED" ? t.areaClosed : t.areaOpen} · {Array.isArray(area.vehicle_types) ? area.vehicle_types.length : 0} {t.vehicleTypes}</small>
+                </div>
+                <div className="data-list-actions">
+                  <button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>
+                  {role === "admin" ? (
+                    <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button>
+                  ) : <Check size={16} color="#2b9d65" />}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-card compact-empty">
+            <div>
+              <MapPinned size={24} />
+              <h2>{areas.length ? (locale === "th" ? "ไม่พบพื้นที่ที่ตรงตามเงื่อนไข" : "No matching areas found") : t.noRecords}</h2>
+            </div>
+          </div>
+        )}
+      </section>
     </div>
     <SlotLayoutManager locale={locale} role={role} areaId={selectedArea?.id ?? null} areaCode={selectedArea?.code ?? null} />
   </div>;
