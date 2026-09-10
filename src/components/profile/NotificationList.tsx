@@ -95,7 +95,7 @@ function getNotificationVisual(item: NotificationRow, isTh: boolean) {
     };
   }
 
-  if (type.includes("booking") || text.includes("booking") || text.includes("จอง") || text.includes("msupk-bkg")) {
+  if (type.includes("booking") || text.includes("booking") || text.includes("จอง") || text.includes("msupk")) {
     return {
       icon: CalendarCheck,
       badgeLabel: isTh ? "การจองสำเร็จ" : "Booking Confirmed",
@@ -223,7 +223,7 @@ export function NotificationList({ locale }: { locale: Locale }) {
       return String(item.metadata.booking_reference);
     }
     const fullText = `${item.title_th} ${item.title_en} ${item.body_th ?? ""} ${item.body_en ?? ""}`;
-    const match = fullText.match(/MSUPK-BKG-[0-9A-Za-z_-]+/i);
+    const match = fullText.match(/MSUPK-(?:BKG-)?[0-9A-Za-z_-]+/i);
     return match ? match[0] : null;
   }
 

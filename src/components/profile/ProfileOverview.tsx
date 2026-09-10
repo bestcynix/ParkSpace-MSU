@@ -106,6 +106,18 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
   const [viewingBooking, setViewingBooking] = useState<UserBooking | null>(null);
   const bookingsPerPage = 5;
 
+  const isDirty = Boolean(editing || pendingAvatar || newPassword || removeCurrentAvatar);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
   const loadProfile = useCallback(async () => {
     if (!isSupabaseConfigured()) return;
     setLoading(true);
@@ -1056,7 +1068,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
                     </a>
                     <Link
                       className="primary-button small-button"
-                      href={`/${locale}/app/bookings`}
+                      href={`/${locale}/app/bookings/${b.reference}`}
                       style={{ fontSize: 12, padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: 5 }}
                       title={locale === "th" ? "เปิดบัตรผ่าน QR Pass" : "QR Pass"}
                     >
@@ -1140,7 +1152,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
                 <div style={{ display: "flex", gap: 8 }}>
                   <Link
                     className="primary-button"
-                    href={`/${locale}/app/bookings`}
+                    href={`/${locale}/app/bookings/${viewingBooking.reference}`}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     <QrCode size={14} />

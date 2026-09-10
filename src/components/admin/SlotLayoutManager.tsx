@@ -82,6 +82,18 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
     });
   }, []);
 
+  const isDirty = Boolean(editingRowId);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
   const selectedRow = useMemo(() => rows.find((row) => row.id === selectedRowId) ?? null, [rows, selectedRowId]);
   const selectedSlots = useMemo(() => slots.filter((slot) => slot.row_id === selectedRowId || (!slot.row_id && selectedRow && slot.row_label === selectedRow.row_label)), [selectedRow, selectedRowId, slots]);
 
@@ -256,7 +268,14 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
       setMessage(t.layoutSaved);
       notify({ title: t.layoutSaved, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      let detail = error instanceof Error ? error.message : t.operationalData;
+      if (detail.includes("violates foreign key constraint") || detail.includes("foreign key")) {
+        detail = locale === "th"
+          ? "ไม่สามารถลบแถวนี้ได้ เนื่องจากมีช่องจอดหรือรายการจองผูกอยู่กับแถวนี้ กรุณาลบหรือย้ายช่องจอดในแถวก่อน"
+          : "Cannot delete this row because parking slots or bookings are linked to it. Please remove slots first.";
+      }
+      setMessage(detail);
+      notify({ title: locale === "th" ? "ไม่สามารถลบแถวได้" : "Cannot Delete Row", message: detail, kind: "error" });
     } finally {
       setSaving(false);
     }
@@ -359,7 +378,14 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
       setMessage(t.layoutSaved);
       notify({ title: t.layoutSaved, kind: "success" });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : t.operationalData);
+      let detail = error instanceof Error ? error.message : t.operationalData;
+      if (detail.includes("violates foreign key constraint") || detail.includes("foreign key")) {
+        detail = locale === "th"
+          ? "ไม่สามารถลบช่องจอดนี้ได้ เนื่องจากมีประวัติการจองหรือข้อมูลผูกอยู่กับช่องนี้"
+          : "Cannot delete this slot because active bookings or history are linked to it.";
+      }
+      setMessage(detail);
+      notify({ title: locale === "th" ? "ไม่สามารถลบช่องจอดได้" : "Cannot Delete Slot", message: detail, kind: "error" });
     }
   }
 

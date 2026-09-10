@@ -65,6 +65,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
     }
 
+    const now = new Date();
+    if (endsAtDate.getTime() < now.getTime() - 5 * 60 * 1000) {
+      return NextResponse.json({ error: "Cannot create a booking in the past" }, { status: 400 });
+    }
+
     // Ensure database constraints are strictly satisfied:
     // (booking_mode = 'AREA_ONLY' and parking_slot_id is null) or (booking_mode = 'INDIVIDUAL_SLOT' and parking_slot_id is not null)
     const slotId = parking_slot_id ? String(parking_slot_id).trim() : null;

@@ -80,6 +80,18 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
     return () => { active = false; };
   }, []);
 
+  const isDirty = Boolean(!success && (vehicle || vehicleId || date !== todayStr || startTime !== (initialStartTime ?? "10:00") || endTime !== (initialEndTime ?? "13:00")));
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -233,7 +245,19 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
   }
 
   if (success) {
-    return <div className="form-card booking-success-card"><div className="empty-icon" style={{ margin: "0 auto 15px" }}><ShieldCheck size={28} /></div><h1 style={{ textAlign: "center" }}>{locale === "th" ? "จองสำเร็จ!" : "Booking successful"}</h1><p style={{ textAlign: "center" }}>{t.qrReady}</p><div className="form-note">{t.bookingReference}: {success.reference}</div><QrPass locale={locale} payload={success.qrPayload} reference={success.reference} expiresAt={success.expiresAt} /><Link className="primary-button" href={`/${locale}/app/bookings`}>{t.bookings}</Link></div>;
+    return (
+      <div className="form-card booking-success-card">
+        <div className="empty-icon" style={{ margin: "0 auto 15px" }}><ShieldCheck size={28} /></div>
+        <h1 style={{ textAlign: "center" }}>{locale === "th" ? "จองสำเร็จ!" : "Booking successful"}</h1>
+        <p style={{ textAlign: "center" }}>{t.qrReady}</p>
+        <div className="form-note">{t.bookingReference}: {success.reference}</div>
+        <QrPass locale={locale} payload={success.qrPayload} reference={success.reference} expiresAt={success.expiresAt} />
+        <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
+          <Link className="primary-button" href={`/${locale}/app/bookings/${success.reference}`}>{locale === "th" ? "ดูรายละเอียดการจองนี้" : "View This Booking"}</Link>
+          <Link className="secondary-button" href={`/${locale}/app/bookings`}>{t.bookings}</Link>
+        </div>
+      </div>
+    );
   }
 
   return (

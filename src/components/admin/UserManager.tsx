@@ -150,6 +150,29 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     () => (selectedUser ? getManagedRoles(selectedUser) : []),
     [selectedUser],
   );
+
+  const isProfileDirty = useMemo(() => {
+    if (!selectedUser) return false;
+    return (
+      profileDraft.full_name !== (selectedUser.full_name ?? "") ||
+      profileDraft.university_id !== (selectedUser.university_id ?? "") ||
+      profileDraft.faculty !== (selectedUser.faculty ?? "") ||
+      profileDraft.major !== (selectedUser.major ?? "") ||
+      profileDraft.department !== (selectedUser.department ?? "") ||
+      profileDraft.phone !== (selectedUser.phone ?? "") ||
+      Boolean(adminNewPassword)
+    );
+  }, [selectedUser, profileDraft, adminNewPassword]);
+
+  useEffect(() => {
+    if (!isProfileDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isProfileDirty]);
   const roleCounts = useMemo(
     () => Object.fromEntries(managedRoleOrder.map((item) => [item, users.filter((user) => getManagedRoles(user).includes(item)).length])) as Record<ManagedRole, number>,
     [users],
@@ -298,7 +321,20 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     }
   }, [t.operationalData]);
 
-  function editUser(user: UserRecord) {
+  async function editUser(user: UserRecord) {
+    if (user.id === selectedId) return;
+    if (isProfileDirty) {
+      const ok = await confirm({
+        title: locale === "th" ? "มีข้อมูลที่ยังไม่ได้บันทึก" : "Unsaved Changes",
+        message: locale === "th"
+          ? "คุณมีการแก้ไขข้อมูลผู้ใช้ที่ยังไม่ได้บันทึก ต้องการทิ้งข้อมูลแล้วเปลี่ยนผู้ใช้หรือไม่?"
+          : "You have unsaved changes. Discard them and switch user?",
+        confirmLabel: locale === "th" ? "ทิ้งข้อมูล" : "Discard",
+        cancelLabel: locale === "th" ? "แก้ไขต่อ" : "Keep editing",
+        danger: true,
+      });
+      if (!ok) return;
+    }
     setSelectedId(user.id);
     setProfileDraft({
       full_name: user.full_name ?? "",
@@ -308,6 +344,8 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
       department: user.department ?? "",
       phone: user.phone ?? "",
     });
+    setAdminNewPassword("");
+    setPasswordMessage("");
     setHistory(null);
     void loadHistory(user.id);
     setMessage("");
@@ -1062,7 +1100,7 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                     <article
                       className={`data-list-item ${selectedId === user.id ? "selected" : ""}`}
                       key={user.id}
-                      onClick={() => editUser(user)}
+                      onClick={() => void editUser(user)}
                       style={{ cursor: "pointer" }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>

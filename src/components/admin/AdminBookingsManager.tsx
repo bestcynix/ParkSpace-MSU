@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -484,7 +485,16 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
                       }}
                     >
                       <td style={{ padding: "12px 16px", fontFamily: "monospace", fontWeight: 700 }}>
-                        <span style={{ color: "#1e40af" }}>{b.reference}</span>
+                        <Link
+                          href={`/${locale}/app/bookings/${b.reference}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#1e40af", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 4 }}
+                          title={isTh ? "เปิดดูรายละเอียดการจอง & QR" : "View booking details & QR"}
+                        >
+                          <span>{b.reference}</span>
+                          <ExternalLink size={12} />
+                        </Link>
                       </td>
 
                       <td style={{ padding: "12px 16px" }}>
@@ -769,17 +779,31 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
                 alignItems: "center",
                 paddingTop: 14,
                 borderTop: "1px solid var(--line)",
+                flexWrap: "wrap",
+                gap: 8,
               }}
             >
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => void handleDelete(selectedBooking.id, selectedBooking.reference)}
-                style={{ color: "var(--red)", borderColor: "#fecaca" }}
-              >
-                <Trash2 size={14} />
-                <span>{isTh ? "ลบรายการนี้" : "Delete"}</span>
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void handleDelete(selectedBooking.id, selectedBooking.reference)}
+                  style={{ color: "var(--red)", borderColor: "#fecaca" }}
+                >
+                  <Trash2 size={14} />
+                  <span>{isTh ? "ลบรายการนี้" : "Delete"}</span>
+                </button>
+                <Link
+                  href={`/${locale}/app/bookings/${selectedBooking.reference}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="secondary-button"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <ExternalLink size={14} />
+                  <span>{isTh ? "เปิดหน้าบัตร QR" : "Open QR Details"}</span>
+                </Link>
+              </div>
 
               <button
                 type="button"
