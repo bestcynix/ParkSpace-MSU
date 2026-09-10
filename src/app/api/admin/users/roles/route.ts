@@ -69,6 +69,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
+    // Protect Primary Super Admin (68011211206@msu.ac.th)
+    const { data: targetProfile } = await client
+      .from("profiles")
+      .select("email")
+      .eq("id", target_user_id)
+      .maybeSingle();
+
+    if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของ Admin หลัก (68011211206@msu.ac.th)" },
+        { status: 403 }
+      );
+    }
+
     // Filter to valid roles: admin, staff, user
     const validRoles = requestedRoles
       .map((r: string) => String(r).toLowerCase().trim())

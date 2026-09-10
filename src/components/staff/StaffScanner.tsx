@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock3,
+  Edit3,
   Flashlight,
   LoaderCircle,
   QrCode,
@@ -33,6 +34,10 @@ type ScanResult = {
   area_name_th: string | null;
   slot_code: string | null;
   vehicle_plate: string | null;
+  booker_name?: string | null;
+  booker_phone?: string | null;
+  is_overstay?: boolean;
+  overdue_minutes?: number;
   scan_result: "VALID" | "EXPIRED" | "USED" | "CANCELLED" | "INVALID_REFERENCE" | "ERROR";
   qr_status?: string;
   message?: string;
@@ -82,6 +87,9 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
   const [transitioning, setTransitioning] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
+  const [editingField, setEditingField] = useState(false);
+  const [overridePlate, setOverridePlate] = useState("");
+  const [staffNote, setStaffNote] = useState("");
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isStaffOnly = role === "staff";
@@ -249,6 +257,9 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
 
       const scanRes: ScanResult = data.result;
       setResult(scanRes);
+      setOverridePlate(scanRes.vehicle_plate || "");
+      setStaffNote("");
+      setEditingField(false);
 
       setHistory((prev) => [
         {
@@ -284,6 +295,15 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
     }
   }
 
+  function handleClearResult() {
+    setResult(null);
+    setManualCode("");
+    setNotice(null);
+    setEditingField(false);
+    setOverridePlate("");
+    setStaffNote("");
+  }
+
   async function handleTransition(action: "CHECK_IN" | "CHECK_OUT" | "CANCEL" | "NO_SHOW" | "OVERRIDE", overrideStatus?: string) {
     if (!result?.booking_id) return;
 
@@ -305,6 +325,8 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
           booking_id: result.booking_id,
           action,
           override_status: overrideStatus,
+          updated_plate: overridePlate && overridePlate.trim() !== result.vehicle_plate ? overridePlate.trim() : undefined,
+          note: staffNote.trim() || undefined,
         }),
       });
 
@@ -315,7 +337,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       }
 
       const updatedStatus = data.current_status;
-      setResult((prev) => (prev ? { ...prev, booking_status: updatedStatus } : null));
+      setResult((prev) => (prev ? { ...prev, booking_status: updatedStatus, vehicle_plate: overridePlate || prev.vehicle_plate } : null));
 
       setNotice({
         text: isTh
@@ -636,11 +658,40 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             </span>
           </div>
 
+          {/* Overstay Alert Banner */}
+          {(result.is_overstay || (result.booking_status === "CHECKED_IN" && new Date().getTime() > new Date(result.ends_at).getTime())) && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "12px 16px",
+                borderRadius: 12,
+                background: "#fef2f2",
+                border: "2px solid #ef4444",
+                color: "#991b1b",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <AlertTriangle size={24} color="#dc2626" />
+              <div>
+                <strong style={{ fontSize: 13, display: "block" }}>
+                  🚨 {isTh ? "แจ้งเตือน: รถจอดเกินเวลาที่กำหนด (OVERSTAY)!" : "ALERT: VEHICLE OVERSTAY!"}
+                </strong>
+                <span style={{ fontSize: 11, color: "#7f1d1d" }}>
+                  {isTh
+                    ? `หมดเวลาตั้งแต่ ${result.ends_at ? new Date(result.ends_at).toLocaleTimeString() : ""} (เกินเวลาแล้ว ${result.overdue_minutes || 0} นาที) · ติดต่อผู้จอง: ${result.booker_name || "—"} (${result.booker_phone || "ไม่มีเบอร์"})`
+                    : `Expired at ${result.ends_at ? new Date(result.ends_at).toLocaleTimeString() : ""} (${result.overdue_minutes || 0} min overdue) · Contact: ${result.booker_name || "—"}`}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Details Grid */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
               gap: 10,
               marginTop: 14,
               padding: 12,
@@ -651,7 +702,17 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
           >
             <div>
               <span style={{ color: "var(--muted)", display: "block" }}>{isTh ? "ทะเบียนรถ" : "Vehicle Plate"}</span>
-              <strong style={{ fontSize: 13 }}>{result.vehicle_plate || "—"}</strong>
+              <strong style={{ fontSize: 13, color: overridePlate !== result.vehicle_plate ? "#0284c7" : "inherit" }}>
+                {overridePlate || result.vehicle_plate || "—"}
+                {overridePlate !== result.vehicle_plate ? " (แก้ไขแล้ว)" : ""}
+              </strong>
+            </div>
+            <div>
+              <span style={{ color: "var(--muted)", display: "block" }}>{isTh ? "ผู้จอง" : "Booker"}</span>
+              <strong style={{ fontSize: 13 }}>{result.booker_name || "—"}</strong>
+              {result.booker_phone ? (
+                <small style={{ display: "block", color: "var(--muted)" }}>📞 {result.booker_phone}</small>
+              ) : null}
             </div>
             <div>
               <span style={{ color: "var(--muted)", display: "block" }}>{isTh ? "ช่องจอด" : "Parking Slot"}</span>
@@ -667,6 +728,51 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             </div>
           </div>
 
+          {/* On-Site Editing & Clear Controls */}
+          <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => setEditingField((prev) => !prev)}
+              style={{ fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <Edit3 size={13} />
+              <span>{editingField ? (isTh ? "▲ ปิดกล่องแก้ไข" : "▲ Close Edit") : (isTh ? "✏️ แก้ไขทะเบียน / บันทึกหน้างาน" : "✏️ Edit Plate / Staff Note")}</span>
+            </button>
+            <button
+              type="button"
+              className="secondary-button small-button"
+              onClick={handleClearResult}
+              style={{ fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
+              <RefreshCw size={12} />
+              <span>{isTh ? "สแกนคันต่อไป / ล้างข้อมูล" : "Next Car / Clear"}</span>
+            </button>
+          </div>
+
+          {editingField && (
+            <div style={{ marginTop: 8, padding: 12, background: "#f1f5f9", borderRadius: 8, display: "grid", gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, display: "block", marginBottom: 2 }}>{isTh ? "ทะเบียนรถจริงหน้างาน" : "Actual Vehicle Plate"}</label>
+                <input
+                  className="form-control"
+                  value={overridePlate}
+                  onChange={(e) => setOverridePlate(e.target.value)}
+                  placeholder={result.vehicle_plate || (isTh ? "เช่น กข 1234" : "e.g. 1AB 1234")}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, display: "block", marginBottom: 2 }}>{isTh ? "บันทึกเจ้าหน้าที่ (Staff Note)" : "Staff Note"}</label>
+                <input
+                  className="form-control"
+                  value={staffNote}
+                  onChange={(e) => setStaffNote(e.target.value)}
+                  placeholder={isTh ? "ระบุหมายเหตุ เช่น รถไม่ตรงกับที่จอง, เปลี่ยนช่องจอด ฯลฯ" : "e.g. plate mismatch verified"}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Role Transitions Action Buttons */}
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
             {isStaffOnly ? (
@@ -681,7 +787,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     {transitioning === "CHECK_IN" ? <RefreshCw size={15} className="spin" /> : <CheckCircle2 size={15} />}
-                    <span>{t.checkIn} (Staff)</span>
+                    <span>🟢 {t.checkIn} (ยืนยันเข้าจอด)</span>
                   </button>
                 )}
 
@@ -694,7 +800,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     {transitioning === "CHECK_OUT" ? <RefreshCw size={15} className="spin" /> : <CheckCircle2 size={15} />}
-                    <span>{t.checkOut} (Staff)</span>
+                    <span>🔵 {t.checkOut} (ยืนยันออก / เสร็จสิ้น)</span>
                   </button>
                 )}
 

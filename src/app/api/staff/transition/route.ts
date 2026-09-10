@@ -59,11 +59,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { booking_id, action, note, override_status } = body as {
+    const { booking_id, action, note, override_status, updated_plate } = body as {
       booking_id: string;
       action: ActionType;
       note?: string;
       override_status?: string;
+      updated_plate?: string;
     };
 
     if (!booking_id || !action) {
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     // Fetch booking current state
     const { data: booking, error: bkgErr } = await client
       .from("bookings")
-      .select("id, status, user_id, parking_area_id, parking_slot_id, starts_at, ends_at")
+      .select("id, status, user_id, parking_area_id, parking_slot_id, vehicle_snapshot, starts_at, ends_at")
       .eq("id", booking_id)
       .single();
 
@@ -126,9 +127,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Perform booking update
+    const updatePayload: Record<string, unknown> = {
+      status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
+    if (updated_plate && updated_plate.trim()) {
+      const vSnap = (booking.vehicle_snapshot as Record<string, unknown>) || {};
+      updatePayload.vehicle_snapshot = {
+        ...vSnap,
+        plate: updated_plate.trim(),
+        plate_number: updated_plate.trim(),
+      };
+    }
+
     const { data: updatedBooking, error: updateErr } = await client
       .from("bookings")
-      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", booking_id)
       .select("id, status, reference")
       .single();

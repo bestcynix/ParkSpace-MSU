@@ -72,6 +72,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cannot delete your own admin account directly" }, { status: 400 });
     }
 
+    // Protect Primary Super Admin (68011211206@msu.ac.th)
+    const { data: targetProfile } = await client
+      .from("profiles")
+      .select("email")
+      .eq("id", target_user_id)
+      .maybeSingle();
+
+    if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
+      return NextResponse.json(
+        { error: "บัญชี 68011211206@msu.ac.th เป็น Admin หลัก (Super Admin) ไม่สามารถลบได้" },
+        { status: 403 }
+      );
+    }
+
     // 1. Delete associated data
     try {
       await client.from("user_roles").delete().eq("user_id", target_user_id);

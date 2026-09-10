@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         status,
         starts_at,
         ends_at,
+        user_id,
         vehicle_snapshot,
         parking_area:parking_areas(code, name_th),
         parking_slot:parking_slots(slot_code)
@@ -134,7 +135,35 @@ export async function POST(request: NextRequest) {
       bookingQuery = bookingQuery.ilike("reference", cleanRef);
     }
 
-    const { data: booking, error: bkgErr } = await bookingQuery.maybeSingle();
+    let { data: booking } = await bookingQuery.maybeSingle();
+
+    // Fallback: If not found by reference or ID, try searching by vehicle license plate
+    if (!booking) {
+      try {
+        const { data: plateMatches } = await client
+          .from("bookings")
+          .select(`
+            id,
+            reference,
+            status,
+            starts_at,
+            ends_at,
+            user_id,
+            vehicle_snapshot,
+            parking_area:parking_areas(code, name_th),
+            parking_slot:parking_slots(slot_code)
+          `)
+          .or(`vehicle_snapshot->>plate.ilike.%${cleanRef}%,vehicle_snapshot->>plate_number.ilike.%${cleanRef}%`)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        if (plateMatches && plateMatches.length > 0) {
+          booking = plateMatches[0];
+        }
+      } catch {
+        // Continue to not found
+      }
+    }
 
     if (!booking) {
       return NextResponse.json({
@@ -151,15 +180,47 @@ export async function POST(request: NextRequest) {
           slot_code: null,
           vehicle_plate: null,
           scan_result: "INVALID_REFERENCE",
-          message: "ไม่พบรหัสการจองหรือรหัส QR ในระบบ",
+          message: "ไม่พบรหัสการจองหรือทะเบียนรถในระบบ",
+          is_overstay: false,
+          overdue_minutes: 0,
         },
       });
+    }
+
+    // Fetch user profile info
+    let bookerName: string | null = null;
+    let bookerPhone: string | null = null;
+    const targetUserId = (booking as { user_id?: string | null }).user_id;
+    if (targetUserId) {
+      try {
+        const { data: prof } = await client
+          .from("profiles")
+          .select("full_name, phone, email")
+          .eq("id", targetUserId)
+          .maybeSingle();
+        if (prof) {
+          bookerName = prof.full_name || prof.email || null;
+          bookerPhone = prof.phone || null;
+        }
+      } catch {
+        // ignore
+      }
     }
 
     const vSnapshot = booking.vehicle_snapshot as { plate?: string; plate_number?: string } | null;
     const plate = vSnapshot?.plate || vSnapshot?.plate_number || null;
     const bArea = booking.parking_area as { code?: string; name_th?: string } | null;
     const bSlot = booking.parking_slot as { slot_code?: string } | null;
+
+    // Overstay check
+    const now = new Date();
+    const endsAt = booking.ends_at ? new Date(booking.ends_at) : null;
+    const isOverstay = Boolean(
+      (booking.status === "CHECKED_IN" || booking.status === "CONFIRMED" || booking.status === "RESERVED") &&
+      endsAt &&
+      now.getTime() > endsAt.getTime()
+    );
+    const overdueMinutes = isOverstay && endsAt ? Math.max(1, Math.floor((now.getTime() - endsAt.getTime()) / 60000)) : 0;
 
     let scanResult = "VALID";
     let message = "Pass validated successfully";
@@ -173,6 +234,9 @@ export async function POST(request: NextRequest) {
     } else if (cleanArea && bArea?.code && cleanArea.toUpperCase() !== bArea.code.toUpperCase()) {
       scanResult = "WRONG_AREA";
       message = `พื้นที่จอดไม่ตรงกับที่จองไว้ (จองไว้ที่ ${bArea.code})`;
+    } else if (isOverstay) {
+      scanResult = "VALID";
+      message = `⚠️ จอดเกินเวลาที่จองแล้ว ${overdueMinutes} นาที`;
     }
 
     return NextResponse.json({
@@ -186,6 +250,10 @@ export async function POST(request: NextRequest) {
         area_name_th: bArea?.name_th ?? null,
         slot_code: bSlot?.slot_code ?? null,
         vehicle_plate: plate,
+        booker_name: bookerName,
+        booker_phone: bookerPhone,
+        is_overstay: isOverstay,
+        overdue_minutes: overdueMinutes,
         scan_result: scanResult,
         message,
       },

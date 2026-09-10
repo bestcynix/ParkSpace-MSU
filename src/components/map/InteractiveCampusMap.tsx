@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { Crosshair, ExternalLink, LocateFixed, MapPinned, RotateCcw, Satellite, Sliders, ZoomIn, ZoomOut } from "lucide-react";
+import { Crosshair, ExternalLink, FileText, LocateFixed, MapPinned, RotateCcw, Satellite, Sliders, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { campusCenter, getGoogleMapsNavigationUrl, getGoogleMapsSearchQuery, officialMapImage, officialMapMarkers, officialSource, type ParkingArea } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { CampusVector2DMap } from "./CampusVector2DMap";
 
-type MapMode = "google" | "satellite" | "diagram";
+type MapMode = "vector" | "google" | "satellite" | "diagram";
 
 type LiveMapPoint = { latitude: number; longitude: number };
 type LiveMapRow = { code: string; latitude: number | string | null; longitude: number | string | null; data_status: string | null };
@@ -31,7 +32,7 @@ export function InteractiveCampusMap({
 }) {
   const t = getCopy(locale);
   const firstCode = selectedAreaCode ?? areas[0]?.code ?? "P01";
-  const [mode, setMode] = useState<MapMode>("google");
+  const [mode, setMode] = useState<MapMode>("vector");
   const [focusCode, setFocusCode] = useState(firstCode);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -213,6 +214,9 @@ export function InteractiveCampusMap({
       </div>
 
       <div className="map-mode-tabs" role="tablist" aria-label={t.mapMode}>
+        <button type="button" className={mode === "vector" ? "active" : ""} onClick={() => setMode("vector")} role="tab" aria-selected={mode === "vector"}>
+          <Sparkles size={15} /><span>{locale === "th" ? "ผัง 2D ออกแบบเอง" : "Vector 2D Map"}</span><small>{locale === "th" ? "Interactive" : "Interactive"}</small>
+        </button>
         <button type="button" className={mode === "google" ? "active" : ""} onClick={() => setMode("google")} role="tab" aria-selected={mode === "google"}>
           <MapPinned size={15} /><span>{t.googleMaps}</span><small>{t.interactive}</small>
         </button>
@@ -220,9 +224,21 @@ export function InteractiveCampusMap({
           <Satellite size={15} /><span>{t.satellite}</span><small>Google Maps</small>
         </button>
         <button type="button" className={mode === "diagram" ? "active" : ""} onClick={() => { setMode("diagram"); resetView(); }} role="tab" aria-selected={mode === "diagram"}>
-          <MapPinned size={15} /><span>{t.diagram2D}</span><small>{t.interactive}</small>
+          <FileText size={15} /><span>{locale === "th" ? "ภาพประกาศเดิม" : "Original Poster"}</span><small>{locale === "th" ? "ใบประกาศ" : "Flyer"}</small>
         </button>
       </div>
+
+      {mode === "vector" ? (
+        <div style={{ marginTop: 12 }}>
+          <CampusVector2DMap
+            locale={locale}
+            areas={areas}
+            focusCode={focusCode}
+            onSelectArea={(code) => setFocusCode(code)}
+            livePoints={livePoints}
+          />
+        </div>
+      ) : null}
 
       {mode === "google" ? (
         <div className="map-embed-shell">

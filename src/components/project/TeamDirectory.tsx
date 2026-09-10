@@ -252,7 +252,9 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/") || file.size > maxAvatarBytes) {
+    const imageExtensions = /\.(jpe?g|png|webp|gif|svg|avif|heic|heif|jfif|bmp|tiff)$/i;
+    const isImage = file.type.startsWith("image/") || imageExtensions.test(file.name);
+    if (!isImage || file.size > maxAvatarBytes) {
       notify({ title: t.uploadAvatar, message: t.avatarUploadHint, kind: "warning" });
       event.target.value = "";
       return;
@@ -516,7 +518,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
                   <label className="secondary-button team-avatar-file-button" htmlFor="team-avatar-upload">
                     <Camera size={15} />
                     {t.uploadAvatar}
-                    <input id="team-avatar-upload" type="file" accept="image/*" onChange={chooseAvatar} />
+                    <input id="team-avatar-upload" type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif,.heic,.heif,.jfif,.bmp" onChange={chooseAvatar} />
                   </label>
                   {(draft.avatar_path || pendingAvatar) ? (
                     <button className="secondary-button compact-btn" type="button" onClick={openCropperForCurrent} title="ครอบ / ปรับภาพ">

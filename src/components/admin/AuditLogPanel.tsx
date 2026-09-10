@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type AuditRole = "admin";
@@ -71,12 +71,20 @@ export function AuditLogPanel({ locale }: { locale: Locale; role: AuditRole }) {
     }
     setLoading(true);
     try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       const params = new URLSearchParams();
       params.set("page", String(page));
       params.set("pageSize", String(pageSize));
       if (query.trim()) params.set("q", query.trim());
 
-      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`);
+      const res = await fetch(`/api/admin/audit-logs?${params.toString()}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
       if (!res.ok) {
         throw new Error(`HTTP error ${res.status}`);
       }
@@ -134,9 +142,16 @@ export function AuditLogPanel({ locale }: { locale: Locale; role: AuditRole }) {
     if (!confirmed) return;
 
     try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       const res = await fetch("/api/admin/audit-logs", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ id: log.id }),
       });
       if (!res.ok) {
@@ -178,9 +193,16 @@ export function AuditLogPanel({ locale }: { locale: Locale; role: AuditRole }) {
         admin_edited_at: new Date().toISOString(),
       };
 
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       const res = await fetch("/api/admin/audit-logs", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           id: editingLog.id,
           action: editAction.trim(),

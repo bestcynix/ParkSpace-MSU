@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type MouseEvent, type TouchEvent } from "react";
+import { useState, useRef, useEffect, useCallback, type MouseEvent, type TouchEvent, type WheelEvent } from "react";
 import { Crop, RotateCw, ZoomIn, ZoomOut, Check, X, RefreshCw } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 
@@ -25,6 +25,8 @@ export function ImageCropperModal({
   const [rotation, setRotation] = useState(0); // in degrees: 0, 90, 180, 270
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [naturalDim, setNaturalDim] = useState<{ width: number; height: number } | null>(null);
+
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,7 +34,7 @@ export function ImageCropperModal({
 
   const t = {
     cropTitle: locale === "th" ? "ครอบและปรับแต่งภาพ" : "Crop & Adjust Image",
-    cropHint: locale === "th" ? "ลากเพื่อเลื่อนตำแหน่ง และใช้แถบซูมเพื่อย่อ/ขยาย" : "Drag to reposition and use slider to zoom",
+    cropHint: locale === "th" ? "ลากเพื่อเลื่อนตำแหน่ง, เลื่อนลูกกลิ้งเมาส์หรือใช้แถบเพื่อย่อ/ขยาย" : "Drag to reposition, use mouse wheel or slider to zoom",
     zoom: locale === "th" ? "ย่อ/ขยาย" : "Zoom",
     rotate: locale === "th" ? "หมุน 90°" : "Rotate 90°",
     reset: locale === "th" ? "รีเซ็ต" : "Reset",
@@ -40,12 +42,42 @@ export function ImageCropperModal({
     cancel: locale === "th" ? "ยกเลิก" : "Cancel",
   };
 
+  // Determine frame size on screen
+  const effectiveAspect = circularCrop ? 1 : aspectRatio;
+  // Landscape 16:9 -> 340 x 191; 1:1 -> 240 x 240
+  const frameWidth = effectiveAspect >= 1 ? (effectiveAspect > 1.4 ? 340 : 250) : Math.round(250 * effectiveAspect);
+  const frameHeight = effectiveAspect >= 1 ? Math.round(frameWidth / effectiveAspect) : 250;
+
   // Reset state when imageSrc changes
   useEffect(() => {
     setZoom(1);
     setRotation(0);
     setPan({ x: 0, y: 0 });
+    setNaturalDim(null);
   }, [imageSrc]);
+
+  function handleImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget;
+    const nw = img.naturalWidth || 600;
+    const nh = img.naturalHeight || 600;
+    setNaturalDim({ width: nw, height: nh });
+  }
+
+  // Calculate base display dimensions so that at zoom=1, the image covers the frame
+  const nw = naturalDim?.width || 600;
+  const nh = naturalDim?.height || 600;
+  const imgAspect = nw / nh;
+  const frameAspect = frameWidth / frameHeight;
+
+  let baseDrawW: number;
+  let baseDrawH: number;
+  if (imgAspect > frameAspect) {
+    baseDrawH = frameHeight;
+    baseDrawW = frameHeight * imgAspect;
+  } else {
+    baseDrawW = frameWidth;
+    baseDrawH = frameWidth / imgAspect;
+  }
 
   // Handle Drag Start
   function handleMouseDown(e: MouseEvent<HTMLDivElement>) {
@@ -105,6 +137,13 @@ export function ImageCropperModal({
     };
   }, [isDragging, handleMouseMove, handleTouchMove, handleDragEnd]);
 
+  // Wheel zoom support
+  function handleWheel(e: WheelEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.08 : -0.08;
+    setZoom((z) => Math.min(3.0, Math.max(0.2, Number((z + delta).toFixed(2)))));
+  }
+
   function handleRotate() {
     setRotation((r) => (r + 90) % 360);
   }
@@ -117,17 +156,12 @@ export function ImageCropperModal({
 
   // Perform the actual crop to Canvas
   async function handleApply() {
-    if (!imageRef.current || !containerRef.current) return;
-
+    if (!imageRef.current) return;
     const img = imageRef.current;
-    const cropBox = containerRef.current.getBoundingClientRect();
-    const boxSize = Math.min(cropBox.width, cropBox.height);
 
-    const effectiveAspect = circularCrop ? 1 : aspectRatio;
-
-    // Target output dimensions
-    const outputWidth = effectiveAspect >= 1 ? 600 : Math.round(600 * effectiveAspect);
-    const outputHeight = effectiveAspect >= 1 ? Math.round(600 / effectiveAspect) : 600;
+    // Target output dimensions (high quality)
+    const outputWidth = effectiveAspect >= 1 ? 960 : Math.round(960 * effectiveAspect);
+    const outputHeight = effectiveAspect >= 1 ? Math.round(960 / effectiveAspect) : 960;
 
     const canvas = document.createElement("canvas");
     canvas.width = outputWidth;
@@ -138,56 +172,35 @@ export function ImageCropperModal({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
-    // Ratio between output canvas and crop frame on screen
-    const baseFrameSize = 220;
-    const frameWidth = effectiveAspect >= 1 ? baseFrameSize : Math.round(baseFrameSize * effectiveAspect);
-    const frameHeight = effectiveAspect >= 1 ? Math.round(baseFrameSize / effectiveAspect) : baseFrameSize;
     const scaleFactor = outputWidth / frameWidth;
 
     ctx.save();
-    // Center of canvas
+    // Center canvas
     ctx.translate(outputWidth / 2, outputHeight / 2);
-    // Apply user rotation
+    // User rotation
     ctx.rotate((rotation * Math.PI) / 180);
-    // Apply user pan & zoom
+    // User zoom
     ctx.scale(zoom, zoom);
 
-    // Determine drawn image dimensions relative to crop frame
-    const naturalWidth = img.naturalWidth || 600;
-    const naturalHeight = img.naturalHeight || 600;
-
-    // Base display size inside crop frame
-    const imgAspect = naturalWidth / naturalHeight;
-    let baseDrawW = frameWidth;
-    let baseDrawH = frameHeight;
-
-    if (imgAspect > (frameWidth / frameHeight)) {
-      baseDrawH = frameHeight;
-      baseDrawW = frameHeight * imgAspect;
-    } else {
-      baseDrawW = frameWidth;
-      baseDrawH = frameWidth / imgAspect;
-    }
-
-    const drawW = baseDrawW * scaleFactor;
-    const drawH = baseDrawH * scaleFactor;
-
-    // Offset based on user pan (rotated back)
+    // Compute unrotated pan
     const rad = (-rotation * Math.PI) / 180;
     const unrotatedPanX = pan.x * Math.cos(rad) - pan.y * Math.sin(rad);
     const unrotatedPanY = pan.x * Math.sin(rad) + pan.y * Math.cos(rad);
 
+    const destW = baseDrawW * scaleFactor;
+    const destH = baseDrawH * scaleFactor;
+
     ctx.drawImage(
       img,
-      -drawW / 2 + unrotatedPanX * scaleFactor / zoom,
-      -drawH / 2 + unrotatedPanY * scaleFactor / zoom,
-      drawW,
-      drawH
+      -destW / 2 + (unrotatedPanX * scaleFactor) / zoom,
+      -destH / 2 + (unrotatedPanY * scaleFactor) / zoom,
+      destW,
+      destH
     );
 
     ctx.restore();
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(
         (b) => {
@@ -195,29 +208,23 @@ export function ImageCropperModal({
           else reject(new Error("Failed to produce cropped blob"));
         },
         "image/jpeg",
-        0.88
+        0.90
       );
     });
 
     onConfirm(dataUrl, blob);
   }
 
-  const effectiveAspect = circularCrop ? 1 : aspectRatio;
-  const baseFrameSize = 220;
-  const frameWidth = effectiveAspect >= 1 ? baseFrameSize : Math.round(baseFrameSize * effectiveAspect);
-  const frameHeight = effectiveAspect >= 1 ? Math.round(baseFrameSize / effectiveAspect) : baseFrameSize;
-
   // Calculate crop viewport frame size
   const frameStyle = {
     width: `${frameWidth}px`,
     height: `${frameHeight}px`,
-    aspectRatio: `${effectiveAspect} / 1`,
-    borderRadius: circularCrop ? "50%" : "16px",
+    borderRadius: circularCrop ? "50%" : "14px",
   };
 
   return (
     <div className="cropper-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cropper-title">
-      <div className="cropper-modal-card">
+      <div className="cropper-modal-card" style={{ maxWidth: 520 }}>
         {/* Modal Header */}
         <div className="cropper-header">
           <div className="cropper-header-title">
@@ -233,27 +240,44 @@ export function ImageCropperModal({
         <div
           ref={containerRef}
           className="cropper-viewport"
+          style={{
+            cursor: isDragging ? "grabbing" : "grab",
+            height: 330,
+            position: "relative",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#0b0f19",
+          }}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
-          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+          onWheel={handleWheel}
         >
-          {/* Active Image */}
+          {/* Active Image with fitted base size */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             ref={imageRef}
             src={imageSrc}
             alt="To crop"
             className="cropper-image"
+            onLoad={handleImageLoad}
             style={{
+              position: "absolute",
+              width: `${baseDrawW}px`,
+              height: `${baseDrawH}px`,
+              maxWidth: "none",
+              maxHeight: "none",
               transform: `translate(${pan.x}px, ${pan.y}px) rotate(${rotation}deg) scale(${zoom})`,
               transformOrigin: "center center",
               userSelect: "none",
               pointerEvents: "none",
+              willChange: "transform",
             }}
           />
 
           {/* Mask overlay */}
-          <div className="cropper-mask">
+          <div className="cropper-mask" style={{ pointerEvents: "none" }}>
             <div className={`cropper-frame ${circularCrop ? "is-circle" : ""}`} style={frameStyle}>
               <div className="cropper-grid-line h1" />
               <div className="cropper-grid-line h2" />
@@ -263,41 +287,44 @@ export function ImageCropperModal({
           </div>
         </div>
 
-        <p className="cropper-hint">{t.cropHint}</p>
+        <p className="cropper-hint" style={{ marginTop: 8 }}>{t.cropHint}</p>
 
         {/* Controls Toolbar */}
-        <div className="cropper-controls">
-          <div className="cropper-control-group zoom-group">
+        <div className="cropper-controls" style={{ marginTop: 10 }}>
+          <div className="cropper-control-group zoom-group" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               type="button"
               className="icon-button"
-              onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))}
+              onClick={() => setZoom((z) => Math.max(0.2, Number((z - 0.15).toFixed(2))))}
               aria-label="Zoom Out"
             >
               <ZoomOut size={16} />
             </button>
             <input
               type="range"
-              min="0.5"
-              max="3"
+              min="0.2"
+              max="3.0"
               step="0.05"
               value={zoom}
               onChange={(e) => setZoom(parseFloat(e.target.value))}
               className="cropper-slider"
               aria-label={t.zoom}
+              style={{ flex: 1 }}
             />
             <button
               type="button"
               className="icon-button"
-              onClick={() => setZoom((z) => Math.min(3, Number((z + 0.15).toFixed(2))))}
+              onClick={() => setZoom((z) => Math.min(3.0, Number((z + 0.15).toFixed(2))))}
               aria-label="Zoom In"
             >
               <ZoomIn size={16} />
             </button>
-            <span className="cropper-zoom-text">{Math.round(zoom * 100)}%</span>
+            <span className="cropper-zoom-text" style={{ minWidth: 46, textAlign: "right", fontSize: 12, fontWeight: 700 }}>
+              {Math.round(zoom * 100)}%
+            </span>
           </div>
 
-          <div className="cropper-control-group action-group">
+          <div className="cropper-control-group action-group" style={{ display: "flex", gap: 6 }}>
             <button
               type="button"
               className="secondary-button compact-btn"
@@ -320,7 +347,7 @@ export function ImageCropperModal({
         </div>
 
         {/* Modal Footer Actions */}
-        <div className="cropper-footer">
+        <div className="cropper-footer" style={{ marginTop: 14 }}>
           <button type="button" className="secondary-button" onClick={onCancel}>
             <X size={15} />
             <span>{t.cancel}</span>

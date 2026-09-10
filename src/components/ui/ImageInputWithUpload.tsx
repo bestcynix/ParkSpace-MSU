@@ -41,7 +41,7 @@ export function ImageInputWithUpload({
     uploadImage: locale === "th" ? "อัปโหลดภาพ" : "Upload image",
     dragDropOrClick: locale === "th" ? "ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์" : "Drag & drop image here or click to browse",
     dragDropActive: locale === "th" ? "ปล่อยไฟล์ที่นี่เพื่ออัปโหลด" : "Drop image file here to upload",
-    supportedFormats: locale === "th" ? "รองรับ JPG, PNG, WEBP, GIF" : "Supports JPG, PNG, WEBP, GIF",
+    supportedFormats: locale === "th" ? "รองรับรูปภาพทุกประเภท JPG, PNG, WEBP, GIF, SVG, HEIC, AVIF" : "Supports all image types: JPG, PNG, WEBP, GIF, SVG, HEIC, AVIF",
     imageUrl: locale === "th" ? "ลิงก์รูปภาพโดยตรง" : "Direct image URL",
     defaultPlaceholder: locale === "th" ? "https://... หรือวางลิงก์รูปภาพ" : "https://... or paste image URL",
     removeImage: locale === "th" ? "ลบรูปภาพ" : "Remove image",
@@ -50,7 +50,7 @@ export function ImageInputWithUpload({
     uploadingText: locale === "th" ? "กำลังอัปโหลด..." : "Uploading...",
     uploadSuccessText: locale === "th" ? "อัปโหลดเรียบร้อยแล้ว" : "Uploaded successfully",
     imagePreview: locale === "th" ? "ตัวอย่างรูปภาพ" : "Image preview",
-    invalidFormat: locale === "th" ? "กรุณาเลือกไฟล์รูปภาพเท่านั้น" : "Please select an image file only",
+    invalidFormat: locale === "th" ? "กรุณาเลือกไฟล์รูปภาพเท่านั้น (JPG, PNG, WEBP, HEIC, AVIF, GIF ฯลฯ)" : "Please select an image file (JPG, PNG, WEBP, HEIC, AVIF, GIF etc.)",
     unableToLoad: locale === "th" ? "ไม่สามารถโหลดรูปภาพได้" : "Unable to load image",
     dataUrlBadge: locale === "th" ? "บันทึกในระบบ" : "Embedded",
     storageBadge: locale === "th" ? "คลาวด์สตอเรจ" : "Cloud Storage",
@@ -58,7 +58,9 @@ export function ImageInputWithUpload({
   };
 
   async function handleFileSelected(file: File) {
-    if (!file.type.startsWith("image/")) {
+    const imageExtensions = /\.(jpe?g|png|webp|gif|svg|avif|heic|heif|jfif|bmp|tiff)$/i;
+    const isImage = file.type.startsWith("image/") || imageExtensions.test(file.name);
+    if (!isImage) {
       setErrorMessage(t.invalidFormat);
       return;
     }
@@ -157,7 +159,7 @@ export function ImageInputWithUpload({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif,.heic,.heif,.jfif,.bmp"
           aria-label={t.uploadImage}
           style={{ display: "none" }}
           onChange={handleFileInputChange}
@@ -309,7 +311,7 @@ export function ImageInputWithUpload({
         <ImageCropperModal
           imageSrc={cropperSource}
           aspectRatio={aspectRatio}
-          circularCrop={false}
+          circularCrop={aspectRatio === 1}
           locale={locale}
           onConfirm={handleCroppedConfirm}
           onCancel={() => setCropperSource(null)}

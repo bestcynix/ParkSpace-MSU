@@ -160,6 +160,18 @@ export async function POST(request: NextRequest) {
 
     if (action === "approve") {
       const uid = targetUserId || request_id;
+
+      // Protect Primary Super Admin (68011211206@msu.ac.th)
+      const { data: targetProfile } = await client
+        .from("profiles")
+        .select("email")
+        .eq("id", uid)
+        .maybeSingle();
+
+      if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
+        return NextResponse.json({ error: "ไม่อนุญาตให้ลบบัญชี Admin หลัก (68011211206@msu.ac.th)" }, { status: 403 });
+      }
+
       // Mark deletion request as APPROVED
       await client
         .from("account_deletion_requests")

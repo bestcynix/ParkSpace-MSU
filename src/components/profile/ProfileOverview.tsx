@@ -284,8 +284,14 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
   function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file || !profile || !editing) return;
-    if (!file.type.startsWith("image/") || file.size > 5 * 1024 * 1024) {
-      notify({ title: t.profileImage, message: locale === "th" ? "ใช้ไฟล์รูปภาพขนาดไม่เกิน 5 MB" : "Choose an image file up to 5 MB.", kind: "warning" });
+    const imageExtensions = /\.(jpe?g|png|webp|gif|svg|avif|heic|heif|jfif|bmp|tiff)$/i;
+    const isImage = file.type.startsWith("image/") || imageExtensions.test(file.name);
+    if (!isImage || file.size > 20 * 1024 * 1024) {
+      notify({
+        title: t.profileImage,
+        message: locale === "th" ? "กรุณาใช้ไฟล์รูปภาพ (JPG, PNG, WEBP, HEIC, AVIF ฯลฯ) ขนาดไม่เกิน 20 MB" : "Choose an image file up to 20 MB.",
+        kind: "warning",
+      });
       event.target.value = "";
       return;
     }
@@ -505,7 +511,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
           <div className="profile-avatar-actions">
             <label className={`avatar-upload-button ${!editing ? "is-disabled" : ""}`} aria-label={t.uploadImage} title={t.uploadImage}>
               <Camera size={14} />
-              <input type="file" accept="image/*" onChange={chooseAvatar} disabled={!editing || saving} />
+              <input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif,.heic,.heif,.jfif,.bmp" onChange={chooseAvatar} disabled={!editing || saving} />
             </label>
             {editing && displayedAvatarUrl ? (
               <button

@@ -46,6 +46,20 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
     try {
       const supabase = createSupabaseBrowserClient();
       const authEmail = normalizeLoginIdentifier(email);
+
+      // Automatically initialize central staff account if staff/staff123 is used
+      if (isLogin && authEmail === "staff@msu.ac.th" && password === "staff123") {
+        try {
+          await fetch("/api/auth/staff-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier: "staff", password: "staff123" }),
+          });
+        } catch {
+          // continue to sign in
+        }
+      }
+
       const result = isLogin
         ? await supabase.auth.signInWithPassword({ email: authEmail, password })
         : await supabase.auth.signUp({ email: authEmail, password, options: { data: { full_name: name, preferred_locale: locale }, emailRedirectTo: `${window.location.origin}/${locale}/verify-email` } });
@@ -55,7 +69,12 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       }
       setMessage(isLogin ? t.ready : t.verifyEmail);
       notify({ title: isLogin ? t.accountConnected : t.verifyEmail, kind: "success" });
-      if (isLogin) window.location.assign(getNextPath());
+      if (isLogin) {
+        const destination = authEmail === "staff@msu.ac.th" && getNextPath() === `/${locale}/app`
+          ? `/${locale}/staff/dashboard`
+          : getNextPath();
+        window.location.assign(destination);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : "Authentication failed";
       setMessage(detail);
@@ -134,6 +153,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
 
 function normalizeLoginIdentifier(value: string) {
   const normalized = value.trim().toLowerCase();
+  if (normalized === "staff") return "staff@msu.ac.th";
   if (/^\d{11}$/.test(normalized)) return `${normalized}@msu.ac.th`;
   if (normalized.endsWith("@msu.a.th")) return `${normalized.slice(0, -"@msu.a.th".length)}@msu.ac.th`;
   return normalized;

@@ -69,6 +69,11 @@ const profileFields = "id, email, full_name, university_id, faculty, major, depa
 const managedRoleOrder: ManagedRole[] = ["admin", "staff", "user"];
 const quickRoles: ManagedRole[] = ["admin", "staff", "user"];
 
+export const SUPER_ADMIN_EMAIL = "68011211206@msu.ac.th";
+export function isSuperAdminEmail(email?: string | null): boolean {
+  return (email || "").trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+}
+
 function getManagedRoles(user: Pick<UserRecord, "roles" | "user_type">): ManagedRole[] {
   const elevated = managedRoleOrder.filter(
     (candidate): candidate is Exclude<ManagedRole, "user"> =>
@@ -282,6 +287,15 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
   }
 
   async function handleDeleteUserDirect(targetUser: UserRecord) {
+    if (isSuperAdminEmail(targetUser.email)) {
+      notify({
+        title: locale === "th" ? "ไม่อนุญาตให้ลบบัญชี" : "Cannot Delete",
+        message: locale === "th" ? `บัญชี ${SUPER_ADMIN_EMAIL} เป็น Admin หลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถลบได้` : "Primary Super Admin account is protected from deletion.",
+        kind: "error",
+      });
+      return;
+    }
+
     if (getManagedRoles(targetUser).includes("admin") && roleCounts.admin <= 1) {
       notify({
         title: locale === "th" ? "ไม่สามารถลบได้" : "Cannot delete",
@@ -506,6 +520,15 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
 
   async function applyRoles(user: UserRecord, requestedRoles: ManagedRole[], successMessage: string) {
     if (!isSupabaseConfigured()) return;
+    if (isSuperAdminEmail(user.email)) {
+      notify({
+        title: locale === "th" ? "ไม่อนุญาตให้เปลี่ยนยศ" : "Cannot Change Role",
+        message: locale === "th" ? `บัญชี ${SUPER_ADMIN_EMAIL} เป็น Admin หลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถปลดหรือเปลี่ยนยศได้` : "Primary Super Admin role cannot be modified.",
+        kind: "error",
+      });
+      return;
+    }
+
     const normalizedRoles = managedRoleOrder.filter((item) => requestedRoles.includes(item));
     const currentRoles = getManagedRoles(user);
     const removesAdmin = currentRoles.includes("admin") && !normalizedRoles.includes("admin");
@@ -847,15 +870,33 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                           {user.user_type ? ` · ${user.user_type}` : ""}
                         </small>
                         <div className="role-chip-list">
-                          {getManagedRoles(user).map((userRole) => (
+                          {isSuperAdminEmail(user.email) ? (
                             <span
-                              className={`role-chip ${userRole}`}
-                              key={userRole}
-                              title={roleFullLabel(userRole, locale)}
+                              className="role-chip admin"
+                              style={{
+                                background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+                                color: "#78350f",
+                                border: "1px solid #f59e0b",
+                                fontWeight: 800,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                              title="Admin หลัก (Super Admin) - คุ้มครองถาวร"
                             >
-                              {roleLabel(userRole, locale)}
+                              👑 Admin หลัก (Super Admin)
                             </span>
-                          ))}
+                          ) : (
+                            getManagedRoles(user).map((userRole) => (
+                              <span
+                                className={`role-chip ${userRole}`}
+                                key={userRole}
+                                title={roleFullLabel(userRole, locale)}
+                              >
+                                {roleLabel(userRole, locale)}
+                              </span>
+                            ))
+                          )}
                         </div>
                       </div>
                       <div className="data-list-actions">
@@ -871,19 +912,28 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                         >
                           <Edit3 size={15} />
                         </button>
-                        <button
-                          className="icon-button"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleDeleteUserDirect(user);
-                          }}
-                          aria-label={`Delete ${user.email ?? user.id}`}
-                          title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
-                          style={{ color: "var(--red)" }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {isSuperAdminEmail(user.email) ? (
+                          <span
+                            title={locale === "th" ? "Admin หลัก ไม่สามารถลบได้" : "Super Admin cannot be deleted"}
+                            style={{ opacity: 0.3, cursor: "not-allowed", display: "inline-flex", padding: 6 }}
+                          >
+                            <Trash2 size={15} />
+                          </span>
+                        ) : (
+                          <button
+                            className="icon-button"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDeleteUserDirect(user);
+                            }}
+                            aria-label={`Delete ${user.email ?? user.id}`}
+                            title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
+                            style={{ color: "var(--red)" }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </article>
                   ))}
@@ -932,37 +982,66 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <button
-                      type="button"
-                      className="secondary-button danger-button compact-btn"
-                      onClick={() => void handleDeleteUserDirect(selectedUser)}
-                      disabled={saving}
-                      title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
-                      style={{ fontSize: 11, padding: "5px 11px", display: "flex", alignItems: "center", gap: 5, border: "1px solid #fca5a5", color: "#dc2626" }}
-                    >
-                      <Trash2 size={13} />
-                      <span>{locale === "th" ? "ลบบัญชีนี้" : "Delete"}</span>
-                    </button>
+                    {isSuperAdminEmail(selectedUser.email) ? (
+                      <span
+                        title={locale === "th" ? "Admin หลัก ไม่สามารถลบได้" : "Super Admin cannot be deleted"}
+                        style={{ opacity: 0.85, cursor: "not-allowed", fontSize: 11, padding: "5px 11px", display: "flex", alignItems: "center", gap: 5, border: "1px solid #f59e0b", borderRadius: 8, background: "#fef3c7", color: "#92400e", fontWeight: 700 }}
+                      >
+                        👑 Super Admin
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="secondary-button danger-button compact-btn"
+                        onClick={() => void handleDeleteUserDirect(selectedUser)}
+                        disabled={saving}
+                        title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
+                        style={{ fontSize: 11, padding: "5px 11px", display: "flex", alignItems: "center", gap: 5, border: "1px solid #fca5a5", color: "#dc2626" }}
+                      >
+                        <Trash2 size={13} />
+                        <span>{locale === "th" ? "ลบบัญชีนี้" : "Delete"}</span>
+                      </button>
+                    )}
                     <button className="icon-button" type="button" onClick={() => { setSelectedId(null); setHistory(null); }} aria-label={t.cancel}><X size={16} /></button>
                   </div>
                 </div>
 
                 <div className="role-grant-box" style={{ borderTop: 0, paddingTop: 0 }}>
+                  {isSuperAdminEmail(selectedUser.email) ? (
+                    <div style={{ padding: "12px 16px", borderRadius: 12, background: "linear-gradient(135deg, #fef3c7, #fde68a)", border: "1px solid #f59e0b", color: "#78350f", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 10, margin: "12px 0" }}>
+                      <span style={{ fontSize: 20 }}>👑</span>
+                      <div>
+                        <div>{locale === "th" ? "Admin หลัก (Super Admin) - คุ้มครองความปลอดภัยสูงสุด" : "Primary Super Admin Account"}</div>
+                        <small style={{ fontWeight: 500, opacity: 0.9 }}>
+                          {locale === "th" ? "บัญชี 68011211206@msu.ac.th ได้รับการคุ้มครองถาวร ไม่สามารถลบบัญชี หรือปลด/เปลี่ยนยศได้" : "This account is permanently protected from deletion and role modifications."}
+                        </small>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
                     <div>
                       <h3>{locale === "th" ? "ยศและสิทธิ์การใช้งาน" : "Roles and access"}</h3>
                       <p className="page-subtitle">{locale === "th" ? "สลับยศทันทีด้วยปุ่มด่วน หรือเพิ่ม/ถอนยศตามต้องการ" : "Switch roles quickly or manage role combinations below."}</p>
                     </div>
                     <div className="role-chip-list" aria-label={locale === "th" ? "ยศปัจจุบัน" : "Current roles"}>
-                      {selectedRoles.map((userRole) => (
-                        <span className={`role-chip ${userRole}`} key={userRole}>
-                          {roleLabel(userRole, locale)}
+                      {isSuperAdminEmail(selectedUser.email) ? (
+                        <span className="role-chip admin" style={{ background: "linear-gradient(135deg, #fef3c7, #fde68a)", color: "#78350f", border: "1px solid #f59e0b", fontWeight: 800 }}>
+                          👑 Super Admin
                         </span>
-                      ))}
+                      ) : (
+                        selectedRoles.map((userRole) => (
+                          <span className={`role-chip ${userRole}`} key={userRole}>
+                            {roleLabel(userRole, locale)}
+                          </span>
+                        ))
+                      )}
                     </div>
                   </div>
 
-                  <div className="quick-role-section">
+                  {!isSuperAdminEmail(selectedUser.email) ? (
+                    <>
+                      <div className="quick-role-section">
                     <span className="quick-role-label">
                       {locale === "th" ? "เปลี่ยนยศด่วน (Quick Role Assignment):" : "Quick Role Assignment:"}
                     </span>
@@ -1027,6 +1106,8 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                       ? "User คือสิทธิ์พื้นฐานและไม่รวมกับยศที่สูงกว่า ระบบจะไม่อนุญาตให้ถอน Admin คนสุดท้าย"
                       : "User is the baseline role and cannot be combined with elevated roles. The final Admin cannot be removed."}
                   </p>
+                    </>
+                  ) : null}
                 </div>
 
                 <form className="support-form" onSubmit={(event) => void saveProfile(event)} style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
