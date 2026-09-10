@@ -132,7 +132,6 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       }
 
       const bookingPayload = {
-        user_id: sessionData.session.user.id,
         parking_area_id: dbArea.id,
         booking_date: date,
         parking_slot_id: slotIdToUse,
@@ -140,61 +139,58 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         starts_at: `${date}T${startTime}:00+07:00`,
         ends_at: `${date}T${endTime}:00+07:00`,
         vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, vehicle_type: selectedVehicleType, source: "MANUAL_ENTRY" },
-        booking_mode: slotIdToUse ? "INDIVIDUAL_SLOT" : area.slotMode,
+        booking_mode: slotIdToUse ? "INDIVIDUAL_SLOT" : "AREA_ONLY",
         status: "PENDING",
       };
 
-      const { data: directBooking, error: directError } = await supabase
-        .from("bookings")
-        .insert(bookingPayload)
-        .select("id, reference")
-        .single();
+      const apiRes = await fetch("/api/bookings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify(bookingPayload),
+      });
 
-      if (!directError && directBooking) {
-        booking = directBooking;
-      } else {
-        // Fallback to server endpoint if direct client insert is forbidden or fails
-        try {
-          const apiRes = await fetch("/api/bookings", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${sessionData.session.access_token}`,
-            },
-            body: JSON.stringify(bookingPayload),
-          });
-          const apiJson = await apiRes.json();
-          if (apiRes.ok && apiJson.booking) {
-            booking = apiJson.booking;
-          } else {
-            throw new Error(apiJson.error || directError?.message || t.bookingFailed);
-          }
-        } catch (fallbackErr) {
-          throw directError || fallbackErr;
-        }
+      const apiJson = (await apiRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        booking?: { id: string; reference: string };
+        qr?: { qr_reference?: string; qr_payload?: string; expires_at?: string };
+        error?: string;
+      };
+      if (!apiRes.ok || !apiJson.booking) {
+        throw new Error(apiJson.error || t.bookingFailed);
       }
 
-      if (!booking) throw new Error("Booking was not created.");
-      void fetch("/api/bookings/issue-qr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ booking_id: booking.id }),
-      }).catch(() => {});
+      const createdBooking = apiJson.booking;
+      booking = createdBooking;
+
+      // Extract issued QR payload or fallback to booking reference
+      const qrPayload = apiJson.qr?.qr_payload || createdBooking.reference;
       const endsAtDate = new Date(`${date}T${endTime}:00`);
-      const expiresAtIso = Number.isNaN(endsAtDate.getTime()) ? null : endsAtDate.toISOString();
-      const canonicalPayload = booking.reference;
-      setSuccess({ reference: booking.reference, qrPayload: canonicalPayload, expiresAt: expiresAtIso });
+      const expiresAtIso = apiJson.qr?.expires_at || (Number.isNaN(endsAtDate.getTime()) ? null : endsAtDate.toISOString());
+
+      // Ensure QR token exists in background if not already returned
+      if (!apiJson.qr) {
+        void fetch("/api/bookings/issue-qr", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ booking_id: createdBooking.id }),
+        }).catch(() => {});
+      }
+
+      setSuccess({ reference: createdBooking.reference, qrPayload, expiresAt: expiresAtIso });
       try {
-        sessionStorage.setItem(`parkspace_qr_${booking.id}`, JSON.stringify({
-          bookingId: booking.id,
-          reference: booking.reference,
-          payload: canonicalPayload,
+        sessionStorage.setItem(`parkspace_qr_${createdBooking.id}`, JSON.stringify({
+          bookingId: createdBooking.id,
+          reference: createdBooking.reference,
+          payload: qrPayload,
           expiresAt: expiresAtIso,
         }));
       } catch {
         // ignore
       }
-      notify({ title: t.bookingSaved, message: booking.reference, kind: "success", duration: 8000 });
+      notify({ title: t.bookingSaved, message: createdBooking.reference, kind: "success", duration: 8000 });
     } catch (error) {
       const detail = error instanceof Error ? error.message : t.bookingFailed;
       setMessage(detail);

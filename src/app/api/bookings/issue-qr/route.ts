@@ -1,16 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getSystemDatabaseClient } from "@/lib/supabase/system-client";
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-
-    if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
-      return NextResponse.json({ ok: false, message: "Database not configured" });
-    }
-
     const body = await request.json().catch(() => ({}));
     const { booking_id } = body as { booking_id?: string };
 
@@ -18,9 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, message: "booking_id is required" });
     }
 
-    const client = createClient(supabaseUrl, serviceRoleKey || anonKey!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const client = await getSystemDatabaseClient();
 
     try {
       const { data, error } = await client.rpc("issue_booking_qr", { p_booking_id: booking_id });
