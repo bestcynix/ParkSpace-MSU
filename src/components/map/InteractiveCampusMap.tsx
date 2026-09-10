@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Crosshair, ExternalLink, FileText, LocateFixed, MapPinned, RotateCcw, Satellite, Sliders, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
+import { Crosshair, ExternalLink, FileText, Filter, LocateFixed, MapPinned, Navigation, RotateCcw, Satellite, Sliders, Sparkles, ZoomIn, ZoomOut } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
@@ -19,6 +19,16 @@ function coordinate(value: number | string | null) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 export function InteractiveCampusMap({
   locale,
   areas,
@@ -31,6 +41,7 @@ export function InteractiveCampusMap({
   showAreaPicker?: boolean;
 }) {
   const t = getCopy(locale);
+  const isTh = locale === "th";
   const firstCode = selectedAreaCode ?? areas[0]?.code ?? "P01";
   const [mode, setMode] = useState<MapMode>("vector");
   const [focusCode, setFocusCode] = useState(firstCode);
@@ -46,9 +57,23 @@ export function InteractiveCampusMap({
   const [overrideLng, setOverrideLng] = useState<string | null>(null);
   const [calibMsg, setCalibMsg] = useState("");
   const [calibSaving, setCalibSaving] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [filterAvailableOnly, setFilterAvailableOnly] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const diagramContainerRef = useRef<HTMLDivElement>(null);
   const areaCodes = areas.map((area) => area.code).join(",");
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -111,6 +136,17 @@ export function InteractiveCampusMap({
   const focusArea = areas.find((area) => area.code === focusCode) ?? areas[0];
   const focusName = focusArea ? (locale === "th" ? focusArea.th : focusArea.en) : t.map;
   const focusPoint = (focusArea ? livePoints[focusArea.code] : null) ?? (focusArea && Number.isFinite(focusArea.latitude) && Number.isFinite(focusArea.longitude) ? { latitude: focusArea.latitude, longitude: focusArea.longitude } : null);
+
+  const focusDistanceKm =
+    userLocation && focusPoint
+      ? calculateDistanceKm(userLocation.lat, userLocation.lng, focusPoint.latitude, focusPoint.longitude)
+      : null;
+  const focusDistanceText =
+    focusDistanceKm !== null
+      ? focusDistanceKm < 1
+        ? `${Math.round(focusDistanceKm * 1000)} ${isTh ? "ม." : "m"}`
+        : `${focusDistanceKm.toFixed(1)} ${isTh ? "กม." : "km"}`
+      : null;
 
   const displayCalibLat = overrideLat ?? (focusPoint ? String(focusPoint.latitude) : "");
   const displayCalibLng = overrideLng ?? (focusPoint ? String(focusPoint.longitude) : "");
@@ -319,7 +355,29 @@ export function InteractiveCampusMap({
         <div className="selected-map-area">
           <div className="selected-map-area-copy">
             <span>{t.selectedArea}</span>
-            <strong>{focusArea.code} · {focusName}</strong>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <strong>{focusArea.code} · {focusName}</strong>
+              {focusDistanceText ? (
+                <span
+                  className="data-badge"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    background: "#ecfdf5",
+                    color: "#047857",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "2px 8px",
+                    borderRadius: 6,
+                  }}
+                  title={isTh ? "ระยะทางโดยประมาณจากตำแหน่งของคุณ" : "Approximate distance from your location"}
+                >
+                  <Navigation size={11} />
+                  {isTh ? `ห่างจากคุณ ~${focusDistanceText}` : `~${focusDistanceText} away`}
+                </span>
+              ) : null}
+            </div>
             <small>{coordinateNote} · {focusPoint ? `${focusPoint.latitude}, ${focusPoint.longitude}` : ""}</small>
           </div>
           <div className="selected-map-area-actions">
@@ -371,9 +429,33 @@ export function InteractiveCampusMap({
 
       {showAreaPicker ? (
         <div className="map-area-picker">
-          <div className="section-heading"><div><h3>{t.allAreas}</h3><p>{t.officialMap}</p></div></div>
+          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <div>
+              <h3>{t.allAreas}</h3>
+              <p>{t.officialMap}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFilterAvailableOnly((prev) => !prev)}
+              className={filterAvailableOnly ? "primary-button small-button" : "secondary-button small-button"}
+              style={{ fontSize: 12, padding: "4px 10px", display: "inline-flex", alignItems: "center", gap: 5 }}
+            >
+              <Filter size={12} />
+              <span>{isTh ? (filterAvailableOnly ? "แสดงทั้งหมด" : "เฉพาะที่ว่าง") : filterAvailableOnly ? "Show All" : "Available Only"}</span>
+            </button>
+          </div>
           <div className="map-area-chip-grid">
-            {areas.map((area) => <button type="button" key={area.code} className={focusArea?.code === area.code ? "active" : ""} onClick={() => setFocusCode(area.code)} aria-pressed={focusArea?.code === area.code}>{area.code}</button>)}
+            {(filterAvailableOnly ? areas.filter((a) => a.status === "available") : areas).map((area) => (
+              <button
+                type="button"
+                key={area.code}
+                className={focusArea?.code === area.code ? "active" : ""}
+                onClick={() => setFocusCode(area.code)}
+                aria-pressed={focusArea?.code === area.code}
+              >
+                {area.code}
+              </button>
+            ))}
           </div>
         </div>
       ) : null}

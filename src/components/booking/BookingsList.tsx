@@ -135,6 +135,83 @@ function renderStatusBadge(status: string, locale: Locale) {
   }
 }
 
+function getBookingCountdownInfo(startsAt: string, endsAt: string, status: string, isTh: boolean) {
+  const now = Date.now();
+  const startMs = new Date(startsAt).getTime();
+  const endMs = new Date(endsAt).getTime();
+  const upperStatus = status.toUpperCase();
+
+  if (["COMPLETED", "CANCELLED", "NO_SHOW"].includes(upperStatus)) {
+    return null;
+  }
+
+  // Active parking: CHECKED_IN
+  if (upperStatus === "CHECKED_IN") {
+    const diff = endMs - now;
+    if (diff > 0) {
+      const mins = Math.floor(diff / (60 * 1000));
+      const hours = Math.floor(mins / 60);
+      const remMins = mins % 60;
+      const timeText = hours > 0
+        ? (isTh ? `${hours} ชม. ${remMins} นาที` : `${hours}h ${remMins}m`)
+        : (isTh ? `${remMins} นาที` : `${remMins}m`);
+      const isLowTime = mins <= 15;
+      return {
+        type: isLowTime ? "warning" : "active",
+        text: isTh ? `เหลือเวลาจอดอีก ${timeText}` : `Parking time remaining: ${timeText}`,
+        icon: Clock3,
+        color: isLowTime ? "#b45309" : "#15803d",
+        bg: isLowTime ? "rgba(245, 158, 11, 0.12)" : "rgba(34, 197, 94, 0.12)",
+        border: isLowTime ? "rgba(245, 158, 11, 0.3)" : "rgba(34, 197, 94, 0.3)",
+      };
+    } else {
+      const overMins = Math.floor((now - endMs) / (60 * 1000));
+      return {
+        type: "overstay",
+        text: isTh ? `เกินเวลาจอดแล้ว ${overMins} นาที (Overstay)` : `Overstayed by ${overMins} mins`,
+        icon: AlertTriangle,
+        color: "#dc2626",
+        bg: "rgba(239, 68, 68, 0.12)",
+        border: "rgba(239, 68, 68, 0.35)",
+      };
+    }
+  }
+
+  // PENDING, CONFIRMED, RESERVED
+  if (["PENDING", "CONFIRMED", "RESERVED"].includes(upperStatus)) {
+    const diffToStart = startMs - now;
+    if (diffToStart > 0) {
+      const mins = Math.floor(diffToStart / (60 * 1000));
+      if (mins < 180) {
+        const hours = Math.floor(mins / 60);
+        const remMins = mins % 60;
+        const timeText = hours > 0
+          ? (isTh ? `${hours} ชม. ${remMins} นาที` : `${hours}h ${remMins}m`)
+          : (isTh ? `${remMins} นาที` : `${remMins}m`);
+        return {
+          type: "upcoming",
+          text: isTh ? `จะถึงเวลาเข้าจอดในอีก ${timeText}` : `Starts in ${timeText}`,
+          icon: Clock,
+          color: "#2563eb",
+          bg: "rgba(37, 99, 235, 0.1)",
+          border: "rgba(37, 99, 235, 0.25)",
+        };
+      }
+    } else if (now >= startMs && now < endMs) {
+      return {
+        type: "ready",
+        text: isTh ? "ถึงช่วงเวลาเข้าจอดแล้ว (สามารถสแกนเข้าพื้นที่ได้)" : "Ready for check-in",
+        icon: CheckCircle2,
+        color: "#16a34a",
+        bg: "rgba(22, 163, 74, 0.1)",
+        border: "rgba(22, 163, 74, 0.25)",
+      };
+    }
+  }
+
+  return null;
+}
+
 export function BookingsList({ locale }: { locale: Locale }) {
   const t = getCopy(locale);
   const isTh = locale === "th";
@@ -144,6 +221,12 @@ export function BookingsList({ locale }: { locale: Locale }) {
   const [loading, setLoading] = useState(true);
   const [qrLoadingId, setQrLoadingId] = useState("");
   const [qrPass, setQrPass] = useState<{ bookingId: string; reference: string; payload: string | null; expiresAt: string | null } | null>(null);
+  const [, setTicking] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTicking(Date.now()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Search, filter, pagination
   const [searchQuery, setSearchQuery] = useState("");
@@ -516,6 +599,32 @@ export function BookingsList({ locale }: { locale: Locale }) {
                   </div>
                   {renderStatusBadge(booking.status, locale)}
                 </div>
+
+                {(() => {
+                  const countdown = getBookingCountdownInfo(booking.starts_at, booking.ends_at, booking.status, isTh);
+                  if (!countdown) return null;
+                  const CountIcon = countdown.icon;
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        backgroundColor: countdown.bg,
+                        border: `1px solid ${countdown.border}`,
+                        color: countdown.color,
+                        fontWeight: 600,
+                        fontSize: 12,
+                        margin: "4px 0 8px",
+                      }}
+                    >
+                      <CountIcon size={14} />
+                      <span>{countdown.text}</span>
+                    </div>
+                  );
+                })()}
 
                 <div className="booking-card-line">
                   <MapPin size={15} />

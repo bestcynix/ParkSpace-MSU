@@ -84,6 +84,22 @@ function playSuccessBeep() {
   }
 }
 
+function triggerHaptic(type: "success" | "warning" | "error") {
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      if (type === "success") {
+        navigator.vibrate([80, 50, 80]);
+      } else if (type === "warning") {
+        navigator.vibrate([150, 80, 150]);
+      } else {
+        navigator.vibrate([300]);
+      }
+    } catch {
+      // Audio/vibrate not permitted
+    }
+  }
+}
+
 export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?: StaffRole }) {
   const t = getCopy(locale);
   const isTh = locale === "th";
@@ -96,6 +112,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [autoCheckIn, setAutoCheckIn] = useState(false);
   const [transitioning, setTransitioning] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
@@ -449,6 +466,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
         }
 
         const errorMsg = data.error || (isTh ? "ไม่พบข้อมูลการจองหรือบัตรไม่ถูกต้อง" : "Booking not found or invalid pass");
+        triggerHaptic("error");
         setResult({
           booking_id: "",
           booking_reference: referenceStr,
@@ -485,11 +503,54 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       ]);
 
       if (scanRes.scan_result !== "VALID") {
+        triggerHaptic("warning");
         setNotice({
           text: scanRes.message || (isTh ? "ไม่พบข้อมูลการจองหรือบัตรไม่ถูกต้อง" : "Invalid booking or pass"),
           type: "error",
         });
         return;
+      }
+
+      triggerHaptic("success");
+
+      // If auto-check-in is enabled, automatically check in eligible bookings
+      if (
+        autoCheckIn &&
+        scanRes.booking_id &&
+        (scanRes.booking_status === "PENDING" || scanRes.booking_status === "CONFIRMED" || scanRes.booking_status === "RESERVED")
+      ) {
+        try {
+          const resAuto = await fetch("/api/staff/transition", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            body: JSON.stringify({
+              booking_id: scanRes.booking_id,
+              action: "CHECK_IN",
+              staff_zone: staffZone,
+              staff_shift: staffShift,
+              note: `[Auto Check-In] เจ้าหน้าที่ ${staffAccountName} เช็คอินอัตโนมัติผ่าน QR Scanner`,
+            }),
+          });
+          const autoData = await resAuto.json();
+          if (resAuto.ok) {
+            triggerHaptic("success");
+            const updatedStatus = autoData.current_status || "CHECKED_IN";
+            setResult((prev) => (prev ? { ...prev, booking_status: updatedStatus } : null));
+            setNotice({
+              text: isTh
+                ? `⚡ ตรวจสอบและเช็คอินอัตโนมัติสำเร็จ: ${scanRes.booking_reference} (${updatedStatus})`
+                : `⚡ Validated and auto checked-in: ${scanRes.booking_reference} (${updatedStatus})`,
+              type: "success",
+            });
+            return;
+          }
+        } catch {
+          // Fall through to regular notice if auto-check-in fails
+        }
       }
 
       setNotice({
@@ -499,6 +560,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
         type: "success",
       });
     } catch (err) {
+      triggerHaptic("error");
       const msg = err instanceof Error ? err.message : isTh ? "เกิดข้อผิดพลาดในการตรวจสอบ" : "Validation error";
       setNotice({ text: msg, type: "error" });
     } finally {
@@ -549,6 +611,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       }
 
       const updatedStatus = data.current_status;
+      triggerHaptic("success");
       setResult((prev) => (prev ? { ...prev, booking_status: updatedStatus, vehicle_plate: overridePlate || prev.vehicle_plate } : null));
 
       setNotice({
@@ -558,6 +621,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
         type: "success",
       });
     } catch (err) {
+      triggerHaptic("error");
       setNotice({
         text: err instanceof Error ? err.message : isTh ? "ไม่สามารถเปลี่ยนสถานะได้" : "Action failed",
         type: "error",
@@ -828,7 +892,33 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             <Camera size={16} color="#e5ae00" />
             {isTh ? "กล้องสแกน QR Code" : "Camera QR Scanner"}
           </h3>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: "5px 10px",
+                borderRadius: 8,
+                background: autoCheckIn ? "#ecfdf5" : "var(--chip-bg)",
+                border: `1px solid ${autoCheckIn ? "#10b981" : "var(--line)"}`,
+                color: autoCheckIn ? "#065f46" : "var(--ink)",
+                userSelect: "none",
+              }}
+              title={isTh ? "เมื่อเปิดใช้งาน ระบบจะทำการเช็คอินให้ทันทีที่สแกนบัตรผ่าน" : "Automatically check in when pass is valid"}
+            >
+              <input
+                type="checkbox"
+                checked={autoCheckIn}
+                onChange={(e) => setAutoCheckIn(e.target.checked)}
+                style={{ cursor: "pointer", accentColor: "#10b981" }}
+              />
+              <Sparkles size={13} color={autoCheckIn ? "#10b981" : "currentColor"} />
+              <span>{isTh ? "เช็คอินอัตโนมัติ" : "Auto Check-in"}</span>
+            </label>
             {hasTorch && scanning && (
               <button
                 className="secondary-button small-button"

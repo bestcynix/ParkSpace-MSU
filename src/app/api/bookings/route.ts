@@ -83,10 +83,16 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 3. Minimum booking duration (at least 15 minutes)
-    if (endsAtDate.getTime() - startsAtDate.getTime() < 15 * 60 * 1000) {
+    // 3. Minimum booking duration (at least 15 minutes) and maximum duration (12 hours)
+    const durationMs = endsAtDate.getTime() - startsAtDate.getTime();
+    if (durationMs < 15 * 60 * 1000) {
       return NextResponse.json({
         error: "Booking duration must be at least 15 minutes (ระยะเวลาการจองต้องไม่น้อยกว่า 15 นาที)",
+      }, { status: 400 });
+    }
+    if (durationMs > 12 * 60 * 60 * 1000) {
+      return NextResponse.json({
+        error: "Booking duration cannot exceed 12 hours (ระยะเวลาการจองสูงสุดต้องไม่เกิน 12 ชั่วโมงต่อครั้ง)",
       }, { status: 400 });
     }
 

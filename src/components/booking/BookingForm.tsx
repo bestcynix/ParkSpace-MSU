@@ -223,6 +223,21 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time Range", message: revMsg, kind: "warning" });
       return;
     }
+    const [startH, startM] = startTime.split(":").map(Number);
+    const [endH, endM] = endTime.split(":").map(Number);
+    const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    if (durationMinutes < 15) {
+      const minMsg = locale === "th" ? "ระยะเวลาการจองต้องไม่น้อยกว่า 15 นาที" : "Booking duration must be at least 15 minutes";
+      setMessage(minMsg);
+      notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Duration", message: minMsg, kind: "warning" });
+      return;
+    }
+    if (durationMinutes > 12 * 60) {
+      const maxMsg = locale === "th" ? "ระยะเวลาการจองสูงสุดต้องไม่เกิน 12 ชั่วโมงต่อครั้ง" : "Booking duration cannot exceed 12 hours";
+      setMessage(maxMsg);
+      notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Duration Exceeded", message: maxMsg, kind: "warning" });
+      return;
+    }
     if (date === todayStr) {
       const currentTimeStr = getCurrentTimeStr();
       if (startTime < currentTimeStr) {
@@ -377,7 +392,20 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       <p>{title} · {locale === "th" ? "มหาวิทยาลัยมหาสารคาม" : "Mahasarakham University"}</p>
       <div className="form-group"><label htmlFor="date"><CalendarDays size={13} style={{ verticalAlign: "-2px" }} /> {t.selectDate}</label><input className="form-control" id="date" type="date" min={todayStr} value={date} onChange={(event) => handleDateChange(event.target.value)} required /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><div className="form-group"><label htmlFor="start"><Clock3 size={13} style={{ verticalAlign: "-2px" }} /> {t.startTime}</label><input className="form-control" id="start" type="time" min={date === todayStr ? getCurrentTimeStr() : undefined} value={startTime} onChange={(event) => handleStartTimeChange(event.target.value)} required /></div><div className="form-group"><label htmlFor="end">{t.endTime}</label><input className="form-control" id="end" type="time" min={startTime} value={endTime} onChange={(event) => handleEndTimeChange(event.target.value)} required /></div></div>
-      <div className="form-group"><label htmlFor="vehicle-choice"><Car size={13} style={{ verticalAlign: "-2px" }} /> {t.chooseVehicle}</label>{isSupabaseConfigured() ? <select className="form-control" id="vehicle-choice" value={vehicleId} onChange={(event) => { const nextId = event.target.value; setVehicleId(nextId); const nextVehicle = vehicles.find((item) => item.id === nextId); setVehicle(nextVehicle?.plate ?? ""); setVehicleType((nextVehicle?.vehicle_type as VehicleType) || "CAR"); }}><option value="">{loadingVehicles ? "…" : vehicles.length ? t.addVehicle : t.vehicleDataNote}</option>{vehicles.map((item) => <option value={item.id} key={item.id}>{item.plate}{item.province ? ` · ${item.province}` : ""}{item.usage_type === "ONE_DAY" ? ` · ${t.oneDayVehicle}` : ""}</option>)}</select> : null}<input className="form-control" id="vehicle" placeholder={t.vehiclePlate} value={vehicle} onChange={(event) => { const nextPlate = event.target.value; setVehicle(nextPlate); if (vehicles.find((item) => item.id === vehicleId)?.plate !== nextPlate) setVehicleId(""); }} required /><label htmlFor="booking-vehicle-type">{t.vehicleType}</label><select className="form-control" id="booking-vehicle-type" value={selectedVehicleForType(vehicles, vehicleId)?.vehicle_type ?? vehicleType} onChange={(event) => { setVehicleId(""); setVehicleType(event.target.value as VehicleType); }}><option value="CAR">{t.car}</option><option value="MOTORCYCLE">{t.motorcycle}</option><option value="PICKUP">{t.pickup}</option><option value="VAN">{t.van}</option><option value="EV">{t.ev}</option><option value="OTHER">{t.otherVehicle}</option></select>{selectedSlot?.type ? <small className="field-hint">{t.slotType}: {slotTypeLabel(locale, selectedSlot.type)}</small> : null}{isSupabaseConfigured() ? <Link className="text-link" href={`/${locale}/app/profile/vehicles`}>{t.addVehicle}</Link> : null}</div>
+      {(() => {
+        const effectiveVehicleType = selectedVehicleForType(vehicles, vehicleId)?.vehicle_type ?? vehicleType;
+        const isTypeMismatch = Boolean(
+          selectedSlot?.type &&
+          !["ANY", "OTHER"].includes(selectedSlot.type) &&
+          selectedSlot.type !== effectiveVehicleType
+        );
+        if (!isTypeMismatch) return null;
+        return (
+          <div style={{ padding: "9px 13px", background: "rgba(239, 68, 68, 0.08)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: 10, marginTop: 10, fontSize: 13, color: "#dc2626", lineHeight: 1.5 }}>
+            ⚠️ <strong>{locale === "th" ? "ประเภทรถไม่ตรงกับช่องจอด" : "Vehicle Type Mismatch"}:</strong> {locale === "th" ? `ช่อง ${selectedSlot!.code} กำหนดเฉพาะ ${slotTypeLabel(locale, selectedSlot!.type!)} (รถที่เลือกเป็น ${slotTypeLabel(locale, effectiveVehicleType)})` : `Slot ${selectedSlot!.code} requires ${slotTypeLabel(locale, selectedSlot!.type!)}`}
+          </div>
+        );
+      })()}
       <label style={{ display: "flex", alignItems: "start", gap: 9, marginTop: 20, color: "#59636e", fontSize: 12, lineHeight: 1.5 }}><input type="checkbox" checked={acceptRules} onChange={(event) => setAcceptRules(event.target.checked)} required />{t.parkingRules}</label>
       {message ? <div className="form-note" role="alert">{message}</div> : null}
       <button className="primary-button" type="submit" disabled={loading}>{loading ? "…" : t.confirm}</button>
