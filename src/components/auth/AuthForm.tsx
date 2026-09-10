@@ -92,7 +92,37 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       <p>{isLogin ? t.welcomeSub : t.selectDestination}</p>
       {!isLogin ? <div className="form-group"><label htmlFor="name">{t.name}</label><div className="search-box"><UserRound size={17} color="#89919b" /><input id="name" className="form-control" style={{ minHeight: "auto", padding: 0, border: 0, background: "transparent", boxShadow: "none" }} value={name} onChange={(event) => setName(event.target.value)} required /></div></div> : null}
       <div className="form-group"><label htmlFor="email">{t.email}</label><div className="search-box"><Mail size={17} color="#89919b" /><input id="email" type="email" className="form-control" style={{ minHeight: "auto", padding: 0, border: 0, background: "transparent", boxShadow: "none" }} value={email} onChange={(event) => setEmail(event.target.value)} required /></div></div>
-      <div className="form-group"><label htmlFor="password">{t.password}</label><div className="search-box"><LockKeyhole size={17} color="#89919b" /><input id="password" type={showPassword ? "text" : "password"} className="form-control" style={{ minHeight: "auto", padding: 0, border: 0, background: "transparent", boxShadow: "none" }} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required /><button type="button" className="search-clear" aria-label={showPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={14} /> : <Eye size={14} />}</button></div></div>
+      <div className="form-group">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <label htmlFor="password">{t.password}</label>
+          {isLogin ? (
+            <Link className="text-link" href={`/${locale}/forgot-password`} style={{ fontSize: 12 }}>
+              {t.forgotPassword}?
+            </Link>
+          ) : null}
+        </div>
+        <div className="search-box">
+          <LockKeyhole size={17} color="#89919b" />
+          <input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            className="form-control"
+            style={{ minHeight: "auto", padding: 0, border: 0, background: "transparent", boxShadow: "none" }}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            minLength={8}
+            required
+          />
+          <button
+            type="button"
+            className="search-clear"
+            aria-label={showPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")}
+            onClick={() => setShowPassword((value) => !value)}
+          >
+            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      </div>
       {!isLogin ? <div className="form-note">{t.passwordHint}</div> : null}
       {message ? <div className="form-note" role="status">{message}</div> : null}
       <button className="primary-button" type="submit" disabled={loading}>{loading ? "…" : isLogin ? t.login : t.createAccount}</button>

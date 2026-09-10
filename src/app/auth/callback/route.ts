@@ -31,8 +31,44 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data: exchangeData, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) return NextResponse.redirect(loginUrl);
+
+  const user = exchangeData.session?.user;
+  if (user) {
+    const meta = user.user_metadata || {};
+    const googleAvatar = (meta.avatar_url || meta.picture) as string | undefined;
+    const googleName = (meta.full_name || meta.name) as string | undefined;
+    const passwordCompleted = Boolean(meta.parkspace_google_password_setup_completed_at);
+
+    // Sync google avatar & full_name into profiles
+    try {
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("avatar_path, full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const updates: { avatar_path?: string; full_name?: string } = {};
+      if (googleAvatar && (!existingProfile?.avatar_path || existingProfile.avatar_path.startsWith("http"))) {
+        updates.avatar_path = googleAvatar;
+      }
+      if (googleName && !existingProfile?.full_name) {
+        updates.full_name = googleName;
+      }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from("profiles").update(updates).eq("id", user.id);
+      }
+    } catch {
+      // Safe fallback
+    }
+
+    // If password setup already completed, skip the complete page entirely!
+    if (passwordCompleted) {
+      return NextResponse.redirect(new URL(next, requestUrl.origin));
+    }
+  }
+
   return response;
 }
 

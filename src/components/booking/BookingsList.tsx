@@ -175,7 +175,11 @@ export function BookingsList({ locale }: { locale: Locale }) {
 
       // Background ensure token exists in database for scanner validation
       const supabase = createSupabaseBrowserClient();
-      void supabase.rpc("issue_booking_qr", { p_booking_id: booking.id }).catch(() => {});
+      try {
+        await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
+      } catch {
+        // ignore background token issue
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.qrUnavailable);
     } finally {
@@ -399,7 +403,12 @@ export function BookingsList({ locale }: { locale: Locale }) {
               <article className="booking-card" key={booking.id}>
                 <div className="booking-card-top">
                   <div>
-                    <strong>{booking.reference}</strong>
+                    <Link
+                      href={`/${locale}/app/bookings/${booking.reference}`}
+                      style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)", textDecoration: "underline", textUnderlineOffset: 3 }}
+                    >
+                      {booking.reference}
+                    </Link>
                     <span>{booking.booking_mode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span>
                   </div>
                   <span className={`booking-status ${booking.status.toLowerCase()}`}>
@@ -456,14 +465,25 @@ export function BookingsList({ locale }: { locale: Locale }) {
                     </a>
                   ) : null}
 
-                  {/* View Details */}
+                  {/* View Booking Detail Page */}
+                  <Link
+                    className="secondary-button"
+                    href={`/${locale}/app/bookings/${booking.reference}`}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <ExternalLink size={14} />
+                    <span>{isTh ? "ดูรายละเอียดการจอง" : "Booking Details"}</span>
+                  </Link>
+
+                  {/* View Area Page */}
                   {area ? (
                     <Link
                       className="secondary-button"
                       href={`/${locale}/parking/${area.code.toLowerCase()}`}
                       style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
-                      <span>{isTh ? "ดูรายละเอียด" : "Details"}</span>
+                      <MapPin size={14} />
+                      <span>{isTh ? "ข้อมูลลานจอด" : "Area Info"}</span>
                     </Link>
                   ) : null}
 

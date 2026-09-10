@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, ClipboardList, Database, FileText, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
+import { Activity, BarChart3, CalendarCheck, Database, FileText, HeartPulse, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
@@ -8,28 +8,29 @@ import { PublicFooter } from "@/components/layout/PublicFooter";
 export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff"; children: React.ReactNode }) {
   const t = getCopy(locale);
   const prefix = `/${locale}/${role}`;
+  const isTh = locale === "th";
   const items = role === "admin" ? [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
-    ["health", t.systemHealth, Activity, "/health"],
-    ["operations", t.liveOperations, Activity, "/operations"],
-    ["scan", locale === "th" ? "สแกนบัตรผ่าน" : "Scan Pass", QrCode, "/scan"],
-    ["areas", t.areas, MapPinned, "/parking-areas"],
-    ["bookings", t.bookings, ClipboardList, "/bookings"],
-    ["users", t.users, Users, "/users"],
-    ["database", t.database, Database, "/database"],
-    ["traces", t.traceExplorer, Wrench, "/traces"],
-    ["analytics", t.analytics, BarChart3, "/analytics"],
-    ["errors", t.errors, FileText, "/errors"],
-    ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
-    ["audit", t.audit, ShieldCheck, "/audit-logs"],
-    ["flags", t.featureFlags, Settings, "/feature-flags"],
-    ["team", t.teamMembersLabel, Users, "/team"],
-    ["settings", t.settings, Settings, "/settings"],
+    ["health", isTh ? "สุขภาพระบบ" : "System Health", HeartPulse, "/health"],
+    ["operations", isTh ? "ปฏิบัติการเรียลไทม์" : "Live Operations", Activity, "/operations"],
+    ["scan", isTh ? "สแกนบัตรผ่าน" : "Scan QR Pass", QrCode, "/scan"],
+    ["areas", isTh ? "พื้นที่จอดรถ" : "Parking Areas", MapPinned, "/parking-areas"],
+    ["bookings", isTh ? "จัดการการจอง" : "Manage Bookings", CalendarCheck, "/bookings"],
+    ["users", isTh ? "ผู้ใช้งาน" : "Users", Users, "/users"],
+    ["database", isTh ? "ฐานข้อมูล" : "Database", Database, "/database"],
+    ["traces", isTh ? "ติดตาม Trace & Latency" : "Trace & Latency", Wrench, "/traces"],
+    ["analytics", isTh ? "สถิติการใช้งาน" : "Analytics", BarChart3, "/analytics"],
+    ["errors", isTh ? "บันทึกข้อผิดพลาด" : "Error Logs", FileText, "/errors"],
+    ["feedback", isTh ? "ศูนย์ความคิดเห็น" : "Feedback Center", MessageSquare, "/feedback"],
+    ["audit", isTh ? "ประวัติการทำรายการ" : "Audit Logs", ShieldCheck, "/audit-logs"],
+    ["flags", isTh ? "ควบคุมฟีเจอร์" : "Feature Flags", Settings, "/feature-flags"],
+    ["team", isTh ? "สมาชิกทีม" : "Team Members", Users, "/team"],
+    ["settings", isTh ? "ตั้งค่าระบบ" : "Settings", Settings, "/settings"],
   ] : [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
-    ["scan", "Scan QR", QrCode, "/scan"],
-    ["operations", t.liveOperations, Activity, "/operations"],
-    ["incidents", "Incidents", FileText, "/incidents"],
+    ["scan", isTh ? "สแกน QR Pass" : "Scan QR Pass", QrCode, "/scan"],
+    ["operations", isTh ? "ปฏิบัติการเรียลไทม์" : "Live Operations", Activity, "/operations"],
+    ["incidents", isTh ? "รายงานเหตุการณ์" : "Incidents", FileText, "/incidents"],
   ];
 
   return (

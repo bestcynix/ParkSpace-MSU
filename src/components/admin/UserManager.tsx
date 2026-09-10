@@ -6,11 +6,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit3,
+  Eye,
+  EyeOff,
   Filter,
   History,
+  KeyRound,
   LoaderCircle,
+  Lock,
+  Mail,
   Save,
   Search,
+  Send,
   Shield,
   ShieldCheck,
   Trash2,
@@ -119,6 +125,10 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
   const pageSize = 15;
   const [history, setHistory] = useState<AccountHistory | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [adminNewPassword, setAdminNewPassword] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [passwordManaging, setPasswordManaging] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
   const { confirm, notify } = useNotifications();
 
   const selectedUser = useMemo(
@@ -269,6 +279,184 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
 
   function updateDraft(key: keyof typeof profileDraft, value: string) {
     setProfileDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function handleDeleteUserDirect(targetUser: UserRecord) {
+    if (getManagedRoles(targetUser).includes("admin") && roleCounts.admin <= 1) {
+      notify({
+        title: locale === "th" ? "ไม่สามารถลบได้" : "Cannot delete",
+        message: locale === "th" ? "ต้องมี Admin อย่างน้อยหนึ่งคนในระบบ" : "At least one Admin must remain.",
+        kind: "warning",
+      });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: locale === "th" ? `ยืนยันการลบบัญชีผู้ใช้` : `Confirm Account Deletion`,
+      message: locale === "th"
+        ? `คุณต้องการลบบัญชี ${targetUser.full_name || targetUser.email || targetUser.id} ออกจากระบบอย่างถาวรหรือไม่?`
+        : `Permanently delete account ${targetUser.email || targetUser.full_name || targetUser.id}?`,
+      confirmLabel: locale === "th" ? "ยืนยันลบบัญชี" : "Delete Account",
+      cancelLabel: t.close,
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    setSaving(true);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/admin/users/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          target_user_id: targetUser.id,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to delete user");
+
+      notify({
+        title: locale === "th" ? "ลบบัญชีผู้ใช้สำเร็จ" : "User Deleted",
+        message: targetUser.email || targetUser.full_name || targetUser.id,
+        kind: "success",
+      });
+
+      if (selectedId === targetUser.id) {
+        setSelectedId(null);
+      }
+      await loadUsers();
+    } catch (err) {
+      notify({
+        title: locale === "th" ? "เกิดข้อผิดพลาดในการลบ" : "Delete Error",
+        message: err instanceof Error ? err.message : "Failed to delete user",
+        kind: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAdminSetPassword(userId: string) {
+    if (!adminNewPassword || adminNewPassword.length < 8) {
+      notify({
+        title: locale === "th" ? "รหัสผ่านสั้นเกินไป" : "Password too short",
+        message: locale === "th" ? "รหัสผ่านต้องมีความยาวอย่างน้อย 8 ตัวอักษร" : "Password must be at least 8 characters",
+        kind: "warning",
+      });
+      return;
+    }
+
+    setPasswordManaging(true);
+    setPasswordMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/admin/users/password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          target_user_id: userId,
+          action: "set_password",
+          password: adminNewPassword,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to set password");
+
+      notify({
+        title: locale === "th" ? "เปลี่ยนรหัสผ่านให้ผู้ใช้เรียบร้อยแล้ว" : "Password Updated",
+        message: locale === "th" ? "ผู้ใช้สามารถเข้าสู่ระบบด้วยรหัสผ่านใหม่นี้ได้ทันที" : "User can now sign in with this new password.",
+        kind: "success",
+      });
+      setPasswordMessage(locale === "th" ? "เปลี่ยนรหัสผ่านใหม่เรียบร้อยแล้ว" : "Password updated successfully.");
+      setAdminNewPassword("");
+      await loadHistory(userId);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Failed to update password";
+      notify({
+        title: locale === "th" ? "เปลี่ยนรหัสผ่านไม่สำเร็จ" : "Failed to update password",
+        message: detail,
+        kind: "error",
+      });
+      setPasswordMessage(detail);
+    } finally {
+      setPasswordManaging(false);
+    }
+  }
+
+  async function handleAdminSendResetEmail(user: UserRecord) {
+    if (!user.email) {
+      notify({
+        title: locale === "th" ? "ไม่พบอีเมล" : "No email found",
+        message: locale === "th" ? "ผู้ใช้รายนี้ไม่มีอีเมลในระบบ" : "User has no email associated",
+        kind: "warning",
+      });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: locale === "th" ? "ส่งอีเมลรีเซ็ตรหัสผ่าน" : "Send Password Reset Email",
+      message: locale === "th"
+        ? `ระบบจะส่งลิงก์ตั้งรหัสผ่านใหม่ไปยังอีเมล ${user.email}`
+        : `A password reset link will be dispatched to ${user.email}`,
+      confirmLabel: locale === "th" ? "ส่งอีเมลทันที" : "Send Email",
+      cancelLabel: t.close,
+    });
+    if (!confirmed) return;
+
+    setPasswordManaging(true);
+    setPasswordMessage("");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/admin/users/password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          target_user_id: user.id,
+          action: "send_reset_email",
+          email: user.email,
+        }),
+      });
+
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || "Failed to send reset email");
+
+      notify({
+        title: locale === "th" ? "ส่งอีเมลรีเซ็ตรหัสผ่านแล้ว" : "Reset Email Sent",
+        message: user.email,
+        kind: "success",
+      });
+      setPasswordMessage(locale === "th" ? `ส่งลิงก์รีเซ็ตรหัสผ่านไปยัง ${user.email} เรียบร้อยแล้ว` : `Reset link sent to ${user.email}`);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Failed to send email";
+      notify({
+        title: locale === "th" ? "ส่งอีเมลไม่สำเร็จ" : "Failed to send email",
+        message: detail,
+        kind: "error",
+      });
+      setPasswordMessage(detail);
+    } finally {
+      setPasswordManaging(false);
+    }
   }
 
   async function audit(action: string, userId: string, metadata: Record<string, unknown>) {
@@ -679,8 +867,22 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                             editUser(user);
                           }}
                           aria-label={`${t.edit} ${user.email ?? user.id}`}
+                          title={t.edit}
                         >
                           <Edit3 size={15} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteUserDirect(user);
+                          }}
+                          aria-label={`Delete ${user.email ?? user.id}`}
+                          title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
+                          style={{ color: "var(--red)" }}
+                        >
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </article>
@@ -719,13 +921,30 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
           <section className="data-editor-card">
             {selectedUser ? (
               <>
-                <div className="form-section-title">
-                  <UserRound size={22} />
-                  <div>
-                    <h2>{t.edit}</h2>
-                    <p>{selectedUser.full_name ? `${selectedUser.full_name} · ${selectedUser.email || selectedUser.id}` : selectedUser.email || selectedUser.id}</p>
+                <div className="form-section-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                    <UserRound size={22} />
+                    <div style={{ minWidth: 0 }}>
+                      <h2>{t.edit}</h2>
+                      <p style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {selectedUser.full_name ? `${selectedUser.full_name} · ${selectedUser.email || selectedUser.id}` : selectedUser.email || selectedUser.id}
+                      </p>
+                    </div>
                   </div>
-                  <button className="icon-button" type="button" onClick={() => { setSelectedId(null); setHistory(null); }} aria-label={t.cancel}><X size={16} /></button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      className="secondary-button danger-button compact-btn"
+                      onClick={() => void handleDeleteUserDirect(selectedUser)}
+                      disabled={saving}
+                      title={locale === "th" ? "ลบบัญชีผู้ใช้นี้" : "Delete user"}
+                      style={{ fontSize: 11, padding: "5px 11px", display: "flex", alignItems: "center", gap: 5, border: "1px solid #fca5a5", color: "#dc2626" }}
+                    >
+                      <Trash2 size={13} />
+                      <span>{locale === "th" ? "ลบบัญชีนี้" : "Delete"}</span>
+                    </button>
+                    <button className="icon-button" type="button" onClick={() => { setSelectedId(null); setHistory(null); }} aria-label={t.cancel}><X size={16} /></button>
+                  </div>
                 </div>
 
                 <div className="role-grant-box" style={{ borderTop: 0, paddingTop: 0 }}>
@@ -835,6 +1054,71 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                   </div>
                   <button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{t.save}</button>
                 </form>
+
+                {/* Password Management Section */}
+                <section style={{ borderTop: "1px solid var(--line)", paddingTop: 16, marginTop: 8 }}>
+                  <div className="form-section-title" style={{ marginBottom: 12 }}>
+                    <KeyRound size={18} />
+                    <div>
+                      <h3>{locale === "th" ? "จัดการรหัสผ่าน" : "Password Management"}</h3>
+                      <p className="page-subtitle">{locale === "th" ? "รหัสผ่านถูกเข้ารหัสทางเดียว — Admin ไม่สามารถดูรหัสผ่านจริงได้" : "Passwords are one-way hashed — admins cannot read actual passwords."}</p>
+                    </div>
+                  </div>
+                  {passwordMessage ? (
+                    <div className="form-note" style={{ marginBottom: 12 }}>{passwordMessage}</div>
+                  ) : null}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                      <div className="form-group" style={{ flex: "1 1 200px", margin: 0 }}>
+                        <label htmlFor="admin-new-password">
+                          {locale === "th" ? "ตั้งรหัสผ่านใหม่ให้ผู้ใช้" : "Set new password for user"}
+                        </label>
+                        <div style={{ position: "relative" }}>
+                          <input
+                            id="admin-new-password"
+                            className="form-control"
+                            type={showAdminPassword ? "text" : "password"}
+                            placeholder={locale === "th" ? "รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)" : "New password (min. 8 chars)"}
+                            value={adminNewPassword}
+                            onChange={(e) => setAdminNewPassword(e.target.value)}
+                            style={{ paddingRight: 38 }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowAdminPassword((v) => !v)}
+                            style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", border: 0, background: "none", cursor: "pointer", color: "var(--muted)" }}
+                            aria-label={showAdminPassword ? "Hide password" : "Show password"}
+                          >
+                            {showAdminPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() => void handleAdminSetPassword(selectedUser.id)}
+                        disabled={passwordManaging || !adminNewPassword}
+                        style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}
+                      >
+                        {passwordManaging ? <LoaderCircle size={15} className="spin" /> : <Lock size={15} />}
+                        {locale === "th" ? "บันทึกรหัสผ่าน" : "Save Password"}
+                      </button>
+                    </div>
+                    {selectedUser.email ? (
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => void handleAdminSendResetEmail(selectedUser)}
+                        disabled={passwordManaging}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 6, alignSelf: "flex-start" }}
+                      >
+                        {passwordManaging ? <LoaderCircle size={15} className="spin" /> : <Send size={15} />}
+                        {locale === "th" ? "ส่งอีเมลรีเซ็ตรหัสผ่าน" : "Send Reset Email"}
+                        <small style={{ opacity: 0.65, marginLeft: 4 }}>→ {selectedUser.email}</small>
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
 
                 <AccountHistoryPanel locale={locale} history={history} loading={historyLoading} copy={t} />
               </>

@@ -61,12 +61,55 @@ export function GoogleAccountComplete({ locale, next }: { locale: Locale; next: 
         return;
       }
       if (active) {
-        setEmail(data.session.user.email ?? "");
-        const completed = Boolean(data.session.user.user_metadata?.parkspace_google_password_setup_completed_at);
-        if (completed) {
+        const user = data.session.user;
+        setEmail(user.email ?? "");
+
+        // Sync Google photo and name into public.profiles
+        const meta = user.user_metadata || {};
+        const googleAvatar = (meta.avatar_url || meta.picture || "") as string;
+        const googleName = (meta.full_name || meta.name || "") as string;
+
+        try {
+          const { data: existingProfile } = await supabase
+            .from("profiles")
+            .select("avatar_path, full_name")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          const updates: { avatar_path?: string; full_name?: string } = {};
+          if (googleAvatar && (!existingProfile?.avatar_path || existingProfile.avatar_path.startsWith("http"))) {
+            updates.avatar_path = googleAvatar;
+          }
+          if (googleName && !existingProfile?.full_name) {
+            updates.full_name = googleName;
+          }
+          if (Object.keys(updates).length > 0) {
+            await supabase.from("profiles").update(updates).eq("id", user.id);
+          }
+        } catch {
+          // Safe fallback
+        }
+
+        // Show password prompt ONLY ONCE:
+        // If user already completed or prompt was already shown on this browser/session:
+        const promptShownKey = `parkspace_google_prompt_shown_${user.id}`;
+        const completed = Boolean(user.user_metadata?.parkspace_google_password_setup_completed_at);
+        const alreadyPrompted = typeof window !== "undefined" && window.localStorage.getItem(promptShownKey) === "1";
+
+        if (completed || alreadyPrompted) {
           router.replace(next);
           return;
         }
+
+        // Mark as prompted now so it will never show a second time
+        try {
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(promptShownKey, "1");
+          }
+        } catch {
+          // Ignore localStorage errors
+        }
+
         setNeedsPasswordSetup(true);
         setLoading(false);
       }
@@ -86,6 +129,9 @@ export function GoogleAccountComplete({ locale, next }: { locale: Locale; next: 
           parkspace_google_password_setup_completed_at: new Date().toISOString(),
         },
       });
+      if (sessionData.session?.user?.id && typeof window !== "undefined") {
+        window.localStorage.setItem(`parkspace_google_prompt_shown_${sessionData.session.user.id}`, "1");
+      }
     } catch {
       // Proceed even if metadata update fails
     }
@@ -107,6 +153,9 @@ export function GoogleAccountComplete({ locale, next }: { locale: Locale; next: 
           parkspace_google_password_setup_completed_at: new Date().toISOString(),
         },
       });
+      if (sessionData.session?.user?.id && typeof window !== "undefined") {
+        window.localStorage.setItem(`parkspace_google_prompt_shown_${sessionData.session.user.id}`, "1");
+      }
     } catch {
       // Proceed even if metadata update fails
     }

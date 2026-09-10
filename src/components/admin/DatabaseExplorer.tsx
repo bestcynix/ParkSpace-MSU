@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
   Check,
@@ -9,19 +9,24 @@ import {
   Columns3,
   Copy,
   Database,
+  Edit3,
   ExternalLink,
   Eye,
   Info,
   Layers,
   LoaderCircle,
+  Plus,
   RefreshCw,
+  Save,
   Search,
   Table as TableIcon,
+  Trash2,
   X,
 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type ExplorerRole = "admin";
 
@@ -303,6 +308,7 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
   const [tableCounts, setTableCounts] = useState<Record<SupabaseTableName, number | null>>(() =>
     Object.fromEntries(TABLE_NAMES.map((name) => [name, null])) as Record<SupabaseTableName, number | null>,
   );
+  const { confirm, notify } = useNotifications();
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -313,6 +319,12 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const ROWS_PER_PAGE = 15;
+
+  // CRUD state
+  const [isInsertModalOpen, setIsInsertModalOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState<Record<string, unknown> | null>(null);
+  const [formDraft, setFormDraft] = useState<Record<string, string>>({});
+  const [submittingCrud, setSubmittingCrud] = useState(false);
 
   const activeMeta = TABLE_DEFINITIONS[selectedTable];
 
@@ -355,8 +367,8 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
         setRows(meta.fallbackRows);
         setErrorNotice(
           locale === "th"
-            ? "Supabase ยังไม่ได้เชื่อมต่อ แสดงข้อมูลตัวอย่างจาก Schema Definition"
-            : "Supabase connection is not configured. Showing sample schema records.",
+            ? "ระบบฐานข้อมูลยังไม่ได้เชื่อมต่อ แสดงข้อมูลตัวอย่างจาก Schema Definition"
+            : "Database connection is not configured. Showing sample schema records.",
         );
         setLoading(false);
         setRefreshing(false);
@@ -436,6 +448,147 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
     window.setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const openInsertModal = () => {
+    const draft: Record<string, string> = {};
+    for (const col of activeMeta.columns) {
+      if (col.isPk && col.type === "uuid") {
+        draft[col.name] = crypto.randomUUID();
+      } else if (col.name === "created_at" || col.name === "updated_at") {
+        draft[col.name] = new Date().toISOString();
+      } else {
+        draft[col.name] = "";
+      }
+    }
+    setFormDraft(draft);
+    setEditingRow(null);
+    setIsInsertModalOpen(true);
+  };
+
+  const openEditModal = (row: Record<string, unknown>) => {
+    const draft: Record<string, string> = {};
+    for (const col of activeMeta.columns) {
+      const val = row[col.name];
+      if (val == null) draft[col.name] = "";
+      else if (typeof val === "object") draft[col.name] = JSON.stringify(val);
+      else draft[col.name] = String(val);
+    }
+    setFormDraft(draft);
+    setEditingRow(row);
+    setIsInsertModalOpen(true);
+  };
+
+  const handleSaveRecord = async (e: FormEvent) => {
+    e.preventDefault();
+    setSubmittingCrud(true);
+    try {
+      const recordPayload: Record<string, unknown> = {};
+      for (const col of activeMeta.columns) {
+        const valStr = formDraft[col.name] ?? "";
+        if (col.isPk && editingRow) continue;
+        if (valStr === "" && !col.isPk) {
+          recordPayload[col.name] = null;
+        } else if (col.type === "integer" || col.type === "bigint") {
+          recordPayload[col.name] = parseInt(valStr, 10) || 0;
+        } else if (col.type === "numeric" || col.type === "double precision") {
+          recordPayload[col.name] = parseFloat(valStr) || 0;
+        } else if (col.type === "boolean") {
+          recordPayload[col.name] = valStr === "true";
+        } else if (col.type === "jsonb" || col.type === "json") {
+          try {
+            recordPayload[col.name] = JSON.parse(valStr);
+          } catch {
+            recordPayload[col.name] = valStr;
+          }
+        } else {
+          recordPayload[col.name] = valStr;
+        }
+      }
+
+      const pkCol = activeMeta.primaryKey.split(",")[0].trim();
+      const action = editingRow ? "update" : "insert";
+      const id = editingRow ? String(editingRow[pkCol]) : undefined;
+
+      const res = await fetch("/api/admin/database", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          table: selectedTable,
+          id,
+          primaryKey: pkCol,
+          record: recordPayload,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to save record");
+      }
+
+      notify({
+        title: locale === "th" ? (editingRow ? "แก้ไขข้อมูลสำเร็จ" : "เพิ่มข้อมูลสำเร็จ") : "Record Saved",
+        kind: "success",
+      });
+      setIsInsertModalOpen(false);
+      setEditingRow(null);
+      void loadTableData(selectedTable, true);
+    } catch (err) {
+      notify({
+        title: locale === "th" ? "บันทึกข้อมูลไม่สำเร็จ" : "Save Failed",
+        message: err instanceof Error ? err.message : "",
+        kind: "error",
+      });
+    } finally {
+      setSubmittingCrud(false);
+    }
+  };
+
+  const handleDeleteRecord = async (row: Record<string, unknown>) => {
+    const pkCol = activeMeta.primaryKey.split(",")[0].trim();
+    const id = String(row[pkCol] ?? "");
+    const confirmed = await confirm({
+      title: locale === "th" ? `ยืนยันการลบข้อมูลจาก ${selectedTable}` : `Delete Record from ${selectedTable}`,
+      message: locale === "th" ? `ต้องการลบข้อมูล ${pkCol}=${id} ถาวรหรือไม่?` : `Permanently delete ${pkCol}=${id}?`,
+      confirmLabel: locale === "th" ? "ยืนยันลบ" : "Delete",
+      cancelLabel: t.close,
+      danger: true,
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/admin/database", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          table: selectedTable,
+          id,
+          primaryKey: pkCol,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Failed to delete");
+      }
+
+      notify({
+        title: locale === "th" ? "ลบข้อมูลสำเร็จ" : "Record Deleted",
+        kind: "success",
+      });
+      if (selectedRow && String(selectedRow[pkCol]) === id) {
+        setSelectedRow(null);
+      }
+      void loadTableData(selectedTable, true);
+    } catch (err) {
+      notify({
+        title: locale === "th" ? "ไม่สามารถลบข้อมูลได้" : "Delete Failed",
+        message: err instanceof Error ? err.message : "",
+        kind: "error",
+      });
+    }
+  };
+
   const currentCount = tableCounts[selectedTable] ?? rows.length;
 
   return (
@@ -482,6 +635,15 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
           >
             <Columns3 size={14} />
             {locale === "th" ? "โครงสร้าง Schema" : "Schema"}
+          </button>
+          <button
+            className="primary-button small-button"
+            type="button"
+            onClick={openInsertModal}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <Plus size={14} />
+            {locale === "th" ? "เพิ่มข้อมูล" : "Add Record"}
           </button>
           <button
             className="secondary-button small-button"
@@ -738,8 +900,8 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                       {col.isPk ? " (PK)" : ""}
                     </th>
                   ))}
-                  <th style={{ padding: "10px 14px", width: 70, textAlign: "right", color: "var(--muted)" }}>
-                    {locale === "th" ? "ดูข้อมูล" : "Action"}
+                  <th style={{ padding: "10px 14px", width: 110, textAlign: "right", color: "var(--muted)" }}>
+                    {locale === "th" ? "จัดการ" : "Actions"}
                   </th>
                 </tr>
               </thead>
@@ -783,18 +945,43 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                           </td>
                         );
                       })}
-                      <td style={{ padding: "10px 14px", textAlign: "right" }}>
-                        <button
-                          className="icon-button"
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedRow(row);
-                          }}
-                          aria-label={`${locale === "th" ? "ตรวจสอบแถว" : "Inspect row"} ${pkValue}`}
-                        >
-                          <Eye size={14} />
-                        </button>
+                      <td style={{ padding: "10px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRow(row);
+                            }}
+                            title={locale === "th" ? "ตรวจสอบข้อมูล" : "Inspect"}
+                          >
+                            <Eye size={13} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEditModal(row);
+                            }}
+                            title={locale === "th" ? "แก้ไขข้อมูลแถวนี้" : "Edit row"}
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleDeleteRecord(row);
+                            }}
+                            title={locale === "th" ? "ลบข้อมูลแถวนี้" : "Delete row"}
+                            style={{ color: "var(--red, #ef4444)" }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -856,6 +1043,117 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
           </div>
         </div>
       )}
+
+      {/* Insert / Edit Record Modal */}
+      {isInsertModalOpen ? (
+        <div
+          className="confirm-overlay"
+          role="presentation"
+          onClick={() => setIsInsertModalOpen(false)}
+          style={{ zIndex: 130 }}
+        >
+          <div
+            className="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingRow ? (locale === "th" ? "แก้ไขข้อมูล" : "Edit Record") : (locale === "th" ? "เพิ่มข้อมูลใหม่" : "New Record")}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(94vw, 600px)",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              padding: 24,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid var(--line)",
+                paddingBottom: 12,
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <strong style={{ fontSize: 16, display: "block" }}>
+                  {editingRow
+                    ? locale === "th"
+                      ? `แก้ไขข้อมูลในตาราง ${selectedTable}`
+                      : `Edit Record in ${selectedTable}`
+                    : locale === "th"
+                    ? `เพิ่มข้อมูลใหม่ในตาราง ${selectedTable}`
+                    : `Add New Record to ${selectedTable}`}
+                </strong>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {locale === "th" ? "กรอกข้อมูลตามประเภทคอลัมน์ของฐานข้อมูล" : "Provide column values matching schema types"}
+                </span>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setIsInsertModalOpen(false)}
+                aria-label={t.close}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSaveRecord}
+              style={{ display: "flex", flexDirection: "column", gap: 12, overflowY: "auto", paddingRight: 4 }}
+            >
+              {activeMeta.columns.map((col) => {
+                const isPk = col.isPk;
+                return (
+                  <div key={col.name} className="form-group" style={{ margin: 0 }}>
+                    <label htmlFor={`field-${col.name}`} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                      <span>
+                        <strong>{col.name}</strong> {isPk ? "(Primary Key)" : ""}
+                      </span>
+                      <small style={{ color: "var(--muted)", fontFamily: "monospace" }}>{col.type}</small>
+                    </label>
+                    <input
+                      id={`field-${col.name}`}
+                      className="form-control"
+                      value={formDraft[col.name] ?? ""}
+                      onChange={(e) =>
+                        setFormDraft((prev) => ({
+                          ...prev,
+                          [col.name]: e.target.value,
+                        }))
+                      }
+                      disabled={Boolean(isPk && editingRow)}
+                      placeholder={locale === "th" ? col.descriptionTh : col.descriptionEn}
+                      style={{ fontSize: 13 }}
+                    />
+                  </div>
+                );
+              })}
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsInsertModalOpen(false)}
+                  disabled={submittingCrud}
+                >
+                  {t.close}
+                </button>
+                <button type="submit" className="primary-button" disabled={submittingCrud}>
+                  {submittingCrud ? (
+                    <LoaderCircle size={15} className="spin" />
+                  ) : (
+                    <Save size={15} />
+                  )}
+                  <span>{editingRow ? (locale === "th" ? "บันทึกการแก้ไข" : "Update") : (locale === "th" ? "เพิ่มข้อมูล" : "Insert")}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       {/* Row Detail Inspector Modal */}
       {selectedRow ? (

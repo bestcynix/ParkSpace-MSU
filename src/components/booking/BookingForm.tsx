@@ -175,7 +175,11 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       }
 
       if (!booking) throw new Error("Booking was not created.");
-      void supabase.rpc("issue_booking_qr", { p_booking_id: booking.id }).catch(() => {});
+      try {
+        await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
+      } catch {
+        // ignore QR background issue error
+      }
       const endsAtDate = new Date(`${date}T${endTime}:00`);
       const expiresAtIso = Number.isNaN(endsAtDate.getTime()) ? null : endsAtDate.toISOString();
       const canonicalPayload = booking.reference;

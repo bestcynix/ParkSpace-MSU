@@ -124,9 +124,31 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
         ? (profileResult.value.data as Profile)
         : { id: user.id, email: user.email ?? null } as Profile;
 
-      setProfile(profileData);
+      const rawGoogleAvatar = (user.user_metadata?.avatar_url || user.user_metadata?.picture) as string | undefined;
+      const rawGoogleName = (user.user_metadata?.full_name || user.user_metadata?.name) as string | undefined;
+
+      let effectiveAvatarPath = profileData.avatar_path;
+      let effectiveFullName = profileData.full_name;
+
+      if (!effectiveAvatarPath && rawGoogleAvatar) {
+        effectiveAvatarPath = rawGoogleAvatar;
+        void supabase.from("profiles").update({ avatar_path: rawGoogleAvatar }).eq("id", user.id);
+      }
+
+      if (!effectiveFullName && rawGoogleName) {
+        effectiveFullName = rawGoogleName;
+        void supabase.from("profiles").update({ full_name: rawGoogleName }).eq("id", user.id);
+      }
+
+      const mergedProfile: Profile = {
+        ...profileData,
+        full_name: effectiveFullName,
+        avatar_path: effectiveAvatarPath,
+      };
+
+      setProfile(mergedProfile);
       setDraft({
-        full_name: profileData.full_name ?? "",
+        full_name: effectiveFullName ?? "",
         university_id: profileData.university_id ?? "",
         faculty: profileData.faculty ?? "",
         major: profileData.major ?? "",
@@ -155,16 +177,17 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
 
       setEmailVerified(Boolean(user.email_confirmed_at) || Boolean(user.identities?.some((identity: { provider?: string }) => identity.provider === "google")));
 
-      if (profileData.avatar_path) {
-        const resolved = resolveImageSource(profileData.avatar_path, "profile-avatars");
+      const avatarToResolve = effectiveAvatarPath || rawGoogleAvatar;
+      if (avatarToResolve) {
+        const resolved = resolveImageSource(avatarToResolve, "profile-avatars");
         if (resolved && (resolved.startsWith("data:") || resolved.startsWith("blob:") || /^https?:\/\//i.test(resolved) || resolved.startsWith("/"))) {
           setAvatarUrl(resolved);
         } else {
           try {
-            const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(profileData.avatar_path, 3600);
-            setAvatarUrl(signed?.signedUrl || resolved || "");
+            const { data: signed } = await supabase.storage.from("profile-avatars").createSignedUrl(avatarToResolve, 3600);
+            setAvatarUrl(signed?.signedUrl || resolved || avatarToResolve);
           } catch {
-            setAvatarUrl(resolved || "");
+            setAvatarUrl(resolved || avatarToResolve);
           }
         }
       } else {

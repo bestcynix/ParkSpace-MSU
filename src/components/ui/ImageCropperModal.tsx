@@ -123,9 +123,11 @@ export function ImageCropperModal({
     const cropBox = containerRef.current.getBoundingClientRect();
     const boxSize = Math.min(cropBox.width, cropBox.height);
 
+    const effectiveAspect = circularCrop ? 1 : aspectRatio;
+
     // Target output dimensions
-    const outputWidth = aspectRatio >= 1 ? 600 : Math.round(600 * aspectRatio);
-    const outputHeight = aspectRatio >= 1 ? Math.round(600 / aspectRatio) : 600;
+    const outputWidth = effectiveAspect >= 1 ? 600 : Math.round(600 * effectiveAspect);
+    const outputHeight = effectiveAspect >= 1 ? Math.round(600 / effectiveAspect) : 600;
 
     const canvas = document.createElement("canvas");
     canvas.width = outputWidth;
@@ -137,8 +139,9 @@ export function ImageCropperModal({
     ctx.imageSmoothingQuality = "high";
 
     // Ratio between output canvas and crop frame on screen
-    const frameWidth = aspectRatio >= 1 ? boxSize * 0.8 : (boxSize * 0.8) * aspectRatio;
-    const frameHeight = aspectRatio >= 1 ? (boxSize * 0.8) / aspectRatio : boxSize * 0.8;
+    const baseFrameSize = 220;
+    const frameWidth = effectiveAspect >= 1 ? baseFrameSize : Math.round(baseFrameSize * effectiveAspect);
+    const frameHeight = effectiveAspect >= 1 ? Math.round(baseFrameSize / effectiveAspect) : baseFrameSize;
     const scaleFactor = outputWidth / frameWidth;
 
     ctx.save();
@@ -199,10 +202,17 @@ export function ImageCropperModal({
     onConfirm(dataUrl, blob);
   }
 
+  const effectiveAspect = circularCrop ? 1 : aspectRatio;
+  const baseFrameSize = 220;
+  const frameWidth = effectiveAspect >= 1 ? baseFrameSize : Math.round(baseFrameSize * effectiveAspect);
+  const frameHeight = effectiveAspect >= 1 ? Math.round(baseFrameSize / effectiveAspect) : baseFrameSize;
+
   // Calculate crop viewport frame size
   const frameStyle = {
-    aspectRatio: `${aspectRatio} / 1`,
-    borderRadius: circularCrop ? "50%" : "14px",
+    width: `${frameWidth}px`,
+    height: `${frameHeight}px`,
+    aspectRatio: `${effectiveAspect} / 1`,
+    borderRadius: circularCrop ? "50%" : "16px",
   };
 
   return (

@@ -241,8 +241,8 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
         setTraces(SAMPLE_TRACES);
         setSourceNote(
           locale === "th"
-            ? "Supabase ยังไม่ได้เชื่อมต่อ แสดงข้อมูล Trace จริงจำลองของระบบ"
-            : "Supabase connection not configured. Showing simulated runtime traces.",
+            ? "ฐานข้อมูลยังไม่ได้เชื่อมต่อ แสดงข้อมูล Trace จริงจำลองของระบบ"
+            : "Database connection not configured. Showing simulated runtime traces.",
         );
         setLoading(false);
         setRefreshing(false);
@@ -687,7 +687,30 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                       {/* Action & Info */}
                       <td style={{ padding: "12px 14px" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <strong style={{ fontSize: 12 }}>{trace.action}</strong>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            <strong style={{ fontSize: 12 }}>{trace.action}</strong>
+                            {(trace.metadata?.is_edited ||
+                              trace.metadata?.admin_edited_at ||
+                              trace.action.includes("UPDATE") ||
+                              trace.action.includes("EDIT")) && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  background: "#fef3c7",
+                                  color: "#b45309",
+                                  padding: "1px 6px",
+                                  borderRadius: 4,
+                                  fontWeight: 700,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 3,
+                                  border: "1px solid #fde68a",
+                                }}
+                              >
+                                ✏️ {locale === "th" ? "แก้ไขแล้ว" : "Edited"}
+                              </span>
+                            )}
+                          </div>
                           <span style={{ color: "var(--muted)", fontSize: 11 }}>
                             {trace.route ? `${trace.route} · ` : ""}
                             {trace.message || trace.entity_type || trace.source}
@@ -704,12 +727,27 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                         <small style={{ color: "var(--muted)", fontSize: 10 }}>{trace.actor_type}</small>
                       </td>
 
-                      {/* Duration */}
+                      {/* Duration & Latency */}
                       <td style={{ padding: "12px 14px", whiteSpace: "nowrap" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <Timer size={13} color={latencyColor} />
-                          <span style={{ fontWeight: 700, fontFamily: "monospace", color: latencyColor }}>
-                            {trace.duration_ms} ms
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <Timer size={13} color={latencyColor} />
+                            <span style={{ fontWeight: 700, fontFamily: "monospace", color: latencyColor }}>
+                              {trace.duration_ms} ms
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 9, color: latencyColor, fontWeight: 600 }}>
+                            {trace.duration_ms < 25
+                              ? locale === "th"
+                                ? "⚡ รวดเร็ว"
+                                : "Fast"
+                              : trace.duration_ms < 100
+                              ? locale === "th"
+                                ? "🟢 ปกติ"
+                                : "Normal"
+                              : locale === "th"
+                              ? "🟠 ช้า"
+                              : "High Latency"}
                           </span>
                         </div>
                       </td>
