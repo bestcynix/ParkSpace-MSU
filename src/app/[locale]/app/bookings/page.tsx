@@ -13,5 +13,5 @@ export default async function BookingsPage({ params }: { params: Promise<{ local
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const t = getCopy(locale);
-  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.bookings} subtitle={t.operationalData} /><RequireAuth locale={locale} target={`/${locale}/app/bookings`}><BookingsList locale={locale} /></RequireAuth><PublicFooter locale={locale} /></div><BottomNav locale={locale} active="bookings" /></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.bookings} /><RequireAuth locale={locale} target={`/${locale}/app/bookings`}><BookingsList locale={locale} /></RequireAuth><PublicFooter locale={locale} /></div><BottomNav locale={locale} active="bookings" /></div>;
 }

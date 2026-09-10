@@ -20,7 +20,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type ReviewRole = "admin" | "developer";
+type ReviewRole = "admin";
 type FeedbackStatus = "NEW" | "REVIEWING" | "IN_PROGRESS" | "RESOLVED";
 
 type BugRow = {
@@ -268,7 +268,7 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
         <div>
           <div className="empty-icon"><AlertTriangle size={26} /></div>
           <h2>{message}</h2>
-          <p>{role === "admin" ? t.admin : t.developer}</p>
+          <p>{t.admin}</p>
         </div>
       </div>
     );
@@ -301,7 +301,7 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
             <AlertTriangle size={18} color="#a27e00" />
             <p>{t.errorLogs}</p>
             <strong>{errors.length}</strong>
-            <small>{t.developer}</small>
+            <small>{t.admin}</small>
           </div>
         ) : null}
       </div>
@@ -431,7 +431,7 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
               <FileText size={13} />
               <span>JSON</span>
             </button>
-            <span className="data-badge"><Clock3 size={13} />{role === "admin" ? t.admin : t.developer}</span>
+            <span className="data-badge"><Clock3 size={13} />{t.admin}</span>
           </div>
         </div>
 
@@ -596,7 +596,7 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
           <div className="section-heading">
             <div>
               <h2>{t.errorLogs} ({errors.length})</h2>
-              <p>{t.systemHealth} · {t.developer}</p>
+              <p>{t.systemHealth} · {t.admin}</p>
             </div>
             <AlertTriangle size={20} color="#a27e00" />
           </div>

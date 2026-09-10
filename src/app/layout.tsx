@@ -42,13 +42,31 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           dangerouslySetInnerHTML={{
             __html: `(function(){
               function isIgnored(err){
-                var str = (err && (err.message || err.stack || '' + err)) || '';
+                if (!err) return false;
+                var str = typeof err === 'string' ? err : ((err && (err.message || err.stack || err.name)) ? (err.message + ' ' + (err.stack || '')) : ('' + err));
                 return str.indexOf('startTime') !== -1 || str.indexOf('reportAllChanges') !== -1;
               }
+              try {
+                var origErr = console.error;
+                console.error = function(){
+                  for (var i = 0; i < arguments.length; i++) {
+                    if (isIgnored(arguments[i])) return;
+                  }
+                  origErr.apply(console, arguments);
+                };
+                var origWarn = console.warn;
+                console.warn = function(){
+                  for (var j = 0; j < arguments.length; j++) {
+                    if (isIgnored(arguments[j])) return;
+                  }
+                  origWarn.apply(console, arguments);
+                };
+              } catch(e){}
               window.addEventListener('error', function(e){
-                if (isIgnored(e.error) || isIgnored(e.message)) {
+                if (isIgnored(e.error) || isIgnored(e.message) || (e.filename && e.filename.indexOf('VM') !== -1 && isIgnored(e.message))) {
                   e.preventDefault();
                   e.stopImmediatePropagation();
+                  return true;
                 }
               }, true);
               window.addEventListener('unhandledrejection', function(e){
@@ -56,7 +74,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   e.preventDefault();
                   e.stopImmediatePropagation();
                 }
-              });
+              }, true);
             })();`,
           }}
         />

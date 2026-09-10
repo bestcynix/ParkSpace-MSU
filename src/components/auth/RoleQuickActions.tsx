@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -25,7 +25,10 @@ export function RoleQuickActions({ locale }: { locale: Locale }) {
           .eq("user_id", userId);
 
         if (active && data) {
-          const fetchedRoles = data.map((r: { role?: unknown }) => String(r.role ?? "").toLowerCase().trim());
+          const fetchedRoles = data.map((r: { role?: unknown }) => {
+            const role = String(r.role ?? "").toLowerCase().trim();
+            return role === "developer" ? "admin" : role;
+          });
           setRoles(fetchedRoles);
         }
       } catch {
@@ -36,9 +39,8 @@ export function RoleQuickActions({ locale }: { locale: Locale }) {
     return () => { active = false; };
   }, []);
 
-  const isStaff = roles.includes("staff") || roles.includes("admin") || roles.includes("developer");
-  const isAdmin = roles.includes("admin") || roles.includes("developer");
-  const isDeveloper = roles.includes("developer");
+  const isStaff = roles.includes("staff") || roles.includes("admin");
+  const isAdmin = roles.includes("admin");
 
   if (!roles.length) return null;
 
@@ -59,12 +61,6 @@ export function RoleQuickActions({ locale }: { locale: Locale }) {
           <Link className="role-quick-button" href={`/${locale}/admin/dashboard`}>
             <LayoutDashboard size={15} />
             <span>{locale === "th" ? "Admin Console" : "Admin Console"}</span>
-          </Link>
-        ) : null}
-        {isDeveloper ? (
-          <Link className="role-quick-button" href={`/${locale}/developer/health`}>
-            <Activity size={15} />
-            <span>{locale === "th" ? "Dev Console" : "Dev Console"}</span>
           </Link>
         ) : null}
       </div>

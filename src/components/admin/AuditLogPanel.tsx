@@ -6,7 +6,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type AuditRole = "admin" | "developer";
+type AuditRole = "admin";
 type AuditLog = {
   id: string;
   action: string;
@@ -62,7 +62,7 @@ export function AuditLogPanel({ locale, role }: { locale: Locale; role: AuditRol
   }, [logs, query]);
 
   return <div className="audit-log-panel data-manager">
-    <div className="data-manager-heading"><div><p className="eyebrow">{role === "admin" ? t.admin : t.developer}</p><h2>{t.audit}</h2><p className="page-subtitle">{t.auditHistory} · {t.noPrivateData}</p></div><span className="data-badge"><History size={13} />{logs.length}</span></div>
+    <div className="data-manager-heading"><div><p className="eyebrow">{t.admin}</p><h2>{t.audit}</h2><p className="page-subtitle">{t.auditHistory} · {t.noPrivateData}</p></div><span className="data-badge"><History size={13} />{logs.length}</span></div>
     <div className="user-search-box"><Search size={16} /><input aria-label={locale === "th" ? "ค้นหาประวัติการทำรายการ" : "Search audit history"} placeholder={locale === "th" ? "ค้นหา Action, บัญชี หรือรายการ" : "Search action, account, or entity"} value={query} onChange={(event) => setQuery(event.target.value)} /></div>
     {message ? <div className="form-note" role="alert">{message}</div> : null}
     {loading ? <div className="empty-card" role="status"><div><LoaderCircle size={24} className="spin" /><p>Loading</p></div></div> : filteredLogs.length ? <div className="history-list audit-log-list">{filteredLogs.map((log) => <article className="history-item" key={log.id}><strong>{log.action}</strong><span>{log.actor_type || "—"} · {log.entity_type || "—"} · {log.result || "—"}</span><small>{log.entity_id || log.actor_id || "—"} · {formatDate(log.created_at, locale)}</small></article>)}</div> : <div className="empty-card compact-empty"><div><History size={24} /><h2>{query ? t.noResults : t.noHistory}</h2></div></div>}

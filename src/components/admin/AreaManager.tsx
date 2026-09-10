@@ -9,7 +9,7 @@ import { SlotLayoutManager } from "@/components/admin/SlotLayoutManager";
 import { useNotifications } from "@/components/layout/NotificationProvider";
 import { ImageInputWithUpload } from "@/components/ui/ImageInputWithUpload";
 
-type ManagerRole = "admin" | "developer";
+type ManagerRole = "admin";
 type AreaStatus = "DRAFT" | "AWAITING_VERIFICATION" | "VERIFIED" | "OUTDATED";
 type CapacitySource = "UNVERIFIED" | "VERIFIED_SURVEY";
 type SlotMode = "AREA_ONLY" | "INDIVIDUAL_SLOT";
@@ -246,9 +246,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       const before = editingId ? areas.find((area) => area.id === editingId) ?? null : null;
       const result = editingId
         ? await supabase.from("parking_areas").update(payload).eq("id", editingId).select(fields).single()
-        : role === "admin"
-          ? await supabase.from("parking_areas").insert(payload).select(fields).single()
-          : { data: null, error: new Error("DEVELOPER_CANNOT_CREATE_AREA") };
+        : await supabase.from("parking_areas").insert(payload).select(fields).single();
       if (result.error) throw result.error;
       const nextArea = result.data as AreaRow;
       await writeAudit(editingId ? "UPDATE_PARKING_AREA" : "CREATE_PARKING_AREA", nextArea.id, before, nextArea);
@@ -285,11 +283,11 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   }
 
   return <div className="data-manager">
-    <div className="data-manager-heading"><div><p className="eyebrow">{role === "admin" ? t.admin : t.developer}</p><h2>{t.areas}</h2><p className="page-subtitle">{role === "admin" ? t.realMetrics : t.developer} · {t.sourceLabel}</p></div>{role === "admin" ? <button className="primary-button" type="button" onClick={startCreate}><Plus size={16} />{t.addArea}</button> : null}</div>
+    <div className="data-manager-heading"><div><p className="eyebrow">{t.admin}</p><h2>{t.areas}</h2><p className="page-subtitle">{t.realMetrics} · {t.sourceLabel}</p></div><button className="primary-button" type="button" onClick={startCreate}><Plus size={16} />{t.addArea}</button></div>
     {message ? <div className="form-note" role="status">{message}</div> : null}
     <div className="data-manager-layout">
       <form className="form-card data-editor-card" onSubmit={(event) => void saveArea(event)}>
-        <div className="form-section-title"><MapPinned size={22} /><div><h2>{editingId ? t.edit : t.create}</h2><p>{role === "admin" ? t.admin : t.developer} · {t.noPrivateData}</p></div></div>
+        <div className="form-section-title"><MapPinned size={22} /><div><h2>{editingId ? t.edit : t.create}</h2><p>{t.admin} · {t.noPrivateData}</p></div></div>
         <div className="support-form-grid">
           <div className="form-group"><label htmlFor="area-code">{t.area} / Code</label><input id="area-code" className="form-control" value={draft.code} onChange={(event) => updateDraft("code", event.target.value)} placeholder="P01" required disabled={Boolean(editingId)} /></div>
           <div className="form-group"><label htmlFor="area-capacity">{t.estimatedCapacity}</label><input id="area-capacity" className="form-control" type="number" min="0" value={draft.capacity} onChange={(event) => updateDraft("capacity", event.target.value)} /></div>
@@ -324,8 +322,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
         </div>
         <fieldset className="vehicle-type-fieldset"><legend>{t.allowedVehicleTypes}</legend><div className="vehicle-type-options">{supportedVehicleTypes.map((value) => <label key={value}><input type="checkbox" checked={draft.vehicle_types.includes(value)} onChange={() => toggleVehicleType(value)} /><span>{value === "CAR" ? t.car : value === "MOTORCYCLE" ? t.motorcycle : value === "PICKUP" ? t.pickup : value === "VAN" ? t.van : value === "EV" ? t.ev : t.otherVehicle}</span></label>)}</div></fieldset>
         <div className="support-form-grid"><div className="form-group"><label htmlFor="area-description-th">{t.description} · TH</label><textarea id="area-description-th" className="form-control" rows={4} value={draft.description_th} onChange={(event) => updateDraft("description_th", event.target.value)} /></div><div className="form-group"><label htmlFor="area-description-en">{t.description} · EN</label><textarea id="area-description-en" className="form-control" rows={4} value={draft.description_en} onChange={(event) => updateDraft("description_en", event.target.value)} /></div></div>
-        <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving || role !== "admin" && !editingId}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
-        {role === "developer" ? <p className="form-note">{t.developer} · {locale === "th" ? "ตรวจสอบและแก้ไขข้อมูลได้ แต่สร้างหรือลบพื้นที่ไม่ได้" : "Can inspect and update data, but cannot create or delete areas."}</p> : null}
+        <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
       </form>
       <section className="review-panel data-list-panel">
         <div className="section-heading">
@@ -334,7 +331,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
             <p>{filteredAreas.length} / {areas.length} · {t.realMetrics}</p>
           </div>
           <div className="inline-actions">
-            <span className="data-badge">&lt; {filteredAreas.length} &gt;</span>
+            <span className="count-pill">({filteredAreas.length})</span>
             <span className="data-badge">{t.noPrivateData}</span>
           </div>
         </div>

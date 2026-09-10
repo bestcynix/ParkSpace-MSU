@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -21,7 +21,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-type StaffRole = "staff" | "admin" | "developer";
+type StaffRole = "staff" | "admin";
 
 type ScanResult = {
   booking_id: string;
@@ -262,6 +262,14 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
         ...prev.slice(0, 7),
       ]);
 
+      if (scanRes.scan_result !== "VALID") {
+        setNotice({
+          text: scanRes.message || (isTh ? "ไม่พบข้อมูลการจองหรือบัตรไม่ถูกต้อง" : "Invalid booking or pass"),
+          type: "error",
+        });
+        return;
+      }
+
       setNotice({
         text: isTh
           ? `ตรวจสอบสิทธิ์สำเร็จ: ${scanRes.booking_reference} (${scanRes.booking_status})`
@@ -324,7 +332,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       setTransitioning(null);
     }
   }
-  const canCheckIn = result?.booking_status === "CONFIRMED" || result?.booking_status === "RESERVED";
+  const canCheckIn = result?.booking_status === "PENDING" || result?.booking_status === "CONFIRMED" || result?.booking_status === "RESERVED";
   const canCheckOut = result?.booking_status === "CHECKED_IN" || result?.booking_status === "OVERSTAY";
   const isCompleted = result?.booking_status === "COMPLETED";
   const isCancelled = result?.booking_status === "CANCELLED";
@@ -382,11 +390,11 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             <span>
               🔒 {isTh ? "สิทธิ์ Staff จำกัด:" : "Staff Role Boundary:"}{" "}
               <strong>{isTh ? "เช็คอิน (Check-in) และ เช็คเอาท์ (Check-out) เท่านั้น" : "Check-in and Check-out only"}</strong>.{" "}
-              {isTh ? "การยกเลิกหรือ override สถานะต้องดำเนินการโดย Admin/Dev" : "Cancellations and overrides require Admin/Dev."}
+              {isTh ? "การยกเลิกหรือ override สถานะต้องดำเนินการโดย Admin" : "Cancellations and overrides require Admin."}
             </span>
           ) : (
             <span>
-              ⚡ {isTh ? "สิทธิ์ Admin/Developer:" : "Admin/Dev Role:"}{" "}
+              ⚡ {isTh ? "สิทธิ์ Admin:" : "Admin Role:"}{" "}
               <strong>{isTh ? "อำนาจเต็ม (Check-in, Check-out, ยกเลิก, No-Show, และ Override สถานะ)" : "Full Control (Check-in, Check-out, Cancel, No-Show, Override)"}</strong>.
             </span>
           )}
@@ -703,7 +711,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                 )}
               </div>
             ) : (
-              /* Admin & Developer: Full Transition Authority */
+              /* Admin: Full Transition Authority */
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button

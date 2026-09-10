@@ -24,8 +24,9 @@ import {
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { setFeatureFlag, type FeatureFlagKey } from "@/lib/feature-flags";
 
-type FlagRole = "admin" | "developer";
+type FlagRole = "admin";
 export type FlagStatusFilter = "ALL" | "ENABLED" | "DISABLED";
 
 export type FeatureFlag = {
@@ -190,11 +191,13 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
       setFlags(updatedFlags);
 
       try {
-        const flagMap: Record<string, boolean> = {};
-        for (const flag of updatedFlags) {
-          flagMap[flag.key] = flag.enabled;
+        if (changedFlag) {
+          setFeatureFlag(changedFlag.key as FeatureFlagKey, changedFlag.enabled);
+        } else {
+          for (const flag of updatedFlags) {
+            setFeatureFlag(flag.key as FeatureFlagKey, flag.enabled);
+          }
         }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(flagMap));
 
         // Feedback message
         const changedDesc = changedFlag
@@ -299,7 +302,7 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
       {/* Header with Title and Standard < N > Badge */}
       <div className="data-manager-heading">
         <div>
-          <p className="eyebrow">{role === "admin" ? t.admin : t.developer} · {t.featureFlags}</p>
+          <p className="eyebrow">{t.admin} · {t.featureFlags}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2>{locale === "th" ? "ตัวจัดการ Feature Flags" : "Feature Flags Manager"}</h2>
             <span

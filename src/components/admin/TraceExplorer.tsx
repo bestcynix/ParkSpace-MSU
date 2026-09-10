@@ -8,6 +8,8 @@ import {
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Copy,
   Filter,
@@ -24,7 +26,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type TraceRole = "admin" | "developer";
+type TraceRole = "admin";
 export type TraceStatusFilter = "ALL" | "SUCCESS" | "ERROR" | "WARNING";
 
 export type TraceSpan = {
@@ -58,15 +60,15 @@ const SAMPLE_TRACES: TraceItem[] = [
     action: "AUTH_SESSION_VERIFY",
     timestamp: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
     duration_ms: 18,
-    actor: "developer@msu.ac.th",
-    actor_type: "developer",
+    actor: "admin@msu.ac.th",
+    actor_type: "admin",
     result: "SUCCESS",
     source: "audit_logs",
-    route: "/developer/traces",
+    route: "/admin/traces",
     entity_type: "user_roles",
     entity_id: "e1f2a3b4-5c6d-7e8f-9a0b-111111111111",
-    message: "Verified developer RLS credentials and session token",
-    metadata: { method: "GET", path: "/developer/traces", status: 200, rls_applied: true },
+    message: "Verified admin RLS credentials and session token",
+    metadata: { method: "GET", path: "/admin/traces", status: 200, rls_applied: true },
     spans: [
       { name: "HTTP Request Handshake", duration_ms: 3, status: "ok" },
       { name: "JWT Token Validation", duration_ms: 5, status: "ok" },
@@ -148,7 +150,7 @@ const SAMPLE_TRACES: TraceItem[] = [
     actor_type: "system",
     result: "SUCCESS",
     source: "system",
-    route: "/developer/health",
+    route: "/admin/health",
     entity_type: "parking_slots",
     message: "Broadcasted slot change event for P28 (OCCUPIED -> AVAILABLE)",
     metadata: { table: "parking_slots", event: "UPDATE", latency_ms: 12 },
@@ -421,7 +423,7 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
       {/* Header with Title and Standard < N > Badge */}
       <div className="data-manager-heading">
         <div>
-          <p className="eyebrow">{role === "admin" ? t.admin : t.developer} · {t.traceExplorer}</p>
+          <p className="eyebrow">{t.admin} · {t.traceExplorer}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2>{locale === "th" ? "สำรวจ Trace และ Latency" : "Distributed Trace Explorer"}</h2>
             <span
@@ -742,8 +744,9 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
               >
-                &lt;
+                <ChevronLeft size={16} />
               </button>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {locale === "th" ? `หน้า ${page} / ${totalTracePages}` : `Page ${page} of ${totalTracePages}`} ({filteredTraces.length} {locale === "th" ? "รายการ" : "traces"})
@@ -753,8 +756,9 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                 type="button"
                 disabled={page >= totalTracePages}
                 onClick={() => setPage((p) => Math.min(totalTracePages, p + 1))}
+                aria-label="Next page"
               >
-                &gt;
+                <ChevronRight size={16} />
               </button>
             </div>
           )}

@@ -7,12 +7,11 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type ProtectedRole = "staff" | "admin" | "developer";
+type ProtectedRole = "staff" | "admin";
 
-const ROLE_HIERARCHY: Record<ProtectedRole, string[]> = {
-  staff: ["staff", "admin", "developer"],
-  admin: ["admin", "developer"],
-  developer: ["developer"],
+const ROLE_HIERARCHY: Record<string, string[]> = {
+  staff: ["staff", "admin"],
+  admin: ["admin"],
 };
 
 export function RoleGate({ locale, role, children }: { locale: Locale; role: ProtectedRole; children: React.ReactNode }) {
@@ -33,15 +32,31 @@ export function RoleGate({ locale, role, children }: { locale: Locale; role: Pro
           if (mounted) setState("blocked");
           return;
         }
+        const userId = sessionData.session.user.id;
+        let userRoles: string[] = [];
         const { data: roleData, error } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", sessionData.session.user.id);
-        if (error) {
-          if (mounted) setState("blocked");
-          return;
+          .eq("user_id", userId);
+
+        if (!error && roleData && roleData.length > 0) {
+          userRoles = roleData.map((item: { role?: unknown }) => {
+            const r = String(item.role ?? "").toLowerCase().trim();
+            return r === "developer" ? "admin" : r;
+          });
+        } else {
+          // Fallback to profiles.user_type
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("user_type")
+            .eq("id", userId)
+            .maybeSingle();
+          if (profile?.user_type) {
+            const ut = String(profile.user_type).toLowerCase().trim();
+            userRoles = [ut === "developer" ? "admin" : ut];
+          }
         }
-        const userRoles = ((roleData ?? []) as Array<{ role?: unknown }>).map((item) => String(item.role ?? "").toLowerCase().trim());
+
         const satisfyingRoles: string[] = ROLE_HIERARCHY[role] ?? [role];
         const hasAccess = userRoles.some((userRole: string) => satisfyingRoles.includes(userRole));
         if (mounted) setState(hasAccess ? "allowed" : "blocked");

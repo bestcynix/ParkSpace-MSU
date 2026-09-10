@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 type ActionType = "CHECK_IN" | "CHECK_OUT" | "CANCEL" | "NO_SHOW" | "OVERRIDE";
@@ -39,18 +39,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Role check
-    const { data: userRoles } = await client
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+    let roles: string[] = [];
+    try {
+      const { data: userRoles } = await client
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      roles = (userRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
+    } catch {
+      const { data: profile } = await client.from("profiles").select("user_type").eq("id", userId).maybeSingle();
+      if (profile?.user_type) roles = [String(profile.user_type).toLowerCase().trim()];
+    }
 
-    const roles = (userRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
     const isStaff = roles.includes("staff");
     const isAdmin = roles.includes("admin");
-    const isDev = roles.includes("developer");
 
-    if (!isStaff && !isAdmin && !isDev) {
-      return NextResponse.json({ error: "Staff, Admin, or Developer role required" }, { status: 403 });
+    if (!isStaff && !isAdmin) {
+      return NextResponse.json({ error: "Staff or Admin role required" }, { status: 403 });
     }
 
     const body = await request.json();
@@ -79,12 +84,12 @@ export async function POST(request: NextRequest) {
     let nextStatus: string;
 
     // Strict Role Permission Logic
-    if (isStaff && !isAdmin && !isDev) {
+    if (isStaff && !isAdmin) {
       // Staff has restricted transitions: only CHECK_IN and CHECK_OUT
       if (action === "CHECK_IN") {
-        if (!["CONFIRMED", "RESERVED"].includes(booking.status)) {
+        if (!["PENDING", "CONFIRMED", "RESERVED"].includes(booking.status)) {
           return NextResponse.json(
-            { error: `Staff can only check-in CONFIRMED or RESERVED bookings (current: ${booking.status})` },
+            { error: `Staff can only check-in PENDING, CONFIRMED, or RESERVED bookings (current: ${booking.status})` },
             { status: 400 }
           );
         }
@@ -99,12 +104,12 @@ export async function POST(request: NextRequest) {
         nextStatus = "COMPLETED";
       } else {
         return NextResponse.json(
-          { error: "Staff accounts are strictly limited to Check-in and Check-out. Cancel or status override requires Admin/Developer." },
+          { error: "Staff accounts are strictly limited to Check-in and Check-out. Cancel or status override requires Admin." },
           { status: 403 }
         );
       }
     } else {
-      // Admin or Developer: full authority
+      // Admin: full authority
       if (action === "CHECK_IN") {
         nextStatus = "CHECKED_IN";
       } else if (action === "CHECK_OUT") {
@@ -155,7 +160,7 @@ export async function POST(request: NextRequest) {
     await client.from("audit_logs").insert({
       event_id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       trace_id: `trace-${Date.now()}`,
-      actor_type: isAdmin ? "ADMIN" : isDev ? "DEVELOPER" : "STAFF",
+      actor_type: isAdmin ? "ADMIN" : "STAFF",
       actor_id: userId,
       action: `BOOKING_${action}`,
       entity_type: "booking",

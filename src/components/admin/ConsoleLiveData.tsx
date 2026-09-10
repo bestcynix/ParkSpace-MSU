@@ -9,7 +9,7 @@ import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabas
 import { StatusBadge } from "@/components/parking/StatusBadge";
 import type { ParkingStatus } from "@/lib/parking/demo-data";
 
-type ConsoleRole = "admin" | "staff" | "developer";
+type ConsoleRole = "admin" | "staff";
 export type ConsoleView = "summary" | "operations" | "staff" | "health";
 type HealthState = "checking" | "healthy" | "degraded" | "unavailable";
 type AreaFilter = "all" | "available" | "reserved" | "occupied" | "closed";
@@ -152,14 +152,14 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
         p_starts_at: now.toISOString(),
         p_ends_at: endsAt.toISOString(),
       });
-      const incidentsRequest = role === "developer" ? Promise.resolve({ count: null, error: null }) : supabase
+      const incidentsRequest = supabase
         .from("incidents")
         .select("id", { count: "exact", head: true })
         .neq("status", "RESOLVED");
-      const errorsRequest = role === "developer" ? supabase
+      const errorsRequest = supabase
         .from("error_logs")
         .select("id", { count: "exact", head: true })
-        .gte("created_at", new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()) : Promise.resolve({ count: null, error: null });
+        .gte("created_at", new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString());
       const authRequest = supabase.auth.getUser();
 
       const [areasResult, capacityResult, incidentsResult, errorResult, authResult] = await Promise.all([
@@ -195,7 +195,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
           .eq("user_id", authResult.data.user.id);
         if (!active) return;
         const userRoles = (roleResult.data ?? []).map((r: { role: string }) => String(r.role).toLowerCase().trim());
-        const allowedRoles = role === "staff" ? ["staff", "admin", "developer"] : role === "admin" ? ["admin", "developer"] : ["developer"];
+        const allowedRoles = role === "staff" ? ["staff", "admin"] : ["admin"];
         const hasRole = userRoles.some((r: string) => allowedRoles.includes(r));
         authState = roleResult.error || !hasRole ? "degraded" : "healthy";
       }
@@ -260,9 +260,9 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
 
   const unavailable = locale === "th" ? "ไม่พร้อมใช้งาน" : "Unavailable";
   const loadingLabel = locale === "th" ? "กำลังตรวจสอบ…" : "Checking…";
-  const liveCountLabel = locale === "th" ? "จำนวนช่องจอดสดจาก Supabase" : "Live slot count from Supabase";
+  const liveCountLabel = locale === "th" ? "จำนวนช่องจอดตามเวลาจริง" : "Real-time slot count";
   const incidentLabel = locale === "th" ? "เหตุการณ์ที่ยังไม่ปิด" : "Unresolved incidents";
-  const developerKpis: Array<[string, string, LucideIcon, string, HealthState]> = [
+  const systemHealthKpis: Array<[string, string, LucideIcon, string, HealthState]> = [
     ["Database", health.database === "checking" ? loadingLabel : healthLabel(health.database, locale), Database, databaseDetail(health, areaCount, locale), health.database],
     ["Auth / RLS", health.auth === "checking" ? loadingLabel : healthLabel(health.auth, locale), ShieldCheck, authDetail(health.auth, role, locale), health.auth],
     ["Realtime", health.realtime === "checking" ? loadingLabel : healthLabel(health.realtime, locale), Radio, realtimeDetail(health.realtime, locale), health.realtime],
@@ -274,7 +274,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
     [t.occupied, errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.occupied.toLocaleString(locale === "th" ? "th-TH" : "en-US"), MapPinned, liveCountLabel, errors.capacity ? "unavailable" : "healthy"],
     [t.incidents, incidentCount == null ? errors.incidents ? unavailable : loadingLabel : incidentCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), AlertTriangle, incidentLabel, errors.incidents ? "unavailable" : incidentCount == null ? "checking" : incidentCount > 0 ? "degraded" : "healthy"],
   ];
-  const kpis = role === "developer" ? developerKpis : operationsKpis;
+  const kpis = view === "health" ? systemHealthKpis : operationsKpis;
 
   return (
     <>
@@ -283,7 +283,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       </div>
       {view === "operations" ? <OperationsList locale={locale} areas={areas} summaries={summaries} filteredAreas={filteredAreas} loading={loading} refreshing={refreshing} errors={errors} query={query} filter={filter} updatedAt={updatedAt} onQueryChange={setQuery} onFilterChange={setFilter} onRefresh={() => setRefreshKey((value) => value + 1)} /> : null}
       {view === "staff" ? <StaffOverview locale={locale} totals={totals} incidentCount={incidentCount} errors={errors} loading={loading} /> : null}
-      {view === "health" ? <DeveloperHealth locale={locale} role={role} health={health} areaCount={areaCount} errorCount={errorCount} errors={errors} /> : null}
+      {view === "health" ? <SystemHealth locale={locale} role={role} health={health} areaCount={areaCount} errorCount={errorCount} errors={errors} /> : null}
     </>
   );
 }
@@ -343,7 +343,7 @@ function StaffOverview({ locale, totals, incidentCount, errors, loading }: { loc
   </>;
 }
 
-function DeveloperHealth({ locale, role, health, areaCount, errorCount, errors }: { locale: Locale; role: ConsoleRole; health: HealthSnapshot; areaCount: number | null; errorCount: number | null; errors: LoadErrors }) {
+function SystemHealth({ locale, role, health, areaCount, errorCount, errors }: { locale: Locale; role: ConsoleRole; health: HealthSnapshot; areaCount: number | null; errorCount: number | null; errors: LoadErrors }) {
   const t = getCopy(locale);
   const rows: Array<[string, HealthState, string]> = [
     ["Database", health.database, databaseDetail(health, areaCount, locale)],
@@ -352,7 +352,7 @@ function DeveloperHealth({ locale, role, health, areaCount, errorCount, errors }
     [locale === "th" ? "ข้อผิดพลาด 24 ชม." : "Errors, 24h", errors.errors ? "unavailable" : errorCount == null ? "checking" : errorCount > 0 ? "degraded" : "healthy", errorCount == null ? (errors.errors || (locale === "th" ? "กำลังตรวจสอบ" : "Checking")) : errorCount.toLocaleString(locale === "th" ? "th-TH" : "en-US")],
   ];
 
-  return <><div className="info-card" style={{ padding: 20, marginTop: 24 }}><h2 style={{ margin: 0, fontSize: 19 }}>{t.systemHealth}</h2><p className="page-subtitle">{locale === "th" ? "สถานะจาก Supabase สำหรับผู้มีสิทธิ์เท่านั้น" : "Live Supabase state for explicitly authorized users only."}</p><div className="status-list">{rows.map(([label, state, detail]) => <div className="status-list-row" key={label}><span>{label}</span><strong style={{ color: healthColor(state) }}>{healthLabel(state, locale)} · {detail}</strong></div>)}</div></div><p className="footer-note"><FileText size={12} style={{ verticalAlign: "-2px" }} /> {t.noPrivateData}</p></>;
+  return <><div className="info-card" style={{ padding: 20, marginTop: 24 }}><h2 style={{ margin: 0, fontSize: 19 }}>{t.systemHealth}</h2><p className="page-subtitle">{locale === "th" ? "สถานะการทำงานระบบ ParkSpace MSU สำหรับผู้ดูแลระบบ" : "System operational state for authorized administrators."}</p><div className="status-list">{rows.map(([label, state, detail]) => <div className="status-list-row" key={label}><span>{label}</span><strong style={{ color: healthColor(state) }}>{healthLabel(state, locale)} · {detail}</strong></div>)}</div></div><p className="footer-note"><FileText size={12} style={{ verticalAlign: "-2px" }} /> {t.noPrivateData}</p></>;
 }
 
 function ConsoleZeroState({ icon: Icon, title, detail, spinning = false }: { icon: LucideIcon; title: string; detail: string; spinning?: boolean }) {

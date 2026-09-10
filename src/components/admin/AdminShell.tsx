@@ -5,11 +5,12 @@ import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 
-export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff" | "developer"; children: React.ReactNode }) {
+export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff"; children: React.ReactNode }) {
   const t = getCopy(locale);
-  const prefix = `/${locale}/${role === "admin" ? "admin" : role === "staff" ? "staff" : "developer"}`;
+  const prefix = `/${locale}/${role}`;
   const items = role === "admin" ? [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
+    ["health", t.systemHealth, Activity, "/health"],
     ["operations", t.liveOperations, Activity, "/operations"],
     ["scan", locale === "th" ? "สแกนบัตรผ่าน" : "Scan Pass", QrCode, "/scan"],
     ["areas", t.areas, MapPinned, "/parking-areas"],
@@ -18,32 +19,17 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["database", t.database, Database, "/database"],
     ["traces", t.traceExplorer, Wrench, "/traces"],
     ["analytics", t.analytics, BarChart3, "/analytics"],
+    ["errors", t.errors, FileText, "/errors"],
     ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
     ["audit", t.audit, ShieldCheck, "/audit-logs"],
     ["flags", t.featureFlags, Settings, "/feature-flags"],
     ["team", t.teamMembersLabel, Users, "/team"],
     ["settings", t.settings, Settings, "/settings"],
-  ] : role === "staff" ? [
+  ] : [
     ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
     ["scan", "Scan QR", QrCode, "/scan"],
     ["operations", t.liveOperations, Activity, "/operations"],
     ["incidents", "Incidents", FileText, "/incidents"],
-  ] : [
-    ["health", t.systemHealth, Activity, "/health"],
-    ["dashboard", t.dashboard, LayoutDashboard, "/dashboard"],
-    ["operations", t.liveOperations, Activity, "/operations"],
-    ["scan", locale === "th" ? "สแกนบัตรผ่าน" : "Scan Pass", QrCode, "/scan"],
-    ["database", t.database, Database, "/database"],
-    ["areas", t.areas, MapPinned, "/parking-areas"],
-    ["bookings", t.bookings, ClipboardList, "/bookings"],
-    ["users", t.users, Users, "/users"],
-    ["analytics", t.analytics, BarChart3, "/analytics"],
-    ["audit", t.audit, ShieldCheck, "/audit-logs"],
-    ["traces", t.traceExplorer, Wrench, "/traces"],
-    ["errors", t.errors, FileText, "/errors"],
-    ["feedback", t.feedbackCenter, MessageSquare, "/feedback"],
-    ["settings", t.featureFlags, Settings, "/feature-flags"],
-    ["team", t.teamMembersLabel, Users, "/team"],
   ];
 
   return (

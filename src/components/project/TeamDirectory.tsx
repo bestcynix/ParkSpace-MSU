@@ -25,7 +25,7 @@ type TeamMember = {
 };
 
 type TeamDraft = Omit<TeamMember, "id" | "display_order">;
-type EditorRole = "admin" | "developer";
+type EditorRole = "admin";
 type DataState = "loading" | "supabase" | "fallback";
 
 const fields = "id, display_order, name_th, name_en, student_id, major_th, major_en, faculty_th, faculty_en, role_th, role_en, avatar_path, visible";
@@ -216,9 +216,12 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
             .select("role")
             .eq("user_id", sessionData.session.user.id);
           const roleValues = (roles ?? [])
-            .map((item: { role?: unknown }) => item.role)
-            .filter((role: unknown): role is EditorRole => role === "admin" || role === "developer");
-          setEditorRole(roleValues.includes("admin") ? "admin" : roleValues.includes("developer") ? "developer" : null);
+            .map((item: { role?: unknown }) => {
+              const r = String(item.role ?? "").toLowerCase();
+              return r === "developer" ? "admin" : r;
+            })
+            .filter((role: string): role is EditorRole => role === "admin");
+          setEditorRole(roleValues.includes("admin") ? "admin" : null);
         } catch {
           // The public directory does not depend on the optional role check.
         }
@@ -392,7 +395,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
     await load();
   }
 
-  const editorRoleLabel = editorRole === "admin" ? t.admin : t.developer;
+  const editorRoleLabel = t.admin;
   const count = dataState === "fallback" ? 1 : loading ? "…" : visibleMembers.length;
 
   return (

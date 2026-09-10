@@ -1,6 +1,6 @@
 -- =============================================================================
--- ParkSpace MSU — Consolidated Database & Storage Migration
--- คัดลอกเนื้อหาทั้งหมดนี้ไปรันใน Supabase SQL Editor เพื่อสร้างสิทธิ์และ Bucket
+-- ParkSpace MSU — Master SQL Fix for Permissions, Roles & Feature Flags
+-- Run this entire script in Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- =============================================================================
 
 begin;
@@ -124,6 +124,7 @@ declare
   requested_roles text[];
   previous_roles text[];
   role_name text;
+  trace_value text := gen_random_uuid()::text;
 begin
   if actor_id is not null then
     select exists (
@@ -132,6 +133,7 @@ begin
       select 1 from public.profiles where id = actor_id and user_type in ('admin', 'developer')
     ) into actor_is_admin;
   else
+    -- Allow service_role
     actor_is_admin := true;
   end if;
 
@@ -166,6 +168,7 @@ begin
     end if;
   end loop;
 
+  -- Synchronize profile user_type
   update public.profiles
   set user_type = case
     when 'admin' = any(requested_roles) then 'admin'

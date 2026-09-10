@@ -9,6 +9,7 @@ import type { ParkingArea, SlotMode } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { AuthAwareLink } from "@/components/auth/AuthAwareLink";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { useFeatureFlag } from "@/lib/feature-flags";
 
 type SlotAvailability = "AVAILABLE" | "RESERVED" | "OCCUPIED" | "CLOSED";
 type SlotType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER" | "ANY";
@@ -147,6 +148,20 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
     }
   }
 
+  const slotStats = useMemo(() => {
+    let avail = 0;
+    let res = 0;
+    let occ = 0;
+    let cls = 0;
+    for (const s of slots) {
+      if (s.availability === "AVAILABLE") avail++;
+      else if (s.availability === "RESERVED") res++;
+      else if (s.availability === "OCCUPIED") occ++;
+      else cls++;
+    }
+    return { total: slots.length, avail, res, occ, cls };
+  }, [slots]);
+
   if (mode !== "INDIVIDUAL_SLOT") {
     return (
       <section className="slot-panel" aria-label={t.areaOnly}>
@@ -167,6 +182,15 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
         <button className="secondary-button" type="submit" disabled={loading}>{loading ? "…" : <><RefreshCw size={15} />{t.refreshAvailability}</>}</button>
       </form>
       <div className="slot-legend" aria-label={t.slotAvailability}><span className="slot-legend-item available"><i />{t.available}</span><span className="slot-legend-item reserved"><i />{t.reserved}</span><span className="slot-legend-item occupied"><i />{t.occupied}</span><span className="slot-legend-item closed"><i />{t.closed}</span></div>
+      {slots.length ? (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13, fontWeight: 700, margin: "10px 0 6px" }}>
+          <span>{locale === "th" ? `ทั้งหมด ${slotStats.total}` : `Total ${slotStats.total}`}</span>
+          <span style={{ color: "#16a34a" }}>· {locale === "th" ? `ว่าง ${slotStats.avail}` : `Free ${slotStats.avail}`}</span>
+          {slotStats.res > 0 ? <span style={{ color: "#ca8a04" }}>· {locale === "th" ? `จองแล้ว ${slotStats.res}` : `Reserved ${slotStats.res}`}</span> : null}
+          {slotStats.occ > 0 ? <span style={{ color: "#2563eb" }}>· {locale === "th" ? `กำลังจอด ${slotStats.occ}` : `Parked ${slotStats.occ}`}</span> : null}
+          {slotStats.cls > 0 ? <span style={{ color: "#dc2626" }}>· {locale === "th" ? `ปิด ${slotStats.cls}` : `Closed ${slotStats.cls}`}</span> : null}
+        </div>
+      ) : null}
       {message ? <div className="form-note" role="status">{message}</div> : null}
       {slots.length ? <div className="status-note live-slot-note"><Info size={15} /><span>{t.realSlotStatusNote} · {vehicleFilter === "ALL" ? t.all : slotTypeLabel(locale, vehicleFilter)}</span></div> : null}
       {!configured ? <div className="slot-empty"><Info size={22} /><strong>{t.setupRequired}</strong><span>{t.operationalData}</span></div> : null}

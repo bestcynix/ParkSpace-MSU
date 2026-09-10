@@ -21,7 +21,7 @@ export function ProjectCredits({ locale, compact = false }: { locale: Locale; co
         <p className="eyebrow">{t.poweredBy}</p>
         <h2 id="creator-dialog-title">{projectInfo.poweredBy.name}</h2>
         <p>{t.creatorInfo}</p>
-        <div className="credit-detail-list"><span><b>{t.studentId}</b>{projectInfo.poweredBy.studentId}</span><span><b>{t.creatorStudyLabel}</b>{t.creatorStudy}</span><span><b>{t.creatorRole}</b>{t.developer}</span></div>
+        <div className="credit-detail-list"><span><b>{t.studentId}</b>{projectInfo.poweredBy.studentId}</span><span><b>{t.creatorStudyLabel}</b>{t.creatorStudy}</span><span><b>{t.creatorRole}</b>{locale === "th" ? "ผู้พัฒนาระบบ" : "System Developer"}</span></div>
         <button type="button" className="primary-button" onClick={() => setOpen(false)}>{t.close}</button>
       </section>
     </div> : null}

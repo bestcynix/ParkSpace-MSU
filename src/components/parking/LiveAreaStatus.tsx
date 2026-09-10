@@ -138,10 +138,17 @@ export function LiveAreaStatus({
   return (
     <div className="live-area-status" aria-live="polite">
       <StatusBadge status={displayStatus} locale={locale} />
-      {displayCounts ? (
-        <span title={`${t.reserved}: ${displayCounts.reserved} · ${t.occupied}: ${displayCounts.occupied} · ${t.closed}: ${displayCounts.closed}`}>
-          {displayCounts.available}/{displayCounts.total} {t.available}
-        </span>
+      {displayCounts && displayCounts.total > 0 ? (
+        <div className="live-breakdown-row" style={{ display: "inline-flex", gap: 6, alignItems: "center", flexWrap: "wrap", fontSize: 11, fontWeight: 700 }}>
+          <span style={{ color: "var(--ink)" }}>{locale === "th" ? "ทั้งหมด" : "Total"} {displayCounts.total}</span>
+          <span style={{ color: "#16a34a" }}>· {locale === "th" ? "ว่าง" : "Free"} {displayCounts.available}</span>
+          {displayCounts.reserved > 0 ? (
+            <span style={{ color: "#ca8a04" }}>· {locale === "th" ? "จอง" : "Booked"} {displayCounts.reserved}</span>
+          ) : null}
+          {displayCounts.occupied > 0 ? (
+            <span style={{ color: "#2563eb" }}>· {locale === "th" ? "จอด" : "Parked"} {displayCounts.occupied}</span>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

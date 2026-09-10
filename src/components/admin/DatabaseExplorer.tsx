@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Columns3,
   Copy,
   Database,
@@ -21,7 +23,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-type ExplorerRole = "admin" | "developer";
+type ExplorerRole = "admin";
 
 export type SupabaseTableName =
   | "parking_areas"
@@ -131,7 +133,7 @@ const TABLE_DEFINITIONS: Record<SupabaseTableName, TableMetadata> = {
       { name: "created_at", type: "timestamptz", descriptionTh: "วันที่สร้างบัญชี", descriptionEn: "Profile created at" },
     ],
     fallbackRows: [
-      { id: "e1f2a3b4-5c6d-7e8f-9a0b-111111111111", email: "developer@msu.ac.th", full_name: "ระบบทดสอบ นักพัฒนา", user_type: "developer", university_id: "DEV-001", faculty: "วิทยาการสารสนเทศ", major: "เทคโนโลยีสารสนเทศ", preferred_locale: "th", created_at: "2026-09-09T07:00:00Z" },
+      { id: "e1f2a3b4-5c6d-7e8f-9a0b-111111111111", email: "admin.super@msu.ac.th", full_name: "ผู้ดูแลระบบหลัก", user_type: "admin", university_id: "ADM-000", faculty: "วิทยาการสารสนเทศ", major: "เทคโนโลยีสารสนเทศ", preferred_locale: "th", created_at: "2026-09-09T07:00:00Z" },
       { id: "e1f2a3b4-5c6d-7e8f-9a0b-222222222222", email: "admin@msu.ac.th", full_name: "ผู้ดูแลระบบ กลาง", user_type: "admin", university_id: "ADM-001", faculty: "กองอาคารสถานที่", major: "บริหารจัดการ", preferred_locale: "th", created_at: "2026-09-09T07:00:00Z" },
       { id: "e1f2a3b4-5c6d-7e8f-9a0b-333333333333", email: "staff.gate1@msu.ac.th", full_name: "เจ้าหน้าที่ จุดตรวจ 1", user_type: "staff", university_id: "STF-102", faculty: "กองอาคารสถานที่", major: "รปภ.และจราจร", preferred_locale: "th", created_at: "2026-09-09T07:30:00Z" },
     ],
@@ -140,18 +142,18 @@ const TABLE_DEFINITIONS: Record<SupabaseTableName, TableMetadata> = {
     name: "user_roles",
     labelTh: "ยศและสิทธิ์ระบบ (User Roles)",
     labelEn: "User Roles (RBAC)",
-    descriptionTh: "ตารางกำหนดบทบาทสิทธิ์ (admin, developer, staff, user) ควบคุมด้วย RLS",
+    descriptionTh: "ตารางกำหนดบทบาทสิทธิ์ (admin, staff, user) ควบคุมด้วย RLS",
     descriptionEn: "Role-based access control assignments enforced by Supabase RLS policies.",
     primaryKey: "user_id, role",
     sortColumn: "granted_at",
     columns: [
       { name: "user_id", type: "uuid", descriptionTh: "รหัสผู้ใช้", descriptionEn: "User UUID referencing profiles", isPk: true, isFk: true },
-      { name: "role", type: "text", descriptionTh: "ยศที่ได้รับ (admin, developer, staff)", descriptionEn: "Granted system role", isPk: true },
+      { name: "role", type: "text", descriptionTh: "ยศที่ได้รับ (admin, staff)", descriptionEn: "Granted system role", isPk: true },
       { name: "granted_by", type: "uuid", descriptionTh: "ผู้มอบหมายยศ", descriptionEn: "Authorizer UUID" },
       { name: "granted_at", type: "timestamptz", descriptionTh: "วันเวลาที่มอบยศ", descriptionEn: "Role grant timestamp" },
     ],
     fallbackRows: [
-      { user_id: "e1f2a3b4-5c6d-7e8f-9a0b-111111111111", role: "developer", granted_by: null, granted_at: "2026-09-09T07:00:00Z" },
+      { user_id: "e1f2a3b4-5c6d-7e8f-9a0b-111111111111", role: "admin", granted_by: null, granted_at: "2026-09-09T07:00:00Z" },
       { user_id: "e1f2a3b4-5c6d-7e8f-9a0b-222222222222", role: "admin", granted_by: null, granted_at: "2026-09-09T07:00:00Z" },
       { user_id: "e1f2a3b4-5c6d-7e8f-9a0b-333333333333", role: "staff", granted_by: "e1f2a3b4-5c6d-7e8f-9a0b-222222222222", granted_at: "2026-09-09T07:30:00Z" },
     ],
@@ -246,7 +248,7 @@ const TABLE_DEFINITIONS: Record<SupabaseTableName, TableMetadata> = {
     ],
     fallbackRows: [
       { id: "e4040404-5555-6666-7777-888888888881", trace_id: "tr_err_3321_01", route: "/api/qr/scan", severity: "ERROR", message: "QR token signature check timed out after 3000ms", created_at: "2026-09-10T08:14:22Z" },
-      { id: "e4040404-5555-6666-7777-888888888882", trace_id: "tr_err_3321_02", route: "/developer/database", severity: "WARNING", message: "Anonymous rate limiter approached 80% threshold", created_at: "2026-09-10T09:45:10Z" },
+      { id: "e4040404-5555-6666-7777-888888888882", trace_id: "tr_err_3321_02", route: "/admin/database", severity: "WARNING", message: "Anonymous rate limiter approached 80% threshold", created_at: "2026-09-10T09:45:10Z" },
     ],
   },
   feedback: {
@@ -441,7 +443,7 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
       {/* Header with Title and Standard < N > Badge */}
       <div className="data-manager-heading">
         <div>
-          <p className="eyebrow">{role === "admin" ? t.admin : t.developer} · {t.database}</p>
+          <p className="eyebrow">{t.admin} · {t.database}</p>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2>{locale === "th" ? activeMeta.labelTh : activeMeta.labelEn}</h2>
             <span
@@ -817,8 +819,9 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+                aria-label="Previous page"
               >
-                &lt;
+                <ChevronLeft size={16} />
               </button>
               <span style={{ fontSize: 12, fontWeight: 600 }}>
                 {locale === "th" ? `หน้า ${page} / ${totalDbPages}` : `Page ${page} of ${totalDbPages}`} ({filteredRows.length} {locale === "th" ? "แถว" : "rows"})
@@ -828,8 +831,9 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                 type="button"
                 disabled={page >= totalDbPages}
                 onClick={() => setPage((p) => Math.min(totalDbPages, p + 1))}
+                aria-label="Next page"
               >
-                &gt;
+                <ChevronRight size={16} />
               </button>
             </div>
           )}

@@ -58,7 +58,7 @@ export function InteractiveCampusMap({
         if (!sessionData.session) return;
         const { data: roleData } = await supabase.from("user_roles").select("role").eq("user_id", sessionData.session.user.id);
         const roles = (roleData ?? []).map((r: { role?: unknown }) => String(r.role ?? "").toLowerCase().trim());
-        if (active && (roles.includes("admin") || roles.includes("developer"))) {
+        if (active && roles.includes("admin")) {
           setCanCalibrate(true);
         }
       } catch {
@@ -286,7 +286,7 @@ export function InteractiveCampusMap({
             </div>
             <span className="diagram-map-hint">{t.dragMap}</span>
           </div>
-          <div className="map-embed-footer"><span>{t.officialMap} · {t.mapReferenceNote} · {coordinateNote}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
+          <div className="map-embed-footer"><span>{t.officialMap} · {t.mapReferenceNote}</span><a className="text-link" href={officialSource} target="_blank" rel="noreferrer">{t.realSource}<ExternalLink size={13} /></a></div>
         </div>
       ) : null}
 
@@ -303,7 +303,7 @@ export function InteractiveCampusMap({
                 type="button"
                 className="secondary-button"
                 onClick={() => setIsCalibrating((prev) => !prev)}
-                title={locale === "th" ? "ปรับแต่งพิกัดสำหรับ Admin/Dev" : "Calibrate GPS"}
+                title={locale === "th" ? "ปรับแต่งพิกัดสำหรับ Admin" : "Calibrate GPS"}
               >
                 <Sliders size={14} />
                 <span>{locale === "th" ? "ปรับพิกัด" : "Calibrate"}</span>
@@ -319,7 +319,7 @@ export function InteractiveCampusMap({
         <div className="form-card" style={{ marginTop: 12, padding: 16, border: "1px solid var(--gold)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <strong>{locale === "th" ? `ปรับพิกัด ${focusArea.code} · ${focusName}` : `Calibrate ${focusArea.code}`}</strong>
-            <span className="data-badge" style={{ background: "var(--gold-soft)", color: "var(--gold-deep)" }}>Admin / Developer</span>
+            <span className="data-badge" style={{ background: "var(--gold-soft)", color: "var(--gold-deep)" }}>Admin</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
             <div>

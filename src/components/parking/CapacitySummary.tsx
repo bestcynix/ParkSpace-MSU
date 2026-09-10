@@ -45,6 +45,8 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
 
   const total = useMemo(() => rows.reduce((sum, row) => sum + row.total_slots, 0), [rows]);
   const available = useMemo(() => rows.reduce((sum, row) => sum + row.available_slots, 0), [rows]);
+  const reserved = useMemo(() => rows.reduce((sum, row) => sum + row.reserved_slots, 0), [rows]);
+  const occupied = useMemo(() => rows.reduce((sum, row) => sum + row.occupied_slots, 0), [rows]);
 
   useEffect(() => {
     let active = true;
@@ -89,7 +91,11 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
         <BarChart3 size={18} />
         <div>
           <strong>{t.liveCapacityByType}</strong>
-          <span>{available}/{total} {t.available}</span>
+          <span>
+            {locale === "th"
+              ? `ทั้งหมด ${total} · ว่าง ${available} · จอง ${reserved} · จอด ${occupied}`
+              : `Total ${total} · Free ${available} · Reserved ${reserved} · Parked ${occupied}`}
+          </span>
         </div>
       </div>
       <div className="capacity-summary-grid">

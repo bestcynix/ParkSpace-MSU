@@ -9,6 +9,7 @@ import type { ParkingArea } from "@/lib/parking/demo-data";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { QrPass } from "@/components/booking/QrPass";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { getFeatureFlag } from "@/lib/feature-flags";
 
 type BookingVehicle = {
   id: string;
@@ -111,16 +112,35 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
         return;
       }
       let booking: { id: string; reference: string } | null = null;
+      let slotIdToUse = selectedSlot?.id ?? null;
+      if (!slotIdToUse && getFeatureFlag("auto_slot_allocation")) {
+        try {
+          const { data: freeSlots } = await supabase.rpc("get_available_parking_slots", {
+            p_area_code: area.code,
+            p_starts_at: `${date}T${startTime}:00+07:00`,
+            p_ends_at: `${date}T${endTime}:00+07:00`,
+          });
+          const matchingSlot = ((freeSlots ?? []) as Array<{ id: string; availability?: string; slot_type?: string }>).find(
+            (s) => s.availability === "AVAILABLE" && (!selectedVehicleType || s.slot_type === "ANY" || s.slot_type === selectedVehicleType)
+          );
+          if (matchingSlot?.id) {
+            slotIdToUse = matchingSlot.id;
+          }
+        } catch {
+          // Fall back gracefully to area booking
+        }
+      }
+
       const bookingPayload = {
         user_id: sessionData.session.user.id,
         parking_area_id: dbArea.id,
         booking_date: date,
-        parking_slot_id: selectedSlot?.id ?? null,
+        parking_slot_id: slotIdToUse,
         vehicle_id: selectedVehicle?.id ?? null,
         starts_at: `${date}T${startTime}:00+07:00`,
         ends_at: `${date}T${endTime}:00+07:00`,
         vehicle_snapshot: selectedVehicle ? { plate: selectedVehicle.plate, province: selectedVehicle.province, vehicle_type: selectedVehicle.vehicle_type, brand: selectedVehicle.brand, model: selectedVehicle.model, color: selectedVehicle.color, usage_type: selectedVehicle.usage_type } : { plate: vehicle, vehicle_type: selectedVehicleType, source: "MANUAL_ENTRY" },
-        booking_mode: selectedSlot ? "INDIVIDUAL_SLOT" : area.slotMode,
+        booking_mode: slotIdToUse ? "INDIVIDUAL_SLOT" : area.slotMode,
         status: "PENDING",
       };
 
