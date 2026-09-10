@@ -72,7 +72,18 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
       if (vehicleFilter !== "ALL" && slot.slot_type !== vehicleFilter && slot.slot_type !== "ANY") continue;
       rows.set(slot.row_label, [...(rows.get(slot.row_label) ?? []), slot]);
     }
-    return [...rows.entries()];
+    // Always sort rows alphabetically from A to Z: A, B, C, D, E, F, G...
+    const sortedEntries = [...rows.entries()].sort(([rowA], [rowB]) =>
+      rowA.localeCompare(rowB, undefined, { numeric: true, sensitivity: "base" })
+    );
+    // Always sort slots within each row by position/code: 01, 02, 03...
+    for (const [, rowSlots] of sortedEntries) {
+      rowSlots.sort((a, b) => {
+        if (a.position !== b.position) return a.position - b.position;
+        return a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true, sensitivity: "base" });
+      });
+    }
+    return sortedEntries;
   }, [slots, vehicleFilter]);
 
   useEffect(() => {
@@ -142,6 +153,12 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
                 slot_type: slot.slot_type ?? "CAR",
                 availability: slot.availability ?? "AVAILABLE",
               }));
+              liveSlots.sort((a, b) => {
+                const rowCmp = a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" });
+                if (rowCmp !== 0) return rowCmp;
+                if (a.position !== b.position) return a.position - b.position;
+                return a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true, sensitivity: "base" });
+              });
               setSlots(liveSlots);
               setLoading(false);
               return;
@@ -170,6 +187,12 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
           slot_type: slot.slot_type ?? "CAR",
           availability: slot.availability as SlotAvailability,
         }));
+      nextSlots.sort((a, b) => {
+        const rowCmp = a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" });
+        if (rowCmp !== 0) return rowCmp;
+        if (a.position !== b.position) return a.position - b.position;
+        return a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true, sensitivity: "base" });
+      });
       setSlots(nextSlots);
       if (!nextSlots.length) setMessage(t.noSlotsConfigured);
     } catch (error) {

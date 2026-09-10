@@ -50,6 +50,12 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
   const reserved = useMemo(() => rows.reduce((sum, row) => sum + row.reserved_slots, 0), [rows]);
   const occupied = useMemo(() => rows.reduce((sum, row) => sum + row.occupied_slots, 0), [rows]);
 
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((a, b) =>
+      a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" })
+    );
+  }, [rows]);
+
   useEffect(() => {
     let active = true;
     let refreshTimer: number | undefined;
@@ -155,7 +161,7 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
         </div>
       </div>
       <div className="capacity-summary-grid">
-        {rows.map((row) => (
+        {sortedRows.map((row) => (
           <article className="capacity-summary-card" key={`${row.row_label}-${row.slot_type}`}>
             <div className="capacity-card-header">
               <strong>{t.row} {row.row_label}</strong>

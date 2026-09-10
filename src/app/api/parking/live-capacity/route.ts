@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
           .from("parking_slots")
           .select("id, slot_code, row_label, slot_type, status, position")
           .eq("parking_area_id", targetArea.id)
+          .order("row_label")
           .order("position");
 
         const bookingBySlot: Record<string, string> = {};
@@ -184,7 +185,15 @@ export async function GET(request: NextRequest) {
           });
         }
 
-        targetRows = Object.values(rowsMap).sort((a, b) => a.row_label.localeCompare(b.row_label));
+        targetRows = Object.values(rowsMap).sort((a, b) =>
+          a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" })
+        );
+        slotList.sort((a, b) => {
+          const rowCmp = a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" });
+          if (rowCmp !== 0) return rowCmp;
+          if (a.position !== b.position) return a.position - b.position;
+          return a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true, sensitivity: "base" });
+        });
         targetSlots = slotList;
       }
     }

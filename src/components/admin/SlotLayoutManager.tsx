@@ -95,7 +95,11 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
   }, [isDirty]);
 
   const selectedRow = useMemo(() => rows.find((row) => row.id === selectedRowId) ?? null, [rows, selectedRowId]);
-  const selectedSlots = useMemo(() => slots.filter((slot) => slot.row_id === selectedRowId || (!slot.row_id && selectedRow && slot.row_label === selectedRow.row_label)), [selectedRow, selectedRowId, slots]);
+  const selectedSlots = useMemo(() => {
+    return slots
+      .filter((slot) => slot.row_id === selectedRowId || (!slot.row_id && selectedRow && slot.row_label === selectedRow.row_label))
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true }));
+  }, [selectedRow, selectedRowId, slots]);
 
   const SLOTS_PER_PAGE = 12;
   const totalSlotPages = Math.max(1, Math.ceil(selectedSlots.length / SLOTS_PER_PAGE));
@@ -115,9 +119,16 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
       ]);
       if (rowsResult.error) throw rowsResult.error;
       if (slotsResult.error) throw slotsResult.error;
-      const nextRows = (rowsResult.data ?? []) as ParkingRow[];
+      const nextRows = ((rowsResult.data ?? []) as ParkingRow[]).sort((a, b) =>
+        a.row_label.localeCompare(b.row_label, undefined, { numeric: true, sensitivity: "base" })
+      );
+      const nextSlots = ((slotsResult.data ?? []) as ParkingSlot[]).sort((a, b) => {
+        const rowCmp = (a.row_label ?? "").localeCompare(b.row_label ?? "", undefined, { numeric: true, sensitivity: "base" });
+        if (rowCmp !== 0) return rowCmp;
+        return (a.position ?? 0) - (b.position ?? 0) || a.slot_code.localeCompare(b.slot_code, undefined, { numeric: true });
+      });
       setRows(nextRows);
-      setSlots((slotsResult.data ?? []) as ParkingSlot[]);
+      setSlots(nextSlots);
       setSelectedRowId((current) => current && nextRows.some((row) => row.id === current) ? current : nextRows[0]?.id ?? null);
       setMessage("");
     } catch (error) {
