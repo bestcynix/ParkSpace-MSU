@@ -47,9 +47,13 @@ export async function GET(request: NextRequest) {
 
     const userEmail = (user.email || "").toLowerCase().trim();
     let isAdmin = false;
+    let isAuthorized = false;
 
     if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "admin@msu.ac.th") {
       isAdmin = true;
+      isAuthorized = true;
+    } else if (userEmail === "staff@msu.ac.th") {
+      isAuthorized = true;
     } else {
       const { data: roleData } = await adminClient
         .from("user_roles")
@@ -58,6 +62,9 @@ export async function GET(request: NextRequest) {
       const roles = (roleData ?? []).map((r: { role: string }) => String(r.role).toLowerCase().trim());
       if (roles.includes("admin") || roles.includes("developer")) {
         isAdmin = true;
+        isAuthorized = true;
+      } else if (roles.includes("staff")) {
+        isAuthorized = true;
       } else {
         const { data: profile } = await adminClient
           .from("profiles")
@@ -67,12 +74,15 @@ export async function GET(request: NextRequest) {
         const uType = String(profile?.user_type ?? "").toLowerCase().trim();
         if (uType === "admin" || uType === "developer") {
           isAdmin = true;
+          isAuthorized = true;
+        } else if (uType === "staff") {
+          isAuthorized = true;
         }
       }
     }
 
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Admin role required" }, { status: 403 });
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Staff or Admin role required" }, { status: 403 });
     }
 
     // Query parameters
@@ -270,6 +280,13 @@ export async function DELETE(request: NextRequest) {
         demoMode: true,
         message: "จำลองการลบการจองสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
       });
+    }
+
+    if (callerEmail === "staff@msu.ac.th") {
+      return NextResponse.json(
+        { error: "เจ้าหน้าที่ (Staff) ไม่มีสิทธิ์ลบรายการจอง ต้องเป็นผู้ดูแลระบบ (Admin) เท่านั้น" },
+        { status: 403 }
+      );
     }
 
     const adminClient = await getSystemDatabaseClient();

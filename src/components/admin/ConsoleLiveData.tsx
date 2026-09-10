@@ -1,19 +1,49 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { Activity, AlertTriangle, Database, FileText, LoaderCircle, MapPinned, QrCode, Radio, RefreshCw, Search, ShieldCheck, type LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  Activity,
+  AlertTriangle,
+  Calendar,
+  Car,
+  CheckCircle2,
+  Clock,
+  Database,
+  ExternalLink,
+  FileText,
+  Filter,
+  Info,
+  LoaderCircle,
+  MapPin,
+  MapPinned,
+  Phone,
+  QrCode,
+  Radio,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  Trash2,
+  User,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/parking/StatusBadge";
 import type { ParkingStatus } from "@/lib/parking/demo-data";
 import { getOperationalTimeWindow } from "@/components/parking/LiveAreaStatus";
+import { useNotifications } from "@/components/layout/NotificationProvider";
+import { QrPass } from "@/components/booking/QrPass";
+import type { AdminBookingItem } from "@/components/admin/AdminBookingsManager";
 
 type ConsoleRole = "admin" | "staff";
 export type ConsoleView = "summary" | "operations" | "staff" | "health";
 type HealthState = "checking" | "healthy" | "degraded" | "unavailable";
 type AreaFilter = "all" | "available" | "reserved" | "occupied" | "closed";
+type OpsTab = "areas" | "reserved" | "occupied";
 
 type AreaRow = {
   id: string;
@@ -101,6 +131,11 @@ function healthColor(state: HealthState) {
 
 export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: ConsoleRole; view: ConsoleView }) {
   const t = getCopy(locale);
+  const isTh = locale === "th";
+  const { confirm, notify } = useNotifications();
+  const searchParams = useSearchParams();
+  const urlFilter = searchParams?.get("filter") || searchParams?.get("tab");
+
   const [areas, setAreas] = useState<AreaRow[]>([]);
   const [summaries, setSummaries] = useState<Record<string, LiveSummary>>({});
   const [incidentCount, setIncidentCount] = useState<number | null>(null);
@@ -120,6 +155,48 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<AreaFilter>("all");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Operational Tabs & Real Booking Management
+  const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>(
+    urlFilter === "reserved" ? "reserved" : urlFilter === "occupied" ? "occupied" : "areas"
+  );
+  const [bookings, setBookings] = useState<AdminBookingItem[]>([]);
+  const [loadingBookings, setLoadingBookings] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
+  const [transitioningId, setTransitioningId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (urlFilter === "reserved") {
+      setActiveOpsTab("reserved");
+    } else if (urlFilter === "occupied") {
+      setActiveOpsTab("occupied");
+    } else if (urlFilter === "areas") {
+      setActiveOpsTab("areas");
+    }
+  }, [urlFilter]);
+
+  const fetchBookings = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    try {
+      setLoadingBookings(true);
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/admin/bookings?pageSize=200", {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.bookings)) {
+          setBookings(data.bookings as AdminBookingItem[]);
+        }
+      }
+    } catch {
+      // silent catch
+    } finally {
+      setLoadingBookings(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -243,7 +320,10 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
 
     function scheduleRefresh() {
       window.clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => { void load(false); }, 300);
+      refreshTimer = window.setTimeout(() => {
+        void load(false);
+        void fetchBookings();
+      }, 300);
     }
 
     return () => {
@@ -251,7 +331,15 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       window.clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [locale, refreshKey, role]);
+  }, [fetchBookings, isTh, locale, refreshKey, role]);
+
+  const reservedBookings = useMemo(() => {
+    return bookings.filter((b) => ["PENDING", "CONFIRMED", "RESERVED"].includes(b.status));
+  }, [bookings]);
+
+  const occupiedBookings = useMemo(() => {
+    return bookings.filter((b) => ["CHECKED_IN", "OVERSTAY"].includes(b.status));
+  }, [bookings]);
 
   const totals = useMemo(() => {
     const raw = Object.values(summaries).reduce((total, summary) => ({
@@ -262,19 +350,16 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       closed: total.closed + summary.closed,
     }), { ...emptySummary });
 
-    if (opStats) {
-      const res = opStats.reserved;
-      const occ = opStats.occupied;
-      const avail = Math.max(0, raw.total - res - occ - raw.closed);
-      return {
-        ...raw,
-        reserved: res,
-        occupied: occ,
-        available: raw.total > 0 ? avail : raw.available,
-      };
-    }
-    return raw;
-  }, [summaries, opStats]);
+    const res = opStats?.reserved ?? reservedBookings.length;
+    const occ = opStats?.occupied ?? occupiedBookings.length;
+    const avail = Math.max(0, raw.total - res - occ - raw.closed);
+    return {
+      ...raw,
+      reserved: res,
+      occupied: occ,
+      available: raw.total > 0 ? avail : raw.available,
+    };
+  }, [summaries, opStats, reservedBookings.length, occupiedBookings.length]);
 
   const filteredAreas = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale === "th" ? "th-TH" : "en-US");
@@ -282,15 +367,205 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       const status = areaStatus(area, summaries[area.code.toUpperCase()]);
       const matchesQuery = !normalizedQuery || [area.code, area.name_th, area.name_en]
         .some((value) => value.toLocaleLowerCase(locale === "th" ? "th-TH" : "en-US").includes(normalizedQuery));
-      const matchesFilter = filter === "all" || status === filter || filter === "closed" && status === "full";
+      const matchesFilter = filter === "all" || status === filter || (filter === "closed" && status === "full");
       return matchesQuery && matchesFilter;
     });
   }, [areas, filter, locale, query, summaries]);
 
-  const unavailable = locale === "th" ? "ไม่พร้อมใช้งาน" : "Unavailable";
-  const loadingLabel = locale === "th" ? "กำลังตรวจสอบ…" : "Checking…";
-  const liveCountLabel = locale === "th" ? "จำนวนช่องจอดตามเวลาจริง" : "Real-time slot count";
-  const incidentLabel = locale === "th" ? "เหตุการณ์ที่ยังไม่ปิด" : "Unresolved incidents";
+  // Operational Action Handlers
+  async function handleCheckIn(bookingId: string) {
+    setTransitioningId(bookingId);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/staff/transition", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ booking_id: bookingId, action: "CHECK_IN" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Check-in failed");
+
+      notify({
+        title: isTh ? "เช็คอินเข้าจอดสำเร็จ" : "Check-in successful",
+        message: isTh ? "ยานพาหนะเข้าจอดเรียบร้อยแล้ว ย้ายไปยังแท็บรถที่กำลังจอด" : "Vehicle is now checked-in and moved to active parking.",
+        kind: "success",
+      });
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking((prev) => (prev ? { ...prev, status: "CHECKED_IN" } : null));
+      }
+      await fetchBookings();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      notify({
+        title: isTh ? "เกิดข้อผิดพลาดในการเช็คอิน" : "Check-in error",
+        message: err instanceof Error ? err.message : "Error",
+        kind: "error",
+      });
+    } finally {
+      setTransitioningId(null);
+    }
+  }
+
+  async function handleCheckOut(bookingId: string) {
+    setTransitioningId(bookingId);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/staff/transition", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ booking_id: bookingId, action: "CHECK_OUT" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Check-out failed");
+
+      notify({
+        title: isTh ? "เช็คเอาท์เสร็จสิ้น" : "Check-out completed",
+        message: isTh ? "ยานพาหนะออกจากพื้นที่เรียบร้อยแล้ว ช่องจอดพร้อมใช้งานสำหรับคันต่อไป" : "Vehicle checked out. Slot is now free.",
+        kind: "success",
+      });
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(null);
+      }
+      await fetchBookings();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      notify({
+        title: isTh ? "เกิดข้อผิดพลาดในการเช็คเอาท์" : "Check-out error",
+        message: err instanceof Error ? err.message : "Error",
+        kind: "error",
+      });
+    } finally {
+      setTransitioningId(null);
+    }
+  }
+
+  async function handleCancelOrNoShow(bookingId: string, action: "CANCEL" | "NO_SHOW") {
+    const isCancel = action === "CANCEL";
+    const ok = await confirm({
+      title: isCancel
+        ? (isTh ? "ยืนยันยกเลิกการจอง?" : "Confirm Cancel Booking?")
+        : (isTh ? "บันทึกไม่มาตามนัด (No-Show)?" : "Mark as No-Show?"),
+      message: isTh
+        ? `ต้องการดำเนินการเปลี่ยนสถานะรายการนี้เป็น ${isCancel ? "ยกเลิกแล้ว" : "ไม่มาตามนัด"} ใช่หรือไม่?`
+        : "Do you want to proceed with this status change?",
+      confirmLabel: isTh ? "ยืนยัน" : "Confirm",
+      cancelLabel: isTh ? "ปิด" : "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setTransitioningId(bookingId);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/staff/transition", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ booking_id: bookingId, action }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Transition failed");
+
+      notify({
+        title: isTh ? "ดำเนินการสำเร็จ" : "Action completed",
+        kind: "success",
+      });
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(null);
+      }
+      await fetchBookings();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      notify({
+        title: isTh ? "เกิดข้อผิดพลาด" : "Error",
+        message: err instanceof Error ? err.message : "Error",
+        kind: "error",
+      });
+    } finally {
+      setTransitioningId(null);
+    }
+  }
+
+  async function handleDeleteBooking(bookingId: string, ref: string) {
+    if (role !== "admin") {
+      notify({
+        title: isTh ? "ไม่มีสิทธิ์ลบ" : "Unauthorized",
+        message: isTh ? "เจ้าหน้าที่ (Staff) ไม่มีสิทธิ์ลบรายการจอง ต้องเป็น Admin เท่านั้น" : "Only Admin can delete bookings",
+        kind: "error",
+      });
+      return;
+    }
+
+    const ok = await confirm({
+      title: isTh ? "ยืนยันการลบรายการจอง?" : "Delete Booking?",
+      message: isTh
+        ? `คุณกำลังจะลบรายการจองรหัส ${ref} ออกจากระบบอย่างถาวร ข้อมูล QR และ Session ที่เกี่ยวข้องจะถูกลบทั้งหมด การดำเนินการนี้ไม่สามารถย้อนกลับได้`
+        : `Are you sure you want to permanently delete booking ${ref}?`,
+      confirmLabel: isTh ? "ลบรายการถาวร" : "Delete",
+      cancelLabel: isTh ? "ยกเลิก" : "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+
+    setTransitioningId(bookingId);
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch("/api/admin/bookings", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ id: bookingId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+
+      notify({
+        title: isTh ? "ลบรายการจองสำเร็จ" : "Booking deleted",
+        message: data.message || ref,
+        kind: "success",
+      });
+      if (selectedBooking?.id === bookingId) {
+        setSelectedBooking(null);
+      }
+      await fetchBookings();
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      notify({
+        title: isTh ? "เกิดข้อผิดพลาดในการลบ" : "Delete error",
+        message: err instanceof Error ? err.message : "Error deleting booking",
+        kind: "error",
+      });
+    } finally {
+      setTransitioningId(null);
+    }
+  }
+
+  const unavailable = isTh ? "ไม่พร้อมใช้งาน" : "Unavailable";
+  const loadingLabel = isTh ? "กำลังตรวจสอบ…" : "Checking…";
+  const liveCountLabel = isTh ? "จำนวนช่องจอดตามเวลาจริง" : "Real-time slot count";
+  const incidentLabel = isTh ? "เหตุการณ์ที่ยังไม่ปิด" : "Unresolved incidents";
 
   type KpiItem = {
     label: string;
@@ -303,10 +578,10 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
   };
 
   const systemHealthKpis: KpiItem[] = [
-    { label: "Database", value: health.database === "checking" ? loadingLabel : healthLabel(health.database, locale), Icon: Database, detail: databaseDetail(health, areaCount, locale), state: health.database, href: role === "admin" ? `/${locale}/admin/database` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ฐานข้อมูล" : "Database") : undefined },
-    { label: "Auth / RLS", value: health.auth === "checking" ? loadingLabel : healthLabel(health.auth, locale), Icon: ShieldCheck, detail: authDetail(health.auth, role, locale), state: health.auth, href: role === "admin" ? `/${locale}/admin/users` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ผู้ใช้" : "Users") : undefined },
-    { label: "Realtime", value: health.realtime === "checking" ? loadingLabel : healthLabel(health.realtime, locale), Icon: Radio, detail: realtimeDetail(health.realtime, locale), state: health.realtime, href: role === "admin" ? `/${locale}/admin/traces` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "Traces" : "Traces") : undefined },
-    { label: "Errors", value: errorCount == null ? errors.errors ? unavailable : loadingLabel : errorCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), Icon: AlertTriangle, detail: locale === "th" ? "24 ชั่วโมงล่าสุด" : "Last 24 hours", state: errors.errors ? "unavailable" : errorCount == null ? "checking" : errorCount > 0 ? "degraded" : "healthy", href: role === "admin" ? `/${locale}/admin/errors` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ดูข้อผิดพลาด" : "Errors") : undefined },
+    { label: "Database", value: health.database === "checking" ? loadingLabel : healthLabel(health.database, locale), Icon: Database, detail: databaseDetail(health, areaCount, locale), state: health.database, href: role === "admin" ? `/${locale}/admin/database` : undefined, actionLabel: role === "admin" ? (isTh ? "ฐานข้อมูล" : "Database") : undefined },
+    { label: "Auth / RLS", value: health.auth === "checking" ? loadingLabel : healthLabel(health.auth, locale), Icon: ShieldCheck, detail: authDetail(health.auth, role, locale), state: health.auth, href: role === "admin" ? `/${locale}/admin/users` : undefined, actionLabel: role === "admin" ? (isTh ? "ผู้ใช้" : "Users") : undefined },
+    { label: "Realtime", value: health.realtime === "checking" ? loadingLabel : healthLabel(health.realtime, locale), Icon: Radio, detail: realtimeDetail(health.realtime, locale), state: health.realtime, href: role === "admin" ? `/${locale}/admin/traces` : undefined, actionLabel: role === "admin" ? (isTh ? "Traces" : "Traces") : undefined },
+    { label: "Errors", value: errorCount == null ? errors.errors ? unavailable : loadingLabel : errorCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), Icon: AlertTriangle, detail: isTh ? "24 ชั่วโมงล่าสุด" : "Last 24 hours", state: errors.errors ? "unavailable" : errorCount == null ? "checking" : errorCount > 0 ? "degraded" : "healthy", href: role === "admin" ? `/${locale}/admin/errors` : undefined, actionLabel: role === "admin" ? (isTh ? "ดูข้อผิดพลาด" : "Errors") : undefined },
   ];
 
   const operationsKpis: KpiItem[] = [
@@ -316,26 +591,26 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       Icon: Activity,
       detail: liveCountLabel,
       state: errors.capacity ? "unavailable" : "healthy",
-      href: view === "operations" ? undefined : `/${locale}/${role}/operations`,
-      actionLabel: view === "operations" ? undefined : (locale === "th" ? "ดูผังพื้นที่" : "View Areas"),
+      href: `/${locale}/${role}/operations?filter=areas`,
+      actionLabel: isTh ? "ดูผังพื้นที่ →" : "View Areas →",
     },
     {
       label: t.reserved,
       value: errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.reserved.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
       Icon: QrCode,
-      detail: locale === "th" ? "คลิกเพื่อกรอง / จัดการรายการจอง" : "Click to view reservations",
+      detail: isTh ? "คลิกเพื่อกรอง / จัดการรายการจอง" : "Click to view reservations",
       state: errors.capacity ? "unavailable" : "healthy",
-      href: role === "admin" ? `/${locale}/admin/bookings?status=PENDING` : `/${locale}/staff/operations?filter=reserved`,
-      actionLabel: locale === "th" ? "ดูรายการจอง →" : "View Bookings →",
+      href: `/${locale}/${role}/operations?filter=reserved`,
+      actionLabel: isTh ? "ดูรายการจอง →" : "View Bookings →",
     },
     {
       label: t.occupied,
       value: errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.occupied.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
       Icon: MapPinned,
-      detail: locale === "th" ? "คลิกเพื่อกรอง / ตรวจสอบรถที่จอด" : "Click to view parked cars",
+      detail: isTh ? "คลิกเพื่อกรอง / ตรวจสอบรถที่จอด" : "Click to view parked cars",
       state: errors.capacity ? "unavailable" : "healthy",
-      href: role === "admin" ? `/${locale}/admin/bookings?status=CHECKED_IN` : `/${locale}/staff/operations?filter=occupied`,
-      actionLabel: locale === "th" ? "ดูรถที่กำลังจอด →" : "View Parked →",
+      href: `/${locale}/${role}/operations?filter=occupied`,
+      actionLabel: isTh ? "ดูรถที่กำลังจอด →" : "View Parked →",
     },
     {
       label: t.incidents,
@@ -344,7 +619,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       detail: incidentLabel,
       state: errors.incidents ? "unavailable" : incidentCount == null ? "checking" : incidentCount > 0 ? "degraded" : "healthy",
       href: `/${locale}/${role}/incidents`,
-      actionLabel: locale === "th" ? "จัดการเหตุการณ์ →" : "Manage Incidents →",
+      actionLabel: isTh ? "จัดการเหตุการณ์ →" : "Manage Incidents →",
     },
   ];
 
@@ -397,15 +672,254 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
           );
         })}
       </div>
-      {view === "operations" ? <OperationsList locale={locale} areas={areas} summaries={summaries} filteredAreas={filteredAreas} loading={loading} refreshing={refreshing} errors={errors} query={query} filter={filter} updatedAt={updatedAt} onQueryChange={setQuery} onFilterChange={setFilter} onRefresh={() => setRefreshKey((value) => value + 1)} /> : null}
-      {view === "staff" ? <StaffOverview locale={locale} totals={totals} incidentCount={incidentCount} errors={errors} loading={loading} /> : null}
-      {view === "health" ? <SystemHealth locale={locale} role={role} health={health} areaCount={areaCount} errorCount={errorCount} errors={errors} /> : null}
+      {view === "operations" ? (
+        <OperationsList
+          locale={locale}
+          role={role}
+          areas={areas}
+          summaries={summaries}
+          filteredAreas={filteredAreas}
+          loading={loading}
+          refreshing={refreshing}
+          errors={errors}
+          query={query}
+          filter={filter}
+          updatedAt={updatedAt}
+          onQueryChange={setQuery}
+          onFilterChange={setFilter}
+          onRefresh={() => {
+            setRefreshKey((value) => value + 1);
+            void fetchBookings();
+          }}
+          activeOpsTab={activeOpsTab}
+          onTabChange={setActiveOpsTab}
+          reservedBookings={reservedBookings}
+          occupiedBookings={occupiedBookings}
+          loadingBookings={loadingBookings}
+          onSelectBooking={setSelectedBooking}
+          onCheckIn={handleCheckIn}
+          onCheckOut={handleCheckOut}
+          onCancelOrNoShow={handleCancelOrNoShow}
+          onDeleteBooking={handleDeleteBooking}
+          transitioningId={transitioningId}
+        />
+      ) : null}
+
+      {view === "staff" ? (
+        <StaffOverview
+          locale={locale}
+          role={role}
+          totals={totals}
+          incidentCount={incidentCount}
+          errors={errors}
+          loading={loading}
+        />
+      ) : null}
+
+      {view === "health" ? (
+        <SystemHealth locale={locale} role={role} health={health} areaCount={areaCount} errorCount={errorCount} errors={errors} />
+      ) : null}
+
+      {/* Inspect Modal */}
+      {selectedBooking ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.65)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              borderRadius: 20,
+              maxWidth: 580,
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
+              border: "1px solid var(--line)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 22px", borderBottom: "1px solid var(--line)" }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+                  {isTh ? "ตรวจสอบรายละเอียดการจอง & ยานพาหนะ" : "Booking & Vehicle Inspection"}
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                  {selectedBooking.reference}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setSelectedBooking(null)}
+                style={{ width: 32, height: 32 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: "20px 22px", display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--canvas)", padding: "12px 16px", borderRadius: 14 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--muted)", display: "block" }}>{isTh ? "ทะเบียนยานพาหนะ" : "License Plate"}</span>
+                  <strong style={{ fontSize: 20, color: "var(--foreground)" }}>
+                    {selectedBooking.vehicle_snapshot?.plate || selectedBooking.vehicle_snapshot?.plate_number || (isTh ? "ไม่ระบุทะเบียน" : "No plate")}
+                  </strong>
+                </div>
+                <span className={`booking-status ${selectedBooking.status.toLowerCase()}`}>
+                  {selectedBooking.status}
+                </span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+                <div style={{ padding: 12, background: "var(--canvas)", borderRadius: 12, border: "1px solid var(--line)" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{isTh ? "พื้นที่จอดรถ" : "Parking Area"}</span>
+                  <div style={{ fontWeight: 600, marginTop: 2 }}>
+                    {selectedBooking.parking_areas?.code} · {isTh ? selectedBooking.parking_areas?.name_th : (selectedBooking.parking_areas?.name_en || selectedBooking.parking_areas?.name_th)}
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: "var(--canvas)", borderRadius: 12, border: "1px solid var(--line)" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{isTh ? "ช่องจอดที่ระบุ" : "Assigned Slot"}</span>
+                  <div style={{ fontWeight: 600, marginTop: 2 }}>
+                    {selectedBooking.parking_slots?.slot_code || (isTh ? "เข้าจอดพื้นที่ทั่วไป (Area Only)" : "General Area")}
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: "var(--canvas)", borderRadius: 12, border: "1px solid var(--line)" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{isTh ? "ผู้จอง / ผู้ขับขี่" : "Driver / User"}</span>
+                  <div style={{ fontWeight: 600, marginTop: 2 }}>
+                    {selectedBooking.profiles?.full_name || selectedBooking.profiles?.email || (isTh ? "ผู้ใช้ระบบ" : "System User")}
+                  </div>
+                </div>
+                <div style={{ padding: 12, background: "var(--canvas)", borderRadius: 12, border: "1px solid var(--line)" }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>{isTh ? "ช่วงเวลาที่จอง" : "Booking Window"}</span>
+                  <div style={{ fontWeight: 600, marginTop: 2, fontSize: 13 }}>
+                    {new Date(selectedBooking.starts_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })} -{" "}
+                    {new Date(selectedBooking.ends_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })} น.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "center", padding: "10px 0" }}>
+                <QrPass
+                  locale={locale}
+                  reference={selectedBooking.reference}
+                  payload={selectedBooking.reference}
+                  expiresAt={selectedBooking.ends_at}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 22px", borderTop: "1px solid var(--line)", background: "var(--canvas)", borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}>
+              <div>
+                {role === "admin" ? (
+                  <button
+                    type="button"
+                    className="danger-button small-button"
+                    onClick={() => void handleDeleteBooking(selectedBooking.id, selectedBooking.reference)}
+                    disabled={transitioningId === selectedBooking.id}
+                  >
+                    <Trash2 size={14} />
+                    <span>{isTh ? "ลบรายการจอง (Admin)" : "Delete Booking"}</span>
+                  </button>
+                ) : null}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["PENDING", "CONFIRMED", "RESERVED"].includes(selectedBooking.status) ? (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-button small-button"
+                      onClick={() => void handleCancelOrNoShow(selectedBooking.id, "NO_SHOW")}
+                      disabled={transitioningId === selectedBooking.id}
+                    >
+                      <span>{isTh ? "ไม่มาตามนัด" : "No-Show"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button small-button"
+                      onClick={() => void handleCheckIn(selectedBooking.id)}
+                      disabled={transitioningId === selectedBooking.id}
+                      style={{ background: "#15803d", borderColor: "#15803d", color: "#fff" }}
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>{isTh ? "เช็คอินเข้าจอด" : "Confirm Check-in"}</span>
+                    </button>
+                  </>
+                ) : ["CHECKED_IN", "OVERSTAY"].includes(selectedBooking.status) ? (
+                  <>
+                    <Link
+                      href={`/${locale}/${role}/incidents?area=${selectedBooking.parking_areas?.code || ""}`}
+                      className="secondary-button small-button"
+                      style={{ textDecoration: "none" }}
+                    >
+                      <AlertTriangle size={14} />
+                      <span>{isTh ? "แจ้งเหตุการณ์" : "Report"}</span>
+                    </Link>
+                    <button
+                      type="button"
+                      className="primary-button small-button"
+                      onClick={() => void handleCheckOut(selectedBooking.id)}
+                      disabled={transitioningId === selectedBooking.id}
+                      style={{ background: "#2563eb", borderColor: "#2563eb", color: "#fff" }}
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>{isTh ? "เช็คเอาท์ออก" : "Confirm Exit"}</span>
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className="secondary-button small-button"
+                  onClick={() => setSelectedBooking(null)}
+                >
+                  <span>{isTh ? "ปิด" : "Close"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
 
-function OperationsList({ locale, areas, summaries, filteredAreas, loading, refreshing, errors, query, filter, updatedAt, onQueryChange, onFilterChange, onRefresh }: {
+function OperationsList({
+  locale,
+  role,
+  areas,
+  summaries,
+  filteredAreas,
+  loading,
+  refreshing,
+  errors,
+  query,
+  filter,
+  updatedAt,
+  onQueryChange,
+  onFilterChange,
+  onRefresh,
+  activeOpsTab,
+  onTabChange,
+  reservedBookings,
+  occupiedBookings,
+  loadingBookings,
+  onSelectBooking,
+  onCheckIn,
+  onCheckOut,
+  onCancelOrNoShow,
+  onDeleteBooking,
+  transitioningId,
+}: {
   locale: Locale;
+  role: ConsoleRole;
   areas: AreaRow[];
   summaries: Record<string, LiveSummary>;
   filteredAreas: AreaRow[];
@@ -418,45 +932,591 @@ function OperationsList({ locale, areas, summaries, filteredAreas, loading, refr
   onQueryChange: (value: string) => void;
   onFilterChange: (value: AreaFilter) => void;
   onRefresh: () => void;
+  activeOpsTab: OpsTab;
+  onTabChange: (tab: OpsTab) => void;
+  reservedBookings: AdminBookingItem[];
+  occupiedBookings: AdminBookingItem[];
+  loadingBookings: boolean;
+  onSelectBooking: (b: AdminBookingItem) => void;
+  onCheckIn: (id: string) => Promise<void>;
+  onCheckOut: (id: string) => Promise<void>;
+  onCancelOrNoShow: (id: string, action: "CANCEL" | "NO_SHOW") => Promise<void>;
+  onDeleteBooking: (id: string, ref: string) => Promise<void>;
+  transitioningId: string | null;
 }) {
   const t = getCopy(locale);
-  const filters: Array<[AreaFilter, string]> = [["all", t.all], ["available", t.available], ["reserved", t.reserved], ["occupied", t.occupied], ["closed", t.closed]];
-  const unavailable = locale === "th" ? "อ่านข้อมูลสดไม่ได้" : "Live data is unavailable.";
+  const isTh = locale === "th";
+  const filters: Array<[AreaFilter, string]> = [
+    ["all", t.all],
+    ["available", t.available],
+    ["reserved", t.reserved],
+    ["occupied", t.occupied],
+    ["closed", t.closed],
+  ];
+  const unavailable = isTh ? "อ่านข้อมูลสดไม่ได้" : "Live data is unavailable.";
 
-  return <section aria-label={t.liveOperations}>
-    <div className="section-heading">
-      <div><h2>{t.liveOperations}</h2><p>{filteredAreas.length}/{areas.length} {t.areas}{updatedAt ? ` · ${formatUpdatedAt(updatedAt, locale)}` : ""}</p></div>
-      <div className="inline-actions"><Link className="text-link" href={`/${locale}/admin/parking-areas`}>{t.areas}</Link><button className="secondary-button small-button" type="button" onClick={onRefresh} disabled={refreshing}><RefreshCw size={14} className={refreshing ? "spin" : undefined} />{t.refreshAvailability}</button></div>
-    </div>
-    <div className="user-search-box"><Search size={16} /><input aria-label={locale === "th" ? "ค้นหาพื้นที่ปฏิบัติการ" : "Search operational areas"} placeholder={locale === "th" ? "ค้นหารหัสหรือชื่อพื้นที่" : "Search area code or name"} value={query} onChange={(event) => onQueryChange(event.target.value)} /></div>
-    <div className="chip-row" aria-label={locale === "th" ? "กรองสถานะพื้นที่" : "Filter area status"}>{filters.map(([key, label]) => <button className={`filter-chip ${filter === key ? "active" : ""}`} key={key} type="button" aria-pressed={filter === key} onClick={() => onFilterChange(key)}>{label}</button>)}</div>
-    {errors.areas || errors.capacity ? <div className="form-note" role="alert">{unavailable} <button className="text-link" type="button" onClick={onRefresh}>{locale === "th" ? "ลองใหม่" : "Retry"}</button></div> : null}
-    {loading && !areas.length ? <ConsoleZeroState icon={LoaderCircle} title={locale === "th" ? "กำลังโหลดข้อมูลสด" : "Loading live data"} detail={t.operationalData} spinning />
-      : filteredAreas.length ? <div className="ops-grid" style={{ marginTop: 18 }}>{filteredAreas.map((area) => {
-        const summary = summaries[area.code.toUpperCase()];
-        const status = areaStatus(area, summary);
-        const areaName = locale === "th" ? area.name_th : area.name_en;
-        const capacity = summary?.total ? `${summary.available}/${summary.total} ${t.available}` : area.capacity != null ? `${area.capacity.toLocaleString(locale === "th" ? "th-TH" : "en-US")} ${locale === "th" ? "ช่องตามข้อมูลพื้นที่" : "area capacity"}` : locale === "th" ? "ไม่มีข้อมูลจำนวนช่อง" : "No slot count";
-        return <Link className="ops-card" href={`/${locale}/parking/${area.code.toLowerCase()}`} key={area.id}><header><strong>{area.code}</strong><StatusBadge status={status} locale={locale} /></header><p>{areaName}<br />{capacity} · {area.data_status}</p></Link>;
-      })}</div>
-        : <ConsoleZeroState icon={Search} title={areas.length ? t.noResults : t.noRecords} detail={areas.length ? (locale === "th" ? "ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ" : "Try a different search or status filter.") : t.operationalData} />}
-  </section>;
+  return (
+    <section aria-label={t.liveOperations}>
+      <div className="section-heading">
+        <div>
+          <h2>{t.liveOperations}</h2>
+          <p>
+            {filteredAreas.length}/{areas.length} {t.areas}
+            {updatedAt ? ` · ${formatUpdatedAt(updatedAt, locale)}` : ""}
+          </p>
+        </div>
+        <div className="inline-actions">
+          {role === "admin" ? (
+            <Link className="text-link" href={`/${locale}/admin/parking-areas`}>
+              {t.areas}
+            </Link>
+          ) : null}
+          <button className="secondary-button small-button" type="button" onClick={onRefresh} disabled={refreshing}>
+            <RefreshCw size={14} className={refreshing ? "spin" : undefined} />
+            {t.refreshAvailability}
+          </button>
+        </div>
+      </div>
+
+      {/* Main Operational Switcher Tabs */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", margin: "16px 0 20px" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className={`filter-chip ${activeOpsTab === "areas" ? "active" : ""}`}
+            onClick={() => onTabChange("areas")}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 24, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <MapPinned size={16} />
+            <span>{isTh ? "ผังพื้นที่และช่องจอด" : "Parking Areas"}</span>
+            <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 10, background: activeOpsTab === "areas" ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.06)" }}>
+              {areas.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${activeOpsTab === "reserved" ? "active" : ""}`}
+            onClick={() => onTabChange("reserved")}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 24, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <QrCode size={16} />
+            <span>{isTh ? "รายการจองที่ต้องดูแล" : "Active Reservations"}</span>
+            <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 10, background: "#fef3c7", color: "#b45309", fontWeight: 700 }}>
+              {reservedBookings.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`filter-chip ${activeOpsTab === "occupied" ? "active" : ""}`}
+            onClick={() => onTabChange("occupied")}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 24, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            <Car size={16} />
+            <span>{isTh ? "รถที่กำลังจอดอยู่" : "Parked Vehicles"}</span>
+            <span style={{ fontSize: 11, padding: "1px 7px", borderRadius: 10, background: "#dcfce7", color: "#15803d", fontWeight: 700 }}>
+              {occupiedBookings.length}
+            </span>
+          </button>
+        </div>
+
+        {role === "admin" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Link
+              href={`/${locale}/admin/parking-areas`}
+              className="secondary-button small-button"
+              style={{ textDecoration: "none" }}
+            >
+              <MapPin size={14} />
+              <span>{isTh ? "จัดการพื้นที่ (Area Manager)" : "Manage Areas"}</span>
+            </Link>
+            <Link
+              href={`/${locale}/admin/bookings`}
+              className="secondary-button small-button"
+              style={{ textDecoration: "none" }}
+            >
+              <Calendar size={14} />
+              <span>{isTh ? "จัดการการจองทั้งหมด" : "All Bookings"}</span>
+            </Link>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Tab 1: Parking Areas */}
+      {activeOpsTab === "areas" ? (
+        <>
+          <div className="user-search-box">
+            <Search size={16} />
+            <input
+              aria-label={isTh ? "ค้นหาพื้นที่ปฏิบัติการ" : "Search operational areas"}
+              placeholder={isTh ? "ค้นหารหัสหรือชื่อพื้นที่ เช่น P01, สาธิต" : "Search area code or name"}
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+            />
+          </div>
+          <div className="chip-row" aria-label={isTh ? "กรองสถานะพื้นที่" : "Filter area status"}>
+            {filters.map(([key, label]) => (
+              <button
+                className={`filter-chip ${filter === key ? "active" : ""}`}
+                key={key}
+                type="button"
+                aria-pressed={filter === key}
+                onClick={() => onFilterChange(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {errors.areas || errors.capacity ? (
+            <div className="form-note" role="alert">
+              {unavailable}{" "}
+              <button className="text-link" type="button" onClick={onRefresh}>
+                {isTh ? "ลองใหม่" : "Retry"}
+              </button>
+            </div>
+          ) : null}
+          {loading && !areas.length ? (
+            <ConsoleZeroState
+              icon={LoaderCircle}
+              title={isTh ? "กำลังโหลดข้อมูลสด" : "Loading live data"}
+              detail={t.operationalData}
+              spinning
+            />
+          ) : filteredAreas.length ? (
+            <div className="ops-grid" style={{ marginTop: 18 }}>
+              {filteredAreas.map((area) => {
+                const summary = summaries[area.code.toUpperCase()];
+                const status = areaStatus(area, summary);
+                const areaName = isTh ? area.name_th : area.name_en;
+                const capacity = summary?.total
+                  ? `${summary.available}/${summary.total} ${t.available} (จอง ${summary.reserved} · จอด ${summary.occupied})`
+                  : area.capacity != null
+                    ? `${area.capacity.toLocaleString(locale === "th" ? "th-TH" : "en-US")} ${isTh ? "ช่องตามข้อมูลพื้นที่" : "area capacity"}`
+                    : isTh ? "ไม่มีข้อมูลจำนวนช่อง" : "No slot count";
+                return (
+                  <Link className="ops-card" href={`/${locale}/parking/${area.code.toLowerCase()}`} key={area.id}>
+                    <header>
+                      <strong>{area.code}</strong>
+                      <StatusBadge status={status} locale={locale} />
+                    </header>
+                    <p>
+                      {areaName}
+                      <br />
+                      {capacity}
+                    </p>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <ConsoleZeroState
+              icon={Search}
+              title={areas.length ? t.noResults : t.noRecords}
+              detail={areas.length ? (isTh ? "ลองเปลี่ยนคำค้นหาหรือตัวกรองสถานะ" : "Try a different search or status filter.") : t.operationalData}
+            />
+          )}
+        </>
+      ) : null}
+
+      {/* Tab 2: Active Reservations */}
+      {activeOpsTab === "reserved" ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+                {isTh ? "รายการจองที่ต้องดูแล (จองแล้ว)" : "Active Reservations (Reserved)"}
+              </h3>
+              <p className="page-subtitle" style={{ margin: "2px 0 0" }}>
+                {isTh
+                  ? `พบ ${reservedBookings.length} รายการจองที่รอการเข้าจอดหรือยืนยันสิทธิ์หน้างาน`
+                  : `${reservedBookings.length} reservations waiting for entry verification`}
+              </p>
+            </div>
+          </div>
+
+          {loadingBookings && !reservedBookings.length ? (
+            <ConsoleZeroState
+              icon={LoaderCircle}
+              title={isTh ? "กำลังโหลดรายการจอง…" : "Loading reservations…"}
+              detail={t.operationalData}
+              spinning
+            />
+          ) : reservedBookings.length === 0 ? (
+            <div className="empty-card">
+              <div>
+                <CheckCircle2 size={32} color="#16a34a" />
+                <h2>{isTh ? "ไม่มีรายการจองที่ค้างอยู่" : "No Pending Reservations"}</h2>
+                <p className="page-subtitle">
+                  {isTh ? "ยังไม่มีรายการจองใหม่ที่รอการเข้าจอดในขณะนี้" : "All reservations have been processed or checked in."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {reservedBookings.map((b) => {
+                const plate = b.vehicle_snapshot?.plate || b.vehicle_snapshot?.plate_number || (isTh ? "ไม่ระบุทะเบียน" : "No Plate");
+                const areaTitle = b.parking_areas?.code ? `${b.parking_areas.code} · ${isTh ? b.parking_areas.name_th : (b.parking_areas.name_en || b.parking_areas.name_th)}` : (isTh ? "พื้นที่ไม่ระบุ" : "Unspecified");
+                const slotLabel = b.parking_slots?.slot_code || (isTh ? "ไม่ระบุช่อง" : "General");
+                const customerName = b.profiles?.full_name || b.profiles?.email || (isTh ? "ผู้ใช้ระบบ" : "Customer");
+                const timeWindow = `${new Date(b.starts_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })} - ${new Date(b.ends_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })} น.`;
+
+                return (
+                  <article
+                    key={b.id}
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 16,
+                      padding: "16px 20px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 12px",
+                            borderRadius: 8,
+                            background: "#0f172a",
+                            color: "#f8fafc",
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: 15,
+                            border: "1.5px solid #334155",
+                          }}
+                        >
+                          <Car size={16} />
+                          <span>{plate}</span>
+                        </span>
+                        <strong style={{ fontSize: 14, color: "var(--foreground)" }}>{b.reference}</strong>
+                      </div>
+                      <span className={`booking-status ${b.status.toLowerCase()}`}>{b.status}</span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, fontSize: 13, color: "var(--muted)" }}>
+                      <div>
+                        <span>{isTh ? "พื้นที่: " : "Area: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{areaTitle}</strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "ช่องจอด: " : "Slot: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{slotLabel}</strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "เวลา: " : "Time: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{timeWindow}</strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "ผู้จอง: " : "User: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{customerName}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+                      <button
+                        type="button"
+                        className="secondary-button small-button"
+                        onClick={() => onSelectBooking(b)}
+                      >
+                        <Search size={14} />
+                        <span>{isTh ? "ตรวจสอบ / ดู QR" : "Inspect / QR"}</span>
+                      </button>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="secondary-button small-button"
+                          onClick={() => void onCancelOrNoShow(b.id, "NO_SHOW")}
+                          disabled={transitioningId === b.id}
+                        >
+                          <span>{isTh ? "ไม่มาตามนัด" : "No-Show"}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="primary-button small-button"
+                          onClick={() => void onCheckIn(b.id)}
+                          disabled={transitioningId === b.id}
+                          style={{ background: "#15803d", borderColor: "#15803d", color: "#fff" }}
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>{isTh ? "เช็คอินเข้าจอด" : "Check-in"}</span>
+                        </button>
+                        {role === "admin" ? (
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            onClick={() => void onDeleteBooking(b.id, b.reference)}
+                            disabled={transitioningId === b.id}
+                            title={isTh ? "ลบรายการจอง" : "Delete booking"}
+                            style={{ width: 32, height: 32 }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Tab 3: Parked Vehicles */}
+      {activeOpsTab === "occupied" ? (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+                {isTh ? "รถที่กำลังจอดอยู่ (กำลังใช้งาน)" : "Currently Parked Vehicles (Occupied)"}
+              </h3>
+              <p className="page-subtitle" style={{ margin: "2px 0 0" }}>
+                {isTh
+                  ? `พบ ${occupiedBookings.length} คันที่เช็คอินเข้าจอดแล้ว ตรวจสอบระยะเวลาและยืนยันการออก`
+                  : `${occupiedBookings.length} vehicles currently parked on premises`}
+              </p>
+            </div>
+          </div>
+
+          {loadingBookings && !occupiedBookings.length ? (
+            <ConsoleZeroState
+              icon={LoaderCircle}
+              title={isTh ? "กำลังโหลดข้อมูลรถที่จอด…" : "Loading parked vehicles…"}
+              detail={t.operationalData}
+              spinning
+            />
+          ) : occupiedBookings.length === 0 ? (
+            <div className="empty-card">
+              <div>
+                <Car size={32} color="#64748b" />
+                <h2>{isTh ? "ไม่มีรถจอดอยู่ในระบบขณะนี้" : "No Parked Vehicles"}</h2>
+                <p className="page-subtitle">
+                  {isTh ? "ยังไม่มียานพาหนะใดเช็คอินเข้าพื้นที่ในขณะนี้" : "All slots are clear."}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {occupiedBookings.map((b) => {
+                const plate = b.vehicle_snapshot?.plate || b.vehicle_snapshot?.plate_number || (isTh ? "ไม่ระบุทะเบียน" : "No Plate");
+                const areaTitle = b.parking_areas?.code ? `${b.parking_areas.code} · ${isTh ? b.parking_areas.name_th : (b.parking_areas.name_en || b.parking_areas.name_th)}` : (isTh ? "พื้นที่ไม่ระบุ" : "Unspecified");
+                const slotLabel = b.parking_slots?.slot_code || (isTh ? "ไม่ระบุช่อง" : "General");
+                const customerName = b.profiles?.full_name || b.profiles?.email || (isTh ? "ผู้ใช้ระบบ" : "Customer");
+                const isOverstay = b.status === "OVERSTAY" || new Date().getTime() > new Date(b.ends_at).getTime();
+
+                return (
+                  <article
+                    key={b.id}
+                    style={{
+                      background: "var(--surface)",
+                      border: isOverstay ? "1.5px solid #ef4444" : "1px solid var(--line)",
+                      borderRadius: 16,
+                      padding: "16px 20px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            padding: "4px 12px",
+                            borderRadius: 8,
+                            background: "#0f172a",
+                            color: "#f8fafc",
+                            fontFamily: "monospace",
+                            fontWeight: 700,
+                            fontSize: 15,
+                            border: "1.5px solid #334155",
+                          }}
+                        >
+                          <Car size={16} />
+                          <span>{plate}</span>
+                        </span>
+                        <strong style={{ fontSize: 14, color: "var(--foreground)" }}>{b.reference}</strong>
+                      </div>
+                      <span className={`booking-status ${isOverstay ? "overstay" : "checked_in"}`}>
+                        {isOverstay ? (isTh ? "เลยเวลาจอด" : "OVERSTAY") : (isTh ? "กำลังจอด" : "CHECKED_IN")}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, fontSize: 13, color: "var(--muted)" }}>
+                      <div>
+                        <span>{isTh ? "จอดที่: " : "Location: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{areaTitle}</strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "ช่องจอด: " : "Slot: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{slotLabel}</strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "กำหนดออก: " : "Exit by: "}</span>
+                        <strong style={{ color: isOverstay ? "#ef4444" : "var(--foreground)" }}>
+                          {new Date(b.ends_at).toLocaleTimeString(locale === "th" ? "th-TH" : "en-US", { hour: "2-digit", minute: "2-digit" })} น.
+                        </strong>
+                      </div>
+                      <div>
+                        <span>{isTh ? "ผู้ขับขี่: " : "Driver: "}</span>
+                        <strong style={{ color: "var(--foreground)" }}>{customerName}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
+                      <button
+                        type="button"
+                        className="secondary-button small-button"
+                        onClick={() => onSelectBooking(b)}
+                      >
+                        <Search size={14} />
+                        <span>{isTh ? "ตรวจสอบ" : "Inspect"}</span>
+                      </button>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Link
+                          href={`/${locale}/${role}/incidents?area=${b.parking_areas?.code || ""}`}
+                          className="secondary-button small-button"
+                          style={{ textDecoration: "none" }}
+                        >
+                          <AlertTriangle size={14} />
+                          <span>{isTh ? "แจ้งเหตุการณ์" : "Report"}</span>
+                        </Link>
+                        <button
+                          type="button"
+                          className="primary-button small-button"
+                          onClick={() => void onCheckOut(b.id)}
+                          disabled={transitioningId === b.id}
+                          style={{ background: "#2563eb", borderColor: "#2563eb", color: "#fff" }}
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>{isTh ? "ยืนยันออก / เช็คเอาท์" : "Confirm Exit"}</span>
+                        </button>
+                        {role === "admin" ? (
+                          <button
+                            type="button"
+                            className="icon-button danger"
+                            onClick={() => void onDeleteBooking(b.id, b.reference)}
+                            disabled={transitioningId === b.id}
+                            title={isTh ? "ลบรายการจอง" : "Delete booking"}
+                            style={{ width: 32, height: 32 }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
-function StaffOverview({ locale, totals, incidentCount, errors, loading }: { locale: Locale; totals: LiveSummary; incidentCount: number | null; errors: LoadErrors; loading: boolean }) {
+function StaffOverview({
+  locale,
+  role,
+  totals,
+  incidentCount,
+  errors,
+  loading,
+}: {
+  locale: Locale;
+  role: ConsoleRole;
+  totals: LiveSummary;
+  incidentCount: number | null;
+  errors: LoadErrors;
+  loading: boolean;
+}) {
   const t = getCopy(locale);
-  const unavailable = locale === "th" ? "ไม่พร้อมใช้งาน" : "Unavailable";
-  const checking = locale === "th" ? "กำลังตรวจสอบ…" : "Checking…";
-  const count = (value: number, hasError: boolean) => hasError ? unavailable : loading ? checking : value.toLocaleString(locale === "th" ? "th-TH" : "en-US");
+  const isTh = locale === "th";
+  const unavailable = isTh ? "ไม่พร้อมใช้งาน" : "Unavailable";
+  const checking = isTh ? "กำลังตรวจสอบ…" : "Checking…";
+  const count = (value: number, hasError: boolean) =>
+    hasError ? unavailable : loading ? checking : value.toLocaleString(locale === "th" ? "th-TH" : "en-US");
 
-  return <>
-    <div className="info-card" style={{ padding: 20, marginTop: 24 }}><h2 style={{ margin: 0, fontSize: 19 }}>{t.scanQr}</h2><p className="page-subtitle">{locale === "th" ? "สแกน QR แล้วตรวจสอบรถก่อนยืนยัน Check-in" : "Scan a QR, verify the vehicle, then confirm Check-in."}</p><Link className="primary-button" style={{ marginTop: 16 }} href={`/${locale}/staff/scan`}><QrCode size={16} />{t.scanQr}</Link></div>
-    <div className="status-list" aria-live="polite">
-      <div className="status-list-row"><span>{t.reserved}</span><strong>{count(totals.reserved, Boolean(errors.capacity))}</strong></div>
-      <div className="status-list-row"><span>{t.occupied}</span><strong>{count(totals.occupied, Boolean(errors.capacity))}</strong></div>
-      <div className="status-list-row"><span>{t.incidents}</span><strong>{errors.incidents ? unavailable : incidentCount == null ? checking : incidentCount.toLocaleString(locale === "th" ? "th-TH" : "en-US")}</strong></div>
-    </div>
-  </>;
+  return (
+    <>
+      <div className="info-card" style={{ padding: 20, marginTop: 24 }}>
+        <h2 style={{ margin: 0, fontSize: 19 }}>{t.scanQr}</h2>
+        <p className="page-subtitle">
+          {isTh
+            ? "สแกน QR แล้วตรวจสอบรถก่อนยืนยัน Check-in หรือ Check-out ออกจากพื้นที่"
+            : "Scan a QR pass to verify and confirm vehicle Check-in or Check-out."}
+        </p>
+        <Link className="primary-button" style={{ marginTop: 16 }} href={`/${locale}/staff/scan`}>
+          <QrCode size={16} />
+          {t.scanQr}
+        </Link>
+      </div>
+
+      <div style={{ marginTop: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>
+            {isTh ? "สรุปปฏิบัติการเร่งด่วนประจำวัน" : "Daily Operational Summary"}
+          </h3>
+          <Link href={`/${locale}/${role}/operations`} className="text-link" style={{ fontSize: 13 }}>
+            {isTh ? "ดูคอนโซลปฏิบัติการเต็มรูปแบบ →" : "Full Operations Console →"}
+          </Link>
+        </div>
+
+        <div className="status-list" aria-live="polite">
+          <Link
+            href={`/${locale}/${role}/operations?filter=reserved`}
+            className="status-list-row"
+            style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <QrCode size={15} color="#d97706" />
+              <span>{t.reserved} (จองแล้ว)</span>
+            </span>
+            <strong style={{ color: "#d97706" }}>
+              {count(totals.reserved, Boolean(errors.capacity))} รายการ →
+            </strong>
+          </Link>
+          <Link
+            href={`/${locale}/${role}/operations?filter=occupied`}
+            className="status-list-row"
+            style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Car size={15} color="#16a34a" />
+              <span>{t.occupied} (กำลังใช้งาน)</span>
+            </span>
+            <strong style={{ color: "#16a34a" }}>
+              {count(totals.occupied, Boolean(errors.capacity))} คัน →
+            </strong>
+          </Link>
+          <Link
+            href={`/${locale}/${role}/incidents`}
+            className="status-list-row"
+            style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <AlertTriangle size={15} color="#ef4444" />
+              <span>{t.incidents} (เหตุการณ์ที่ยังไม่ปิด)</span>
+            </span>
+            <strong style={{ color: "#ef4444" }}>
+              {errors.incidents ? unavailable : incidentCount == null ? checking : incidentCount.toLocaleString(isTh ? "th-TH" : "en-US")} เรื่อง →
+            </strong>
+          </Link>
+        </div>
+      </div>
+    </>
+  );
 }
 
 function SystemHealth({ locale, role, health, areaCount, errorCount, errors }: { locale: Locale; role: ConsoleRole; health: HealthSnapshot; areaCount: number | null; errorCount: number | null; errors: LoadErrors }) {

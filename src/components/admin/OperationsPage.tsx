@@ -79,7 +79,13 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
     isTeam ||
     isIncidents;
 
-  const consoleView: ConsoleView = hasDedicatedSection ? "summary" : role === "admin" ? "operations" : "staff";
+  const consoleView: ConsoleView = hasDedicatedSection
+    ? "summary"
+    : section === "operations"
+      ? "operations"
+      : role === "admin"
+        ? "operations"
+        : "staff";
   const dashboardLink = `/${locale}/${role}/dashboard`;
   const dashboardLabel = t.dashboard;
 
