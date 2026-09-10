@@ -85,7 +85,7 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
           : isTraces ? <TraceExplorer locale={locale} role={role === "admin" ? "admin" : "developer"} />
           : isFeatureFlags ? <FeatureFlagsManager locale={locale} role={role === "admin" ? "admin" : "developer"} />
           : isFeedbackReview || isDeveloperReview ? <FeedbackReview locale={locale} role={role === "admin" ? "admin" : "developer"} includeErrors={role === "developer" && section === "errors"} />
-          : role === "staff" && section === "scan" ? <StaffScanner locale={locale} />
+          : role === "staff" && section === "scan" ? <StaffScanner locale={locale} role={role} />
           : role === "staff" && section === "incidents" ? <IncidentForm locale={locale} />
           : null}
       </RoleGate>

@@ -6,7 +6,6 @@ import { ArrowLeft, Building2, Clock3, ExternalLink, Navigation, ParkingSquare, 
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { getGoogleMapsNavigationUrl, officialSource, parkingAreas, type ParkingArea } from "@/lib/parking/demo-data";
-import { MockupNotice } from "@/components/parking/MockupNotice";
 import { InteractiveCampusMap } from "@/components/map/InteractiveCampusMap";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { LiveAreaStatus } from "@/components/parking/LiveAreaStatus";
@@ -53,9 +52,8 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
         <main className="detail-content">
           <div className="detail-title-row"><div><h1>{title}<span>{locale === "th" ? area.en : area.th}</span></h1></div><LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} /></div>
           <div className="inline-actions" style={{ marginTop: 13 }}><span className="data-badge"><ShieldCheck size={12} /> {t.officialMap}</span><span className="mockup-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span><span className="data-badge">{verifiedPoint ? t.coordinateVerified : t.coordinateSearchFallback}</span></div>
-          {area.estimatedCapacity ? <MockupNotice locale={locale} compact /> : null}
           <div className="stat-grid">
-            <div className="stat-card"><strong>{area.estimatedCapacity ?? "—"}</strong><span>{t.estimatedCapacity}<br />{area.estimatedCapacity ? t.sampleData : t.notVerified}</span></div>
+            <div className="stat-card"><strong>{area.estimatedCapacity ?? "—"}</strong><span>{t.estimatedCapacity}<br />{area.estimatedCapacity ? (locale === "th" ? "ที่จอดรถ" : "Capacity") : t.notVerified}</span></div>
             <div className="stat-card"><strong>—</strong><span>{t.bookings}<br />{t.operationalData}</span></div>
             <div className="stat-card"><strong>—</strong><span>{t.occupied}<br />{t.operationalData}</span></div>
           </div>
@@ -67,7 +65,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
           {tab === "overview" ? <>
             <p className="page-subtitle" style={{ marginTop: 18 }}>{detail}</p>
             <ul className="detail-list">
-              <li><Building2 size={16} />{t.officialMap} · {t.realDataNote}</li>
+              <li><Building2 size={16} />{t.officialMap} · {locale === "th" ? "มหาวิทยาลัยมหาสารคาม" : "Mahasarakham University"}</li>
               <li><Clock3 size={16} />{t.operatingHours}: {t.notVerified}</li>
               <li><ParkingSquare size={16} />{t.vehicleTypes}: {t.notVerified}</li>
             </ul>

@@ -3,7 +3,6 @@ import { MapPin, Navigation, SlidersHorizontal } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { MockupNotice } from "@/components/parking/MockupNotice";
 import { ParkingCard } from "@/components/parking/ParkingCard";
 import { SearchCombobox } from "@/components/parking/SearchCombobox";
 import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
@@ -47,7 +46,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 
           <div className="location-strip" style={{ marginTop: 16 }}>
             <span className="location-icon"><MapPin size={20} /></span>
-            <span className="location-copy"><strong>Mahasarakham University</strong><span>MSU campus · {t.realDataNote}</span></span>
+            <span className="location-copy"><strong>Mahasarakham University</strong><span>MSU Campus · {locale === "th" ? "เขตพื้นที่ขามเรียง" : "Khamriang Campus"}</span></span>
             <Navigation size={17} color="#89919b" style={{ marginLeft: "auto" }} />
           </div>
 
@@ -60,7 +59,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             {parkingAreas.slice(0, 3).map((area) => <ParkingCard area={area} locale={locale} key={area.id} />)}
           </div>
 
-          <MockupNotice locale={locale} />
           <PublicFooter locale={locale} />
         </main>
       </div>

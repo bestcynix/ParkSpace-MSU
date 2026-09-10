@@ -227,6 +227,8 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
   const [selectedTrace, setSelectedTrace] = useState<TraceItem | null>(null);
   const [copiedTraceId, setCopiedTraceId] = useState<string | null>(null);
   const [sourceNote, setSourceNote] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const TRACES_PER_PAGE = 10;
 
   const loadTraces = useCallback(
     async (isManualRefresh = false) => {
@@ -381,6 +383,12 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
     });
   }, [traces, statusFilter, query]);
 
+  const totalTracePages = Math.max(1, Math.ceil(filteredTraces.length / TRACES_PER_PAGE));
+  const paginatedTraces = useMemo(() => {
+    const start = (page - 1) * TRACES_PER_PAGE;
+    return filteredTraces.slice(start, start + TRACES_PER_PAGE);
+  }, [filteredTraces, page]);
+
   const statusCounts = useMemo(() => {
     return {
       ALL: traces.length,
@@ -427,7 +435,7 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
               }}
               title={locale === "th" ? `จำนวน Trace: ${filteredTraces.length}` : `Trace count: ${filteredTraces.length}`}
             >
-              {`< ${filteredTraces.length} >`}
+              {filteredTraces.length} {locale === "th" ? "รายการ" : "traces"}
             </span>
           </div>
           <p className="page-subtitle">
@@ -506,14 +514,14 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
               <span
                 className="font-mono"
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   opacity: 0.9,
-                  padding: "1px 5px",
+                  padding: "1px 6px",
                   borderRadius: 4,
                   background: isSelected ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.05)",
                 }}
               >
-                {`< ${count} >`}
+                ({count})
               </span>
             </button>
           );
@@ -541,15 +549,18 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                 : `Filter by Trace ID, action, actor, or route (${filteredTraces.length} matches)...`
             }
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
           />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="data-badge font-mono" style={{ padding: "6px 12px", fontSize: 11 }}>
             {filteredTraces.length === traces.length
-              ? `< ${traces.length} traces >`
-              : `< ${filteredTraces.length} / ${traces.length} traces >`}
+              ? `${traces.length} traces`
+              : `${filteredTraces.length} / ${traces.length} traces`}
           </span>
           {query && (
             <button
@@ -619,7 +630,7 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
                 </tr>
               </thead>
               <tbody>
-                {filteredTraces.map((trace) => {
+                {paginatedTraces.map((trace) => {
                   const statusColor = getStatusColor(trace.result);
                   const latencyColor = getLatencyColor(trace.duration_ms);
 
@@ -714,6 +725,39 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
               </tbody>
             </table>
           </div>
+          {totalTracePages > 1 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderTop: "1px solid var(--line)",
+                background: "var(--surface-header, #f8f9fa)",
+              }}
+            >
+              <button
+                className="secondary-button small-button"
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                &lt;
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {locale === "th" ? `หน้า ${page} / ${totalTracePages}` : `Page ${page} of ${totalTracePages}`} ({filteredTraces.length} {locale === "th" ? "รายการ" : "traces"})
+              </span>
+              <button
+                className="secondary-button small-button"
+                type="button"
+                disabled={page >= totalTracePages}
+                onClick={() => setPage((p) => Math.min(totalTracePages, p + 1))}
+              >
+                &gt;
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="empty-card compact-empty" style={{ marginTop: 24 }}>

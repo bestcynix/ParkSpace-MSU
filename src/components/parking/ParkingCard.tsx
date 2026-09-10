@@ -26,7 +26,6 @@ export function ParkingCard({ area, locale, liveSummary = null }: { area: Parkin
         {area.estimatedCapacity ? <div className="parking-detail-line">{t.estimatedCapacity}: {area.estimatedCapacity} {locale === "th" ? "คัน" : "vehicles"}</div> : null}
         <div className="inline-actions" style={{ marginTop: 10 }}>
           <span className="data-badge">{t.officialMap}</span>
-          {area.estimatedCapacity ? <span className="mockup-badge">{t.sampleData}</span> : null}
         </div>
         <div className="card-actions">
           <Link className="secondary-button small-button" href={`/${locale}/parking/${area.id}`}>{t.details}</Link>

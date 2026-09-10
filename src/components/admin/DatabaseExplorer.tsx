@@ -309,6 +309,8 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "schema">("table");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const ROWS_PER_PAGE = 15;
 
   const activeMeta = TABLE_DEFINITIONS[selectedTable];
 
@@ -420,6 +422,12 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
     );
   }, [rows, query]);
 
+  const totalDbPages = Math.max(1, Math.ceil(filteredRows.length / ROWS_PER_PAGE));
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * ROWS_PER_PAGE;
+    return filteredRows.slice(start, start + ROWS_PER_PAGE);
+  }, [filteredRows, page]);
+
   const copyToClipboard = (text: string, key = "global") => {
     void navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -447,7 +455,7 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
               }}
               title={locale === "th" ? `จำนวนเรคคอร์ด: ${currentCount}` : `Record count: ${currentCount}`}
             >
-              {`< ${currentCount} >`}
+              {currentCount} {locale === "th" ? "เรคคอร์ด" : "records"}
             </span>
           </div>
           <p className="page-subtitle">
@@ -486,7 +494,7 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
         </div>
       </div>
 
-      {/* Table Selector Tabs / Chip Row with < N > count badges */}
+      {/* Table Selector Tabs / Chip Row with count badges */}
       <div
         className="chip-row"
         style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 6, marginTop: 16 }}
@@ -496,7 +504,7 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
         {TABLE_NAMES.map((tableName) => {
           const isSelected = selectedTable === tableName;
           const count = tableCounts[tableName];
-          const badgeValue = count == null ? "…" : `< ${count} >`;
+          const badgeValue = count == null ? "…" : `(${count})`;
           return (
             <button
               className={`filter-chip ${isSelected ? "active" : ""}`}
@@ -507,6 +515,9 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
               onClick={() => {
                 setSelectedTable(tableName);
                 setQuery("");
+                setPage(1);
+                setSelectedRow(null);
+                void loadTableData(tableName, false);
               }}
               style={{
                 display: "inline-flex",
@@ -556,15 +567,18 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                 : `Filter ${selectedTable} rows (${filteredRows.length} matching)...`
             }
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
           />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="data-badge font-mono" style={{ padding: "6px 12px", fontSize: 11 }}>
             {filteredRows.length === rows.length
-              ? `< ${rows.length} rows >`
-              : `< ${filteredRows.length} / ${rows.length} rows >`}
+              ? `${rows.length} rows`
+              : `${filteredRows.length} / ${rows.length} rows`}
           </span>
           {query && (
             <button
@@ -728,8 +742,9 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                 </tr>
               </thead>
               <tbody>
-                {filteredRows.map((row, index) => {
+                {paginatedRows.map((row, index) => {
                   const pkValue = String(row[activeMeta.columns[0]?.name] ?? index);
+                  const displayIndex = (page - 1) * ROWS_PER_PAGE + index + 1;
                   return (
                     <tr
                       key={pkValue}
@@ -743,27 +758,26 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
                       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <td style={{ padding: "10px 14px", color: "var(--muted)", fontFamily: "monospace" }}>
-                        {index + 1}
+                        {displayIndex}
                       </td>
                       {activeMeta.columns.map((col) => {
-                        const raw = row[col.name];
-                        const displayVal = formatCellValue(raw);
-                        const isNull = raw === null || raw === undefined;
+                        const val = row[col.name];
+                        const isPk = col.isPk;
                         return (
                           <td
                             key={col.name}
                             style={{
                               padding: "10px 14px",
-                              maxWidth: 220,
+                              fontFamily: isPk || typeof val === "number" ? "monospace" : "inherit",
+                              fontWeight: isPk ? 700 : 400,
+                              color: isPk ? "var(--foreground)" : "inherit",
+                              maxWidth: 240,
                               overflow: "hidden",
                               textOverflow: "ellipsis",
                               whiteSpace: "nowrap",
-                              color: isNull ? "var(--muted)" : "inherit",
-                              fontFamily: col.name.includes("id") || col.name.includes("at") ? "monospace" : "inherit",
                             }}
-                            title={typeof raw === "object" ? JSON.stringify(raw) : String(raw ?? "—")}
                           >
-                            {displayVal}
+                            {formatCellValue(val)}
                           </td>
                         );
                       })}
@@ -786,6 +800,39 @@ export function DatabaseExplorer({ locale, role }: { locale: Locale; role: Explo
               </tbody>
             </table>
           </div>
+          {totalDbPages > 1 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 16px",
+                borderTop: "1px solid var(--line)",
+                background: "var(--surface-header, #f8f9fa)",
+              }}
+            >
+              <button
+                className="secondary-button small-button"
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                &lt;
+              </button>
+              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                {locale === "th" ? `หน้า ${page} / ${totalDbPages}` : `Page ${page} of ${totalDbPages}`} ({filteredRows.length} {locale === "th" ? "แถว" : "rows"})
+              </span>
+              <button
+                className="secondary-button small-button"
+                type="button"
+                disabled={page >= totalDbPages}
+                onClick={() => setPage((p) => Math.min(totalDbPages, p + 1))}
+              >
+                &gt;
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         /* Empty State */

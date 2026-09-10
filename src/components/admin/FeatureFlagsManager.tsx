@@ -313,7 +313,7 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
               }}
               title={locale === "th" ? `จำนวนฟีเจอร์: ${filteredFlags.length}` : `Flags count: ${filteredFlags.length}`}
             >
-              {`< ${filteredFlags.length} >`}
+              {filteredFlags.length} {locale === "th" ? "ฟีเจอร์" : "flags"}
             </span>
           </div>
           <p className="page-subtitle">
@@ -408,14 +408,14 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
               <span
                 className="font-mono"
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   opacity: 0.9,
-                  padding: "1px 5px",
+                  padding: "1px 6px",
                   borderRadius: 4,
                   background: isSelected ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.05)",
                 }}
               >
-                {`< ${count} >`}
+                ({count})
               </span>
             </button>
           );
@@ -450,8 +450,8 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span className="data-badge font-mono" style={{ padding: "6px 12px", fontSize: 11 }}>
             {filteredFlags.length === flags.length
-              ? `< ${flags.length} flags >`
-              : `< ${filteredFlags.length} / ${flags.length} flags >`}
+              ? `${flags.length} flags`
+              : `${filteredFlags.length} / ${flags.length} flags`}
           </span>
           {query && (
             <button

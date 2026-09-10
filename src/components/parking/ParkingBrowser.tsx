@@ -35,6 +35,8 @@ export function ParkingBrowser({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: number | undefined;
+
     async function loadLiveSummaries() {
       if (!isSupabaseConfigured()) {
         if (active) setLiveLoading(false);
@@ -70,8 +72,35 @@ export function ParkingBrowser({ locale }: { locale: Locale }) {
         if (active) setLiveLoading(false);
       }
     }
+
     void loadLiveSummaries();
-    return () => { active = false; };
+
+    if (!isSupabaseConfigured()) {
+      return () => {
+        active = false;
+      };
+    }
+
+    function scheduleRefresh() {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void loadLiveSummaries();
+      }, 400);
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`parking-browser-realtime-${Date.now()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_slots" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_areas" }, () => scheduleRefresh())
+      .subscribe();
+
+    return () => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
   }, [refreshKey, t.operationalData]);
 
   const filtered = useMemo(() => parkingAreas.filter((area) => {
@@ -100,7 +129,7 @@ export function ParkingBrowser({ locale }: { locale: Locale }) {
       <div className="chip-row" aria-label={locale === "th" ? "กรองสถานะพื้นที่จอดรถ" : "Filter parking area status"}>{filters.map(([key, label]) => <button className={`filter-chip ${filter === key ? "active" : ""}`} key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
       {liveLoading ? <div className="live-filter-note" role="status"><LoaderCircle size={15} className="spin" />{locale === "th" ? "กำลังอ่านสถานะพื้นที่จาก Supabase…" : "Reading live area status from Supabase…"}</div> : liveError ? <div className="live-filter-note warning" role="status"><Info size={15} /><span>{locale === "th" ? "ยังอ่านสถานะสดไม่ได้ จึงไม่แสดงผลกรองแบบเดา" : "Live status is unavailable, so status filters are not guessed."}</span><button className="text-link" type="button" onClick={() => setRefreshKey((value) => value + 1)}><RefreshCw size={12} />{locale === "th" ? "ลองใหม่" : "Retry"}</button></div> : <div className="live-filter-note" role="status"><Info size={15} />{locale === "th" ? "ตัวกรองสถานะอ่านจากช่องจอดและการจองจริงใน Supabase" : "Status filters read real slot and booking data from Supabase."}</div>}
       <div className="parking-grid" style={{ marginTop: 18 }}>{filtered.map((area) => <ParkingCard area={area} locale={locale} key={area.id} liveSummary={liveSummaries[area.code] ?? null} />)}</div>
-      {!liveLoading && !filtered.length ? <div className="empty-card"><div><div className="empty-icon"><Search size={25} /></div><h2>{t.noResults}</h2><p>{liveError ? (locale === "th" ? "ลองใหม่เมื่อเชื่อมต่อฐานข้อมูลได้" : "Try again when the database connection is available.") : t.realDataNote}</p></div></div> : null}
+      {!liveLoading && !filtered.length ? <div className="empty-card"><div><div className="empty-icon"><Search size={25} /></div><h2>{t.noResults}</h2><p>{liveError ? (locale === "th" ? "ลองใหม่เมื่อเชื่อมต่อฐานข้อมูลได้" : "Try again when the database connection is available.") : (locale === "th" ? "ไม่พบพื้นที่จอดรถที่ตรงกับเงื่อนไขการค้นหา" : "No parking areas match your search filter.")}</p></div></div> : null}
     </section>
   );
 }

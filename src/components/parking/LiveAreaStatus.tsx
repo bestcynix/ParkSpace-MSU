@@ -26,15 +26,29 @@ export function getLiveAreaStatus(summary: LiveAreaSummary, fallback: ParkingSta
   return "full";
 }
 
-export function LiveAreaStatus({ areaCode, locale, fallback = "unverified", summary = null }: { areaCode: string; locale: Locale; fallback?: ParkingStatus; summary?: LiveAreaSummary | null }) {
+export function LiveAreaStatus({
+  areaCode,
+  locale,
+  fallback = "unverified",
+  summary = null,
+}: {
+  areaCode: string;
+  locale: Locale;
+  fallback?: ParkingStatus;
+  summary?: LiveAreaSummary | null;
+}) {
   const t = getCopy(locale);
   const [status, setStatus] = useState<ParkingStatus>(summary ? getLiveAreaStatus(summary, fallback) : fallback);
   const [counts, setCounts] = useState<LiveAreaSummary | null>(summary);
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: number | undefined;
+
     if (summary) {
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }
 
     async function loadStatus() {
@@ -42,30 +56,93 @@ export function LiveAreaStatus({ areaCode, locale, fallback = "unverified", summ
       const startsAt = new Date();
       const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
       try {
-        const { data, error } = await createSupabaseBrowserClient().rpc("get_available_parking_slots", {
+        const supabase = createSupabaseBrowserClient();
+        const { data, error } = await supabase.rpc("get_available_parking_slots", {
           p_area_code: areaCode,
           p_starts_at: startsAt.toISOString(),
           p_ends_at: endsAt.toISOString(),
         });
         if (error) throw error;
         const rows = (data ?? []) as LiveSlotRow[];
-        const available = rows.filter((row) => row.availability === "AVAILABLE").length;
+
+        // Count base slot states
+        const rawAvailable = rows.filter((row) => row.availability === "AVAILABLE").length;
         const closed = rows.filter((row) => row.availability === "CLOSED").length;
         const occupied = rows.filter((row) => row.availability === "OCCUPIED").length;
-        const nextStatus: ParkingStatus = !rows.length ? fallback : closed === rows.length ? "closed" : available === 0 ? (occupied ? "occupied" : "full") : available < rows.length ? "reserved" : "available";
+        let reserved = rows.filter((row) => row.availability === "RESERVED").length;
+
+        // Also check if any area-level bookings (where slot is null) exist for this area
+        const { data: areaBookings } = await supabase
+          .from("bookings")
+          .select("id")
+          .is("parking_slot_id", null)
+          .in("status", ["CONFIRMED", "RESERVED", "CHECKED_IN"])
+          .gte("ends_at", startsAt.toISOString())
+          .lte("starts_at", endsAt.toISOString());
+
+        const unassignedCount = areaBookings?.length ?? 0;
+        const available = Math.max(0, rawAvailable - unassignedCount);
+        reserved += Math.min(rawAvailable, unassignedCount);
+
+        const nextStatus: ParkingStatus = !rows.length
+          ? fallback
+          : closed === rows.length
+          ? "closed"
+          : available === 0
+          ? (occupied ? "occupied" : "full")
+          : available < rows.length
+          ? "reserved"
+          : "available";
+
         if (active) {
           setStatus(nextStatus);
-          setCounts({ available, total: rows.length, reserved: rows.filter((row) => row.availability === "RESERVED").length, occupied, closed });
+          setCounts({ available, total: rows.length, reserved, occupied, closed });
         }
       } catch {
         // Keep the explicit fallback label if the public availability RPC is unavailable.
       }
     }
+
     void loadStatus();
-    return () => { active = false; };
+
+    if (!isSupabaseConfigured()) {
+      return () => {
+        active = false;
+      };
+    }
+
+    function scheduleRefresh() {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void loadStatus();
+      }, 400);
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`live-area-${areaCode}-${Date.now()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_slots" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_areas" }, () => scheduleRefresh())
+      .subscribe();
+
+    return () => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
   }, [areaCode, fallback, summary]);
 
   const displayStatus = summary ? getLiveAreaStatus(summary, fallback) : status;
   const displayCounts = summary ?? counts;
-  return <div className="live-area-status" aria-live="polite"><StatusBadge status={displayStatus} locale={locale} />{displayCounts ? <span title={`${t.reserved}: ${displayCounts.reserved} · ${t.occupied}: ${displayCounts.occupied} · ${t.closed}: ${displayCounts.closed}`}>{displayCounts.available}/{displayCounts.total} {t.available}</span> : null}</div>;
+  return (
+    <div className="live-area-status" aria-live="polite">
+      <StatusBadge status={displayStatus} locale={locale} />
+      {displayCounts ? (
+        <span title={`${t.reserved}: ${displayCounts.reserved} · ${t.occupied}: ${displayCounts.occupied} · ${t.closed}: ${displayCounts.closed}`}>
+          {displayCounts.available}/{displayCounts.total} {t.available}
+        </span>
+      ) : null}
+    </div>
+  );
 }
