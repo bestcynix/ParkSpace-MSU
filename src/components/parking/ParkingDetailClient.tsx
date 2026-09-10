@@ -23,6 +23,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
   });
   const [stats, setStats] = useState({
     capacity: area.estimatedCapacity ?? 100,
+    available: area.estimatedCapacity ?? 100,
     reserved: 0,
     occupied: 0,
   });
@@ -32,11 +33,38 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
 
   useEffect(() => {
     let active = true;
+    let refreshTimer: number | undefined;
+
     async function loadLiveArea() {
+      // 1. Fetch authoritative live capacity and occupancy
+      try {
+        const res = await fetch(`/api/parking/live-capacity?area=${encodeURIComponent(area.code)}`);
+        if (res.ok) {
+          const json = await res.json();
+          const areaStat = json.areaStats || json.summaries?.[area.code.toUpperCase()];
+          if (active && areaStat) {
+            setStats({
+              capacity: Number(areaStat.total) || (area.estimatedCapacity ?? 100),
+              available: Number(areaStat.available) || 0,
+              reserved: Number(areaStat.reserved) || 0,
+              occupied: Number(areaStat.occupied) || 0,
+            });
+          }
+        }
+      } catch {
+        // Safe fallback
+      }
+
+      // 2. Fetch area configuration (mode, coordinates)
       if (!isSupabaseConfigured()) return;
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data } = await supabase.from("parking_areas").select("id, slot_mode, latitude, longitude, capacity").eq("code", area.code).maybeSingle();
+        const { data } = await supabase
+          .from("parking_areas")
+          .select("id, slot_mode, latitude, longitude, capacity")
+          .eq("code", area.code)
+          .maybeSingle();
+
         if (active && (data?.slot_mode === "AREA_ONLY" || data?.slot_mode === "INDIVIDUAL_SLOT")) {
           setSlotMode(data.slot_mode);
         }
@@ -45,39 +73,39 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
         if (active && Number.isFinite(latitude) && Number.isFinite(longitude) && latitude > 0) {
           setVerifiedPoint({ latitude, longitude });
         }
-
-        const areaDbId = data?.id;
-        const totalCapacity = typeof data?.capacity === "number" && data.capacity > 0 ? data.capacity : (area.estimatedCapacity ?? 100);
-
-        if (areaDbId) {
-          const { count: reservedCount } = await supabase
-            .from("bookings")
-            .select("id", { count: "exact", head: true })
-            .eq("parking_area_id", areaDbId)
-            .in("status", ["CONFIRMED", "RESERVED", "CHECKED_IN"]);
-
-          const { count: occupiedCount } = await supabase
-            .from("bookings")
-            .select("id", { count: "exact", head: true })
-            .eq("parking_area_id", areaDbId)
-            .eq("status", "CHECKED_IN");
-
-          if (active) {
-            setStats({
-              capacity: totalCapacity,
-              reserved: reservedCount ?? 0,
-              occupied: occupiedCount ?? 0,
-            });
-          }
-        } else if (active) {
-          setStats((prev) => ({ ...prev, capacity: totalCapacity }));
-        }
       } catch {
         // Safe fallback to defaults
       }
     }
+
     void loadLiveArea();
-    return () => { active = false; };
+
+    if (!isSupabaseConfigured()) {
+      return () => {
+        active = false;
+      };
+    }
+
+    function scheduleRefresh() {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void loadLiveArea();
+      }, 400);
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel(`live-area-detail-${area.code}-${Date.now()}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_slots" }, () => scheduleRefresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_areas" }, () => scheduleRefresh())
+      .subscribe();
+
+    return () => {
+      active = false;
+      window.clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
   }, [area.code, area.estimatedCapacity]);
 
   const canShowSlotLayout = slotMode === "INDIVIDUAL_SLOT" || area.prototypeSlotGrid;
@@ -96,10 +124,23 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
             <span className="data-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span>
             <span className="data-badge"><Navigation size={12} /> {locale === "th" ? "พิกัดทางการ มมส." : "Official MSU GPS"}</span>
           </div>
-          <div className="stat-grid">
-            <div className="stat-card"><strong>{stats.capacity}</strong><span>{locale === "th" ? "ความจุทั้งหมด" : "Total Capacity"}<br />{locale === "th" ? "ช่องจอดมาตรฐาน" : "Standard Spaces"}</span></div>
-            <div className="stat-card"><strong>{stats.reserved}</strong><span>{locale === "th" ? "จองแล้ว" : "Active Bookings"}<br />{locale === "th" ? "ช่วงเวลานี้" : "Current Window"}</span></div>
-            <div className="stat-card"><strong>{stats.occupied}</strong><span>{locale === "th" ? "กำลังใช้งาน" : "In Use / Occupied"}<br />{locale === "th" ? "จอดอยู่ในพื้นที่" : "Parked Onsite"}</span></div>
+          <div className="stat-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
+            <div className="stat-card">
+              <strong>{stats.capacity}</strong>
+              <span>{locale === "th" ? "ความจุทั้งหมด" : "Total Capacity"}<br />{locale === "th" ? "ช่องจอดมาตรฐาน" : "Standard Spaces"}</span>
+            </div>
+            <div className="stat-card" style={{ borderColor: "rgba(22, 163, 74, 0.4)" }}>
+              <strong style={{ color: "#16a34a" }}>{stats.available}</strong>
+              <span>{locale === "th" ? "ว่างพร้อมจอด" : "Available Now"}<br />{locale === "th" ? "ช่องจอดว่างจริง" : "Ready to Park"}</span>
+            </div>
+            <div className="stat-card" style={{ borderColor: "rgba(217, 119, 6, 0.4)" }}>
+              <strong style={{ color: "#d97706" }}>{stats.reserved}</strong>
+              <span>{locale === "th" ? "จองแล้ว" : "Active Bookings"}<br />{locale === "th" ? "รอเข้าจอด" : "Current Window"}</span>
+            </div>
+            <div className="stat-card" style={{ borderColor: "rgba(37, 99, 235, 0.4)" }}>
+              <strong style={{ color: "#2563eb" }}>{stats.occupied}</strong>
+              <span>{locale === "th" ? "กำลังใช้งาน" : "In Use / Occupied"}<br />{locale === "th" ? "จอดอยู่ในพื้นที่" : "Parked Onsite"}</span>
+            </div>
           </div>
           <div className="tabs" role="tablist">
             {([["overview", t.overview], ["map", t.map], ["photos", t.photos], ["details", t.detailsTab]] as const).map(([key, label]) => <button className={tab === key ? "active" : ""} key={key} onClick={() => setTab(key)} role="tab" aria-selected={tab === key}>{label}</button>)}

@@ -120,6 +120,39 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
     }
     setLoading(true);
     try {
+      // 1. If viewing today's current operations, fetch from authoritative live capacity API
+      if (date === todayString()) {
+        try {
+          const res = await fetch(`/api/parking/live-capacity?area=${encodeURIComponent(area.code)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json.slots) && json.slots.length > 0) {
+              const liveSlots: ParkingSlot[] = json.slots.map((slot: {
+                id: string;
+                slot_code: string;
+                row_label: string;
+                position?: number;
+                slot_type?: string;
+                availability?: SlotAvailability;
+              }) => ({
+                id: slot.id,
+                slot_code: slot.slot_code,
+                row_label: slot.row_label,
+                position: slot.position ?? 0,
+                slot_type: slot.slot_type ?? "CAR",
+                availability: slot.availability ?? "AVAILABLE",
+              }));
+              setSlots(liveSlots);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Fallback to RPC
+        }
+      }
+
+      // 2. Query Supabase RPC for future/custom date-times
       const supabase = createSupabaseBrowserClient();
       const { data, error } = await supabase.rpc("get_available_parking_slots", {
         p_area_code: area.code,

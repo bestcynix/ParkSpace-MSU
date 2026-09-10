@@ -9,9 +9,29 @@ export type AreaLiveStats = {
   closed: number;
 };
 
+export type CapacityRow = {
+  row_label: string;
+  slot_type: string;
+  total_slots: number;
+  available_slots: number;
+  reserved_slots: number;
+  occupied_slots: number;
+  closed_slots: number;
+};
+
+export type SlotLiveItem = {
+  id: string;
+  slot_code: string;
+  row_label: string;
+  position: number;
+  slot_type: string;
+  availability: "AVAILABLE" | "RESERVED" | "OCCUPIED" | "CLOSED";
+};
+
 export async function GET(request: NextRequest) {
   try {
     const sysClient = await getSystemDatabaseClient();
+    const requestedArea = request.nextUrl.searchParams.get("area")?.trim().toUpperCase();
 
     // 1. Fetch parking areas
     const { data: areas, error: areaErr } = await sysClient
@@ -98,8 +118,82 @@ export async function GET(request: NextRequest) {
       globalClosed += cls;
     }
 
+    // 6. If a specific area was requested, compute live row-by-row breakdown and slot list
+    let targetRows: CapacityRow[] | null = null;
+    let targetSlots: SlotLiveItem[] | null = null;
+
+    if (requestedArea) {
+      const targetArea = (areas ?? []).find((a) => (a.code || "").toUpperCase() === requestedArea);
+      if (targetArea) {
+        const { data: areaSlots } = await sysClient
+          .from("parking_slots")
+          .select("id, slot_code, row_label, slot_type, status, position")
+          .eq("parking_area_id", targetArea.id)
+          .order("position");
+
+        const bookingBySlot: Record<string, string> = {};
+        for (const b of bookings ?? []) {
+          if (b.parking_slot_id) {
+            bookingBySlot[b.parking_slot_id] = String(b.status).toUpperCase();
+          }
+        }
+
+        const rowsMap: Record<string, CapacityRow> = {};
+        const slotList: SlotLiveItem[] = [];
+
+        for (const s of areaSlots ?? []) {
+          const rLabel = s.row_label || "A";
+          if (!rowsMap[rLabel]) {
+            rowsMap[rLabel] = {
+              row_label: rLabel,
+              slot_type: s.slot_type || "CAR",
+              total_slots: 0,
+              available_slots: 0,
+              reserved_slots: 0,
+              occupied_slots: 0,
+              closed_slots: 0,
+            };
+          }
+          const r = rowsMap[rLabel];
+          r.total_slots++;
+
+          const bStatus = bookingBySlot[s.id];
+          let availability: "AVAILABLE" | "RESERVED" | "OCCUPIED" | "CLOSED" = "AVAILABLE";
+
+          if (bStatus === "CHECKED_IN" || bStatus === "OVERSTAY") {
+            r.occupied_slots++;
+            availability = "OCCUPIED";
+          } else if (bStatus === "PENDING" || bStatus === "CONFIRMED" || bStatus === "RESERVED") {
+            r.reserved_slots++;
+            availability = "RESERVED";
+          } else if (s.status === "CLOSED" || targetArea.current_status === "CLOSED") {
+            r.closed_slots++;
+            availability = "CLOSED";
+          } else {
+            r.available_slots++;
+            availability = "AVAILABLE";
+          }
+
+          slotList.push({
+            id: s.id,
+            slot_code: s.slot_code,
+            row_label: rLabel,
+            position: s.position ?? 0,
+            slot_type: s.slot_type || "CAR",
+            availability,
+          });
+        }
+
+        targetRows = Object.values(rowsMap).sort((a, b) => a.row_label.localeCompare(b.row_label));
+        targetSlots = slotList;
+      }
+    }
+
     return NextResponse.json({
       success: true,
+      areaStats: requestedArea ? summaries[requestedArea] || null : null,
+      rows: targetRows,
+      slots: targetSlots,
       summaries,
       global: {
         total: globalTotal,
