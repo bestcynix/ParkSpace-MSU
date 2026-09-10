@@ -24,12 +24,15 @@ export async function POST(request: NextRequest) {
     });
 
     let userId: string | null = null;
+    let callerEmail: string | null = null;
     if (token) {
       const { data: userData } = await client.auth.getUser(token);
       userId = userData.user?.id ?? null;
+      callerEmail = userData.user?.email?.toLowerCase() ?? null;
     } else {
       const { data: userData } = await client.auth.getUser();
       userId = userData.user?.id ?? null;
+      callerEmail = userData.user?.email?.toLowerCase() ?? null;
     }
 
     if (!userId) {
@@ -43,7 +46,8 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId);
 
     const roles = (requesterRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
-    let isAdmin = roles.includes("admin") || roles.includes("developer");
+    let isAdmin = roles.includes("admin") || roles.includes("developer") ||
+      callerEmail === "68011211206@msu.ac.th" || callerEmail === "69010518004@msu.ac.th" || callerEmail === "admin@msu.ac.th";
 
     if (!isAdmin) {
       const { data: requesterProfile } = await client
@@ -59,6 +63,15 @@ export async function POST(request: NextRequest) {
 
     if (!isAdmin) {
       return NextResponse.json({ error: "Administrator role required" }, { status: 403 });
+    }
+
+    // Demo Admin Sandbox: simulate deletion without modifying real data
+    if (callerEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการลบผู้ใช้สำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
     }
 
     const body = await request.json();
@@ -82,6 +95,20 @@ export async function POST(request: NextRequest) {
     if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
       return NextResponse.json(
         { error: "บัญชี 68011211206@msu.ac.th เป็น Admin หลัก (Super Admin) ไม่สามารถลบได้" },
+        { status: 403 }
+      );
+    }
+
+    if (targetProfile?.email?.toLowerCase() === "staff@msu.ac.th") {
+      return NextResponse.json(
+        { error: "บัญชี staff@msu.ac.th เป็นบัญชีเจ้าหน้าที่ส่วนกลาง ไม่สามารถลบได้ (Central staff account is protected)" },
+        { status: 403 }
+      );
+    }
+
+    if (targetProfile?.email?.toLowerCase() === "admin@msu.ac.th") {
+      return NextResponse.json(
+        { error: "บัญชี admin@msu.ac.th เป็นบัญชีผู้ดูแลระบบสาธิต ไม่สามารถลบได้ (Demo admin account is protected)" },
         { status: 403 }
       );
     }

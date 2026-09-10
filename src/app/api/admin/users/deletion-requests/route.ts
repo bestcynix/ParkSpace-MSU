@@ -78,12 +78,15 @@ export async function POST(request: NextRequest) {
     });
 
     let userId: string | null = null;
+    let userEmail: string | null = null;
     if (token) {
       const { data } = await client.auth.getUser(token);
       userId = data.user?.id ?? null;
+      userEmail = data.user?.email?.toLowerCase() ?? null;
     } else {
       const { data } = await client.auth.getUser();
       userId = data.user?.id ?? null;
+      userEmail = data.user?.email?.toLowerCase() ?? null;
     }
 
     if (!userId) {
@@ -95,6 +98,12 @@ export async function POST(request: NextRequest) {
 
     // User requesting account deletion
     if (action === "request") {
+      if (userEmail === "staff@msu.ac.th" || userEmail === "admin@msu.ac.th" || userEmail === "68011211206@msu.ac.th") {
+        return NextResponse.json(
+          { error: "บัญชีระบบส่วนกลางได้รับการคุ้มครอง ไม่อนุญาตให้ขอลบบัญชี" },
+          { status: 403 }
+        );
+      }
       const { error } = await client
         .from("account_deletion_requests")
         .upsert(
@@ -154,22 +163,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (userEmail === "admin@msu.ac.th" || userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+      isAdmin = true;
+    }
+
     if (!isAdmin) {
       return NextResponse.json({ error: "Admin role required" }, { status: 403 });
+    }
+
+    // Demo Admin Sandbox: simulate approve/reject without modifying real data
+    if (userEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        status: action === "approve" ? "APPROVED" : "REJECTED",
+        message: "จำลองการดำเนินการคำขอลบสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
     }
 
     if (action === "approve") {
       const uid = targetUserId || request_id;
 
-      // Protect Primary Super Admin (68011211206@msu.ac.th)
+      // Protect Primary Super Admin and System Accounts
       const { data: targetProfile } = await client
         .from("profiles")
         .select("email")
         .eq("id", uid)
         .maybeSingle();
 
-      if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
-        return NextResponse.json({ error: "ไม่อนุญาตให้ลบบัญชี Admin หลัก (68011211206@msu.ac.th)" }, { status: 403 });
+      const targetEmail = targetProfile?.email?.toLowerCase();
+      if (targetEmail === "68011211206@msu.ac.th" || targetEmail === "staff@msu.ac.th" || targetEmail === "admin@msu.ac.th") {
+        return NextResponse.json({ error: "ไม่อนุญาตให้ลบบัญชีระบบส่วนกลางที่ได้รับการคุ้มครอง" }, { status: 403 });
       }
 
       // Mark deletion request as APPROVED

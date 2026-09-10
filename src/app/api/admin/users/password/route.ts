@@ -24,12 +24,15 @@ export async function POST(request: NextRequest) {
     });
 
     let userId: string | null = null;
+    let callerEmail: string | null = null;
     if (token) {
       const { data: userData } = await client.auth.getUser(token);
       userId = userData.user?.id ?? null;
+      callerEmail = userData.user?.email?.toLowerCase() ?? null;
     } else {
       const { data: userData } = await client.auth.getUser();
       userId = userData.user?.id ?? null;
+      callerEmail = userData.user?.email?.toLowerCase() ?? null;
     }
 
     if (!userId) {
@@ -43,7 +46,8 @@ export async function POST(request: NextRequest) {
       .eq("user_id", userId);
 
     const roles = (requesterRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
-    let isAdmin = roles.includes("admin") || roles.includes("developer");
+    let isAdmin = roles.includes("admin") || roles.includes("developer") ||
+      callerEmail === "68011211206@msu.ac.th" || callerEmail === "69010518004@msu.ac.th" || callerEmail === "admin@msu.ac.th";
 
     if (!isAdmin) {
       const { data: requesterProfile } = await client
@@ -61,11 +65,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Administrator role required" }, { status: 403 });
     }
 
+    // Demo Admin Sandbox: simulate password change without modifying real data
+    if (callerEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการจัดการรหัสผ่านสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
+    }
+
     const body = await request.json();
     const { target_user_id, action, password, email } = body;
 
     if (!target_user_id) {
       return NextResponse.json({ error: "Missing target_user_id" }, { status: 400 });
+    }
+
+    // Check if target is a protected account
+    const { data: targetProfile } = await client
+      .from("profiles")
+      .select("email")
+      .eq("id", target_user_id)
+      .maybeSingle();
+
+    const targetEmail = targetProfile?.email?.toLowerCase();
+    if (targetEmail === "68011211206@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ Admin หลัก (68011211206@msu.ac.th)" },
+        { status: 403 }
+      );
+    }
+    if (targetEmail === "staff@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ staff@msu.ac.th (รหัสผ่านคงที่คือ staff123)" },
+        { status: 403 }
+      );
+    }
+    if (targetEmail === "admin@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ admin@msu.ac.th (รหัสผ่านคงที่คือ admin123)" },
+        { status: 403 }
+      );
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;

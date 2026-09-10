@@ -39,9 +39,9 @@ export function RoleGate({ locale, role, children }: { locale: Locale; role: Pro
         let hasAccess = false;
 
         // Layer 1: Core MSU Super Admin / Admin / Staff email bypass
-        if (role === "admin" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th")) {
+        if (role === "admin" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "admin@msu.ac.th")) {
           hasAccess = true;
-        } else if (role === "staff" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "staff@msu.ac.th")) {
+        } else if (role === "staff" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "staff@msu.ac.th" || userEmail === "admin@msu.ac.th")) {
           hasAccess = true;
         }
 

@@ -5,6 +5,7 @@ import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { PublicFooter } from "@/components/layout/PublicFooter";
+import { AdminDemoBanner } from "@/components/admin/AdminDemoBanner";
 
 export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff"; children: React.ReactNode }) {
   const t = getCopy(locale);
@@ -53,7 +54,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
           </Link>
         </nav>
       </aside>
-      <main className="admin-main">{children}<PublicFooter locale={locale} /></main>
+      <main className="admin-main"><AdminDemoBanner locale={locale} />{children}<PublicFooter locale={locale} /></main>
     </div>
   );
 }

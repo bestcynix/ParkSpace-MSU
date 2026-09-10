@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     const userEmail = (user.email || "").toLowerCase().trim();
     let isAdmin = false;
 
-    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "admin@msu.ac.th") {
       isAdmin = true;
     } else {
       const { data: roleData } = await adminClient
@@ -166,8 +166,39 @@ export async function GET(request: NextRequest) {
   }
 }
 
+async function getCallerEmail(request: NextRequest): Promise<string | null> {
+  try {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) return null;
+    const client = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: { getAll: () => request.cookies.getAll(), setAll() {} },
+    });
+    if (token) {
+      const { data } = await client.auth.getUser(token);
+      if (data.user?.email) return data.user.email.toLowerCase().trim();
+    }
+    const { data } = await client.auth.getUser();
+    return data.user?.email?.toLowerCase().trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function PUT(request: NextRequest) {
   try {
+    const callerEmail = await getCallerEmail(request);
+
+    // Demo Admin Sandbox: simulate booking update without touching live data
+    if (callerEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการแก้ไขการจองสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
+    }
+
     const adminClient = await getSystemDatabaseClient();
 
     const body = await request.json();
@@ -230,6 +261,17 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const callerEmail = await getCallerEmail(request);
+
+    // Demo Admin Sandbox: simulate booking deletion without touching live data
+    if (callerEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการลบการจองสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
+    }
+
     const adminClient = await getSystemDatabaseClient();
 
     const body = await request.json();

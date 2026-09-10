@@ -59,7 +59,7 @@ export function RoleQuickActions({ locale }: { locale: Locale }) {
         }
 
         // Fallback 3: predefined emails
-        if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+        if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "admin@msu.ac.th") {
           if (!fetchedRoles.includes("admin")) fetchedRoles.push("admin");
         } else if (userEmail === "staff@msu.ac.th" || userEmail.startsWith("staff")) {
           if (!fetchedRoles.includes("staff")) fetchedRoles.push("staff");

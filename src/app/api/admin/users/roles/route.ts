@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Check if requester has admin role
     let isAdmin = false;
-    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "admin@msu.ac.th") {
       isAdmin = true;
     } else {
       const { data: requesterRoles } = await client
@@ -79,6 +79,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
+    // Demo Admin Sandbox: simulate role update without modifying real database
+    if (userEmail === "admin@msu.ac.th") {
+      const demoRole = requestedRoles.includes("admin") ? "admin" : requestedRoles.includes("staff") ? "staff" : "user";
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        user_id: target_user_id,
+        role: demoRole,
+        message: "จำลองการเปลี่ยนบทบาทสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
+    }
+
     // Service client bypassing RLS
     const adminClient = serviceRoleKey
       ? createClient(supabaseUrl, serviceRoleKey, {
@@ -96,6 +108,20 @@ export async function POST(request: NextRequest) {
     if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
       return NextResponse.json(
         { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของ Admin หลัก (68011211206@msu.ac.th)" },
+        { status: 403 }
+      );
+    }
+
+    if (targetProfile?.email?.toLowerCase() === "staff@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของบัญชี staff@msu.ac.th (Central Staff)" },
+        { status: 403 }
+      );
+    }
+
+    if (targetProfile?.email?.toLowerCase() === "admin@msu.ac.th") {
+      return NextResponse.json(
+        { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของบัญชี admin@msu.ac.th (Demo Admin)" },
         { status: 403 }
       );
     }

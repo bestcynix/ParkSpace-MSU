@@ -343,6 +343,17 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
 
   function startEditing() {
     if (!profile) return;
+    const emailLower = (profile.email || "").toLowerCase();
+    if (emailLower === "staff@msu.ac.th" || emailLower === "admin@msu.ac.th") {
+      notify({
+        title: locale === "th" ? "บัญชีระบบส่วนกลางได้รับการคุ้มครอง" : "Protected Account",
+        message: emailLower === "staff@msu.ac.th"
+          ? (locale === "th" ? "บัญชี staff@msu.ac.th แก้ไขข้อมูลไม่ได้ ต้องให้ Admin เป็นผู้แก้ไขเท่านั้น" : "Central staff account must be edited by an Admin.")
+          : (locale === "th" ? "บัญชี admin@msu.ac.th เป็นโหมดอ่านและทดสอบเท่านั้น" : "Demo admin account is read-only."),
+        kind: "warning",
+      });
+      return;
+    }
     setDraft({ full_name: profile.full_name ?? "", university_id: profile.university_id ?? "", faculty: profile.faculty ?? "", major: profile.major ?? "", department: profile.department ?? "", phone: profile.phone ?? "" });
     setEditing(true);
   }
@@ -504,6 +515,10 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
   const displayName = profile.full_name || profile.email || t.userRole;
   const displayedAvatarUrl = removeCurrentAvatar ? "" : avatarPreview || avatarUrl;
 
+  const isStaffCentral = profile.email?.toLowerCase() === "staff@msu.ac.th";
+  const isDemoAdmin = profile.email?.toLowerCase() === "admin@msu.ac.th";
+  const isReadOnlySystemAccount = isStaffCentral || isDemoAdmin;
+
   return (
     <div className="profile-overview">
       {/* Account Deletion Pending Warning */}
@@ -538,39 +553,77 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img className="profile-avatar-image" src={displayedAvatarUrl} alt={t.profileImage} />
           ) : (
-            <span className="profile-avatar"><UserRound size={32} /></span>
+            <span className="profile-avatar"><UserRound size={40} /></span>
           )}
-          <div className="profile-avatar-actions">
-            <label className={`avatar-upload-button ${!editing ? "is-disabled" : ""}`} aria-label={t.uploadImage} title={t.uploadImage}>
-              <Camera size={14} />
-              <input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif,.heic,.heif,.jfif,.bmp" onChange={chooseAvatar} disabled={!editing || saving} />
-            </label>
-            {editing && displayedAvatarUrl ? (
-              <button
-                className="avatar-action-button"
-                type="button"
-                onClick={() => setCropperSrc(displayedAvatarUrl)}
-                disabled={saving}
-                aria-label={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
-                title={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
-              >
-                <Crop size={13} />
-              </button>
-            ) : null}
-            {editing && (profile.avatar_path || pendingAvatar) ? (
-              <button className="avatar-remove-button" type="button" onClick={removeAvatar} disabled={saving} aria-label={t.removeImage} title={t.removeImage}>
-                <Trash2 size={13} />
-              </button>
-            ) : null}
-          </div>
+          {!isReadOnlySystemAccount ? (
+            <div className={`profile-avatar-actions ${editing ? "is-editing-actions" : "is-single-badge"}`}>
+              <label className={`avatar-upload-button ${!editing ? "is-disabled" : ""}`} aria-label={t.uploadImage} title={t.uploadImage}>
+                <Camera size={15} />
+                <input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.svg,.avif,.heic,.heif,.jfif,.bmp" onChange={chooseAvatar} disabled={!editing || saving} />
+              </label>
+              {editing && displayedAvatarUrl ? (
+                <button
+                  className="avatar-action-button"
+                  type="button"
+                  onClick={() => setCropperSrc(displayedAvatarUrl)}
+                  disabled={saving}
+                  aria-label={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
+                  title={locale === "th" ? "ครอบและปรับขนาดภาพ" : "Crop & adjust image"}
+                >
+                  <Crop size={14} />
+                </button>
+              ) : null}
+              {editing && (profile.avatar_path || pendingAvatar) ? (
+                <button className="avatar-remove-button" type="button" onClick={removeAvatar} disabled={saving} aria-label={t.removeImage} title={t.removeImage}>
+                  <Trash2 size={14} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="profile-hero-copy">
           <div className="profile-hero-title-row">
             <strong>{displayName}</strong>
-            <button className="secondary-button profile-edit-button" type="button" onClick={editing ? cancelEditing : startEditing} disabled={saving}>
-              {editing ? <><X size={14} />{t.close}</> : <><Edit3 size={14} />{t.editProfile}</>}
-            </button>
+            {isStaffCentral ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#166534",
+                  background: "#dcfce7",
+                  padding: "6px 12px",
+                  borderRadius: "20px",
+                  border: "1px solid #86efac",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                🔒 {locale === "th" ? "เจ้าหน้าที่ส่วนกลาง (แก้ไขข้อมูลโดย Admin เท่านั้น)" : "Managed by Admin"}
+              </span>
+            ) : isDemoAdmin ? (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: "#9a3412",
+                  background: "#ffedd5",
+                  padding: "6px 12px",
+                  borderRadius: "20px",
+                  border: "1px solid #fed7aa",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                🎭 {locale === "th" ? "แอดมินสาธิต (Demo Read-Only)" : "Demo Admin (Read-Only)"}
+              </span>
+            ) : (
+              <button className="secondary-button profile-edit-button" type="button" onClick={editing ? cancelEditing : startEditing} disabled={saving}>
+                {editing ? <><X size={14} />{t.close}</> : <><Edit3 size={14} />{t.editProfile}</>}
+              </button>
+            )}
           </div>
           <span>{profile.email ?? "—"}</span>
           <div className="role-chip-list" style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "4px 0" }}>
@@ -708,7 +761,13 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             <label htmlFor="profile-department">{locale === "th" ? "หน่วยงาน" : "Department"}</label>
             <input id="profile-department" className="form-control" value={draft.department} onChange={(event) => updateField("department", event.target.value)} disabled={!editing || saving} />
           </div>
-          {editing ? (
+          {isReadOnlySystemAccount ? (
+            <div style={{ marginTop: 20, padding: "12px 16px", borderRadius: 14, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 13, color: "#64748b", textAlign: "center", fontWeight: 600 }}>
+              🔒 {isStaffCentral
+                ? (locale === "th" ? "บัญชีเจ้าหน้าที่ส่วนกลางได้รับการดูแลโดย Admin เท่านั้น (ไม่สามารถแก้ไขข้อมูลได้ด้วยตนเอง)" : "Central staff account is managed by Admin.")
+                : (locale === "th" ? "บัญชีผู้ดูแลระบบสาธิตเป็นโหมดอ่านและทดสอบ (ไม่สามารถแก้ไขข้อมูลส่วนตัวได้)" : "Demo admin account is read-only.")}
+            </div>
+          ) : editing ? (
             <div className="profile-form-actions">
               <button className="secondary-button" type="button" onClick={cancelEditing} disabled={saving}>
                 <X size={15} />{t.close}
@@ -726,64 +785,81 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
 
         <div className="profile-security-stack">
           {/* Change Password Card */}
-          <form className="form-card profile-editor-card" onSubmit={(event) => void changePassword(event)}>
-            <div className="form-section-title">
-              <LockKeyhole size={22} />
-              <div>
-                <h2>{t.accountSecurity}</h2>
-                <p>{t.updatePassword}</p>
+          {isReadOnlySystemAccount ? (
+            <div className="form-card profile-editor-card" style={{ opacity: 0.85 }}>
+              <div className="form-section-title">
+                <LockKeyhole size={22} />
+                <div>
+                  <h2>{t.accountSecurity}</h2>
+                  <p>{locale === "th" ? "รหัสผ่านระบบส่วนกลาง" : "Central System Password"}</p>
+                </div>
               </div>
+              <p style={{ margin: "14px 0 0", fontSize: 12, color: "#64748b", lineHeight: 1.6 }}>
+                🔒 {isStaffCentral
+                  ? (locale === "th" ? "บัญชี staff@msu.ac.th ใช้รหัสผ่านส่วนกลาง (staff123) ไม่อนุญาตให้เปลี่ยนรหัสผ่านเพื่อรักษาความต่อเนื่องในการปฏิบัติงาน" : "Central staff password is fixed for operational consistency.")
+                  : (locale === "th" ? "บัญชี admin@msu.ac.th ใช้รหัสผ่านสาธิต (admin123) ไม่อนุญาตให้เปลี่ยนรหัสผ่าน" : "Demo admin password is fixed.")}
+              </p>
             </div>
-            <div className="form-group">
-              <label htmlFor="profile-new-password">{t.newPassword}</label>
-              <div className="password-control">
-                <input
-                  id="profile-new-password"
-                  className="form-control"
-                  type={showNewPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  required
-                />
-                <button
-                  className="password-toggle"
-                  type="button"
-                  onClick={() => setShowNewPassword((value) => !value)}
-                  aria-label={showNewPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")}
-                >
-                  {showNewPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
+          ) : (
+            <form className="form-card profile-editor-card" onSubmit={(event) => void changePassword(event)}>
+              <div className="form-section-title">
+                <LockKeyhole size={22} />
+                <div>
+                  <h2>{t.accountSecurity}</h2>
+                  <p>{t.updatePassword}</p>
+                </div>
               </div>
-            </div>
-            <div className="form-group">
-              <label htmlFor="profile-confirm-password">{t.confirmPassword}</label>
-              <div className="password-control">
-                <input
-                  id="profile-confirm-password"
-                  className="form-control"
-                  type={showConfirmPassword ? "text" : "password"}
-                  autoComplete="new-password"
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  required
-                />
-                <button
-                  className="password-toggle"
-                  type="button"
-                  onClick={() => setShowConfirmPassword((value) => !value)}
-                  aria-label={showConfirmPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")}
-                >
-                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
+              <div className="form-group">
+                <label htmlFor="profile-new-password">{t.newPassword}</label>
+                <div className="password-control">
+                  <input
+                    id="profile-new-password"
+                    className="form-control"
+                    type={showNewPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    required
+                  />
+                  <button
+                    className="password-toggle"
+                    type="button"
+                    onClick={() => setShowNewPassword((value) => !value)}
+                    aria-label={showNewPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")}
+                  >
+                    {showNewPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
               </div>
-            </div>
-            <button className="secondary-button" type="submit" disabled={saving}>
-              {t.updatePassword}
-            </button>
-          </form>
+              <div className="form-group">
+                <label htmlFor="profile-confirm-password">{t.confirmPassword}</label>
+                <div className="password-control">
+                  <input
+                    id="profile-confirm-password"
+                    className="form-control"
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    required
+                  />
+                  <button
+                    className="password-toggle"
+                    type="button"
+                    onClick={() => setShowConfirmPassword((value) => !value)}
+                    aria-label={showConfirmPassword ? (locale === "th" ? "ซ่อนรหัสผ่าน" : "Hide password") : (locale === "th" ? "แสดงรหัสผ่าน" : "Show password")}
+                  >
+                    {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </div>
+              <button className="secondary-button" type="submit" disabled={saving}>
+                {t.updatePassword}
+              </button>
+            </form>
+          )}
 
           {/* Navigation and Account Actions */}
           <div className="profile-actions-card">
@@ -811,7 +887,26 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             ) : null}
 
             {/* Deletion Request Action */}
-            {!deletionPending ? (
+            {isReadOnlySystemAccount ? (
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "#64748b",
+                  background: "#f1f5f9",
+                  padding: "10px 14px",
+                  borderRadius: 14,
+                  textAlign: "center",
+                  border: "1px dashed #cbd5e1",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                }}
+              >
+                🔒 {locale === "th" ? "บัญชีระบบส่วนกลางได้รับการคุ้มครองถาวร" : "System account is permanently protected"}
+              </div>
+            ) : !deletionPending ? (
               <button className="secondary-button" type="button" onClick={() => void requestDeletion()}>
                 <Trash2 size={15} />
                 <span>{t.deleteAccountRequest}</span>

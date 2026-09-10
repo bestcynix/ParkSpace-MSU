@@ -47,16 +47,38 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       const supabase = createSupabaseBrowserClient();
       const authEmail = normalizeLoginIdentifier(email);
 
-      // Automatically initialize central staff account if staff/staff123 is used
+      // Check demo account access and auto-initialize if needed
       if (isLogin && authEmail === "staff@msu.ac.th" && password === "staff123") {
         try {
+          const demoCheckRes = await fetch("/api/admin/demo-accounts");
+          const demoStatus = await demoCheckRes.json().catch(() => ({})) as { staffEnabled?: boolean };
+          if (demoStatus.staffEnabled === false) {
+            throw new Error(locale === "th" ? "บัญชีเจ้าหน้าที่สาธิตถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Demo staff login has been disabled by an administrator");
+          }
           await fetch("/api/auth/staff-login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identifier: "staff", password: "staff123" }),
           });
-        } catch {
-          // continue to sign in
+        } catch (e) {
+          if (e instanceof Error && (e.message.includes("ปิดการเข้าสู่ระบบ") || e.message.includes("disabled"))) throw e;
+        }
+      }
+
+      if (isLogin && authEmail === "admin@msu.ac.th" && password === "admin123") {
+        try {
+          const demoCheckRes = await fetch("/api/admin/demo-accounts");
+          const demoStatus = await demoCheckRes.json().catch(() => ({})) as { adminEnabled?: boolean };
+          if (demoStatus.adminEnabled === false) {
+            throw new Error(locale === "th" ? "บัญชีผู้ดูแลระบบสาธิตถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Demo admin login has been disabled by an administrator");
+          }
+          await fetch("/api/auth/admin-login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier: "admin", password: "admin123" }),
+          });
+        } catch (e) {
+          if (e instanceof Error && (e.message.includes("ปิดการเข้าสู่ระบบ") || e.message.includes("disabled"))) throw e;
         }
       }
 
@@ -72,6 +94,8 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       if (isLogin) {
         const destination = authEmail === "staff@msu.ac.th" && getNextPath() === `/${locale}/app`
           ? `/${locale}/staff/dashboard`
+          : authEmail === "admin@msu.ac.th" && getNextPath() === `/${locale}/app`
+          ? `/${locale}/admin/dashboard`
           : getNextPath();
         window.location.assign(destination);
       }
@@ -89,14 +113,29 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       setMessage(`${t.accountNotConfigured} / ${t.accountNotConfiguredEn}`);
       return;
     }
+    setLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(getNextPath())}` } });
+      const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(getNextPath())}`;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "select_account",
+          },
+        },
+      });
       if (error) throw error;
+      if (data?.url) {
+        window.location.assign(data.url);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : t.oauthFailed;
       setMessage(detail);
       notify({ title: t.oauthFailed, message: detail, kind: "error", duration: 8000 });
+      setLoading(false);
     }
   }
 
@@ -154,6 +193,7 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
 function normalizeLoginIdentifier(value: string) {
   const normalized = value.trim().toLowerCase();
   if (normalized === "staff") return "staff@msu.ac.th";
+  if (normalized === "admin") return "admin@msu.ac.th";
   if (/^\d{11}$/.test(normalized)) return `${normalized}@msu.ac.th`;
   if (normalized.endsWith("@msu.a.th")) return `${normalized.slice(0, -"@msu.a.th".length)}@msu.ac.th`;
   return normalized;

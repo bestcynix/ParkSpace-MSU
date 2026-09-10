@@ -42,10 +42,10 @@ async function verifyAdminAuth(request: NextRequest) {
 
   const adminClient = await getSystemDatabaseClient();
 
-  // Super Admins bypass
+  // Super Admins & Demo Admin bypass
   const normalizedEmail = (userEmail || "").toLowerCase().trim();
-  if (normalizedEmail === "68011211206@msu.ac.th" || normalizedEmail === "69010518004@msu.ac.th") {
-    return { userId, adminClient };
+  if (normalizedEmail === "68011211206@msu.ac.th" || normalizedEmail === "69010518004@msu.ac.th" || normalizedEmail === "admin@msu.ac.th") {
+    return { userId, adminClient, userEmail: normalizedEmail };
   }
 
   // Check user_roles
@@ -73,7 +73,7 @@ async function verifyAdminAuth(request: NextRequest) {
     return { error: "Administrator role required", status: 403 };
   }
 
-  return { userId, adminClient };
+  return { userId, adminClient, userEmail: normalizedEmail };
 }
 
 export async function GET(request: NextRequest) {
@@ -88,44 +88,37 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") ?? "20", 10)));
     const q = (searchParams.get("q") ?? "").trim();
+    const actionFilter = (searchParams.get("action") ?? "").trim();
+    const resultFilter = (searchParams.get("result") ?? "").trim();
 
     let query = adminClient
       .from("audit_logs")
-      .select(
-        "id, action, actor_type, actor_id, entity_type, entity_id, result, metadata, created_at",
-        { count: "exact" }
-      )
-      .order("created_at", { ascending: false })
-      .range((page - 1) * pageSize, page * pageSize - 1);
+      .select("id, event_id, trace_id, action, actor_type, actor_id, entity_type, entity_id, result, metadata, created_at", { count: "exact" })
+      .order("created_at", { ascending: false });
+
+    if (actionFilter) {
+      query = query.eq("action", actionFilter);
+    }
+
+    if (resultFilter) {
+      query = query.eq("result", resultFilter);
+    }
 
     if (q) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
-      if (isUuid) {
-        query = query.or(`action.ilike.%${q}%,actor_id.eq.${q},entity_id.eq.${q},result.ilike.%${q}%`);
-      } else {
-        query = query.or(
-          `action.ilike.%${q}%,actor_type.ilike.%${q}%,entity_type.ilike.%${q}%,result.ilike.%${q}%`
-        );
-      }
+      query = query.or(
+        `action.ilike.%${q}%,actor_id.ilike.%${q}%,entity_id.ilike.%${q}%,entity_type.ilike.%${q}%,result.ilike.%${q}%`
+      );
     }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
 
     const { data, error, count } = await query;
 
     if (error) {
-      console.warn("[audit-logs API] Primary query warning:", error.message);
-      // Fallback: simple select
-      const fallback = await adminClient
-        .from("audit_logs")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(pageSize);
-
-      return NextResponse.json({
-        logs: fallback.data ?? [],
-        total: fallback.data?.length ?? 0,
-        page,
-        pageSize,
-      });
+      console.warn("[audit-logs API] Query warning:", error.message);
+      return NextResponse.json({ logs: [], total: 0, page, pageSize }, { status: 200 });
     }
 
     return NextResponse.json({
@@ -145,6 +138,14 @@ export async function DELETE(request: NextRequest) {
     const authResult = await verifyAdminAuth(request);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    if (authResult.userEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการลบประวัติสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
     }
 
     const { adminClient } = authResult;
@@ -167,6 +168,14 @@ export async function PATCH(request: NextRequest) {
     const authResult = await verifyAdminAuth(request);
     if ("error" in authResult) {
       return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    if (authResult.userEmail === "admin@msu.ac.th") {
+      return NextResponse.json({
+        success: true,
+        demoMode: true,
+        message: "จำลองการแก้ไขสำเร็จ (โหมด Demo Admin - ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)",
+      });
     }
 
     const { adminClient } = authResult;

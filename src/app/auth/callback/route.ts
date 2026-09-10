@@ -16,9 +16,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${locale}/login?error=setup`, requestUrl.origin));
   }
 
-  const response = NextResponse.redirect(
-    new URL(`/${locale}/auth/complete?provider=google&next=${encodeURIComponent(next)}`, requestUrl.origin),
-  );
+  // Create redirect response directly to target destination
+  const targetUrl = new URL(next, requestUrl.origin);
+  const response = NextResponse.redirect(targetUrl);
 
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -32,40 +32,82 @@ export async function GET(request: NextRequest) {
   });
 
   const { data: exchangeData, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return NextResponse.redirect(loginUrl);
+  if (error) {
+    console.error("OAuth exchangeCodeForSession error:", error);
+    return NextResponse.redirect(loginUrl);
+  }
 
   const user = exchangeData.session?.user;
   if (user) {
+    const userEmail = (user.email || "").toLowerCase();
     const meta = user.user_metadata || {};
     const googleAvatar = (meta.avatar_url || meta.picture) as string | undefined;
     const googleName = (meta.full_name || meta.name) as string | undefined;
-    const passwordCompleted = Boolean(meta.parkspace_google_password_setup_completed_at);
+
+    // Check if user is Super Admin or Admin and adjust default destination if landing on /app
+    if (next === `/${locale}/app` || next === "/th/app" || next === "/en/app") {
+      if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+        response.headers.set("Location", new URL(`/${locale}/admin/dashboard`, requestUrl.origin).toString());
+      } else if (userEmail === "staff@msu.ac.th") {
+        response.headers.set("Location", new URL(`/${locale}/staff/dashboard`, requestUrl.origin).toString());
+      }
+    }
+
+    // Mark password setup completed in metadata
+    try {
+      if (!meta.parkspace_google_password_setup_completed_at) {
+        await supabase.auth.updateUser({
+          data: {
+            ...meta,
+            parkspace_google_password_setup_completed_at: new Date().toISOString(),
+          },
+        });
+      }
+    } catch {
+      // Safe fallback
+    }
 
     // Sync google avatar & full_name into profiles
     try {
       const { data: existingProfile } = await supabase
         .from("profiles")
-        .select("avatar_path, full_name")
+        .select("avatar_path, full_name, user_type")
         .eq("id", user.id)
         .maybeSingle();
 
-      const updates: { avatar_path?: string; full_name?: string } = {};
+      const updates: { avatar_path?: string; full_name?: string; user_type?: string } = {};
       if (googleAvatar && (!existingProfile?.avatar_path || existingProfile.avatar_path.startsWith("http"))) {
         updates.avatar_path = googleAvatar;
       }
       if (googleName && !existingProfile?.full_name) {
         updates.full_name = googleName;
       }
+
+      // Ensure Super Admin has admin user_type
+      if (userEmail === "68011211206@msu.ac.th" && existingProfile?.user_type !== "admin") {
+        updates.user_type = "admin";
+      }
+
       if (Object.keys(updates).length > 0) {
         await supabase.from("profiles").update(updates).eq("id", user.id);
       }
+
+      // Ensure Super Admin role in user_roles
+      if (userEmail === "68011211206@msu.ac.th") {
+        const { data: roleRow } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (!roleRow || roleRow.role !== "admin") {
+          await supabase.from("user_roles").upsert({
+            user_id: user.id,
+            role: "admin",
+          });
+        }
+      }
     } catch {
       // Safe fallback
-    }
-
-    // If password setup already completed, skip the complete page entirely!
-    if (passwordCompleted) {
-      return NextResponse.redirect(new URL(next, requestUrl.origin));
     }
   }
 

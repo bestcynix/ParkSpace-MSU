@@ -135,6 +135,10 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [passwordManaging, setPasswordManaging] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState("");
+  const [demoStaffEnabled, setDemoStaffEnabled] = useState(true);
+  const [demoAdminEnabled, setDemoAdminEnabled] = useState(true);
+  const [demoTogglingStaff, setDemoTogglingStaff] = useState(false);
+  const [demoTogglingAdmin, setDemoTogglingAdmin] = useState(false);
   const { confirm, notify } = useNotifications();
 
   const selectedUser = useMemo(
@@ -241,6 +245,14 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     const timer = window.setTimeout(() => {
       void loadUsers();
       void loadDeletionRequests();
+      // Load demo account config
+      void fetch("/api/admin/demo-accounts")
+        .then((r) => r.json())
+        .then((cfg: { staffEnabled?: boolean; adminEnabled?: boolean }) => {
+          if (typeof cfg.staffEnabled === "boolean") setDemoStaffEnabled(cfg.staffEnabled);
+          if (typeof cfg.adminEnabled === "boolean") setDemoAdminEnabled(cfg.adminEnabled);
+        })
+        .catch(() => {});
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadUsers, loadDeletionRequests]);
@@ -309,6 +321,18 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
       notify({
         title: locale === "th" ? "ไม่อนุญาตให้ลบบัญชี" : "Cannot Delete",
         message: locale === "th" ? `บัญชี ${SUPER_ADMIN_EMAIL} เป็น Admin หลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถลบได้` : "Primary Super Admin account is protected from deletion.",
+        kind: "error",
+      });
+      return;
+    }
+
+    const emailLower = (targetUser.email || "").toLowerCase();
+    if (emailLower === "staff@msu.ac.th" || emailLower === "admin@msu.ac.th") {
+      notify({
+        title: locale === "th" ? "ไม่อนุญาตให้ลบบัญชี" : "Cannot Delete",
+        message: locale === "th"
+          ? `บัญชี ${emailLower} เป็นบัญชีระบบส่วนกลาง ได้รับการคุ้มครองถาวร ไม่สามารถลบได้`
+          : `${emailLower} is a protected system account and cannot be deleted.`,
         kind: "error",
       });
       return;
@@ -735,6 +759,176 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
           </p>
         </div>
         <span className="data-badge"><ShieldCheck size={13} />{t.admin}</span>
+      </div>
+
+      {/* Demo Accounts Access Control Panel */}
+      <div
+        style={{
+          margin: "14px 0",
+          padding: "14px 18px",
+          borderRadius: 16,
+          border: "1.5px solid #e2e8f0",
+          background: "linear-gradient(135deg, #f8fafc, #f1f5f9)",
+          display: "grid",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 800, fontSize: 14, color: "#334155" }}>
+          🎛️ {locale === "th" ? "ควบคุมการเข้าถึงบัญชีสาธิต" : "Demo Accounts Access Control"}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {/* Staff toggle */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: demoStaffEnabled ? "#dcfce7" : "#fee2e2",
+              border: `1px solid ${demoStaffEnabled ? "#86efac" : "#fca5a5"}`,
+              transition: "all 0.3s ease",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: demoStaffEnabled ? "#166534" : "#991b1b" }}>
+              <div>📋 staff@msu.ac.th</div>
+              <div style={{ fontWeight: 600, fontSize: 11, opacity: 0.8 }}>
+                {demoStaffEnabled
+                  ? (locale === "th" ? "🟢 เปิดใช้งาน" : "🟢 Enabled")
+                  : (locale === "th" ? "🔴 ปิดการเข้าสู่ระบบ" : "🔴 Disabled")}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={demoTogglingStaff}
+              onClick={async () => {
+                setDemoTogglingStaff(true);
+                try {
+                  const supabase = createSupabaseBrowserClient();
+                  const { data: sd } = await supabase.auth.getSession();
+                  const token = sd.session?.access_token;
+                  const res = await fetch("/api/admin/demo-accounts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ staffEnabled: !demoStaffEnabled }),
+                  });
+                  if (res.ok) {
+                    setDemoStaffEnabled(!demoStaffEnabled);
+                    notify({ title: locale === "th" ? "อัปเดตการเข้าถึงสำเร็จ" : "Access Updated", kind: "success" });
+                  } else {
+                    const d = await res.json().catch(() => ({}));
+                    notify({ title: locale === "th" ? "ไม่สำเร็จ" : "Failed", message: (d as { error?: string }).error || "", kind: "error" });
+                  }
+                } catch {
+                  notify({ title: locale === "th" ? "เกิดข้อผิดพลาด" : "Error", kind: "error" });
+                } finally {
+                  setDemoTogglingStaff(false);
+                }
+              }}
+              style={{
+                width: 48,
+                height: 26,
+                borderRadius: 13,
+                border: "none",
+                background: demoStaffEnabled ? "#22c55e" : "#d1d5db",
+                position: "relative",
+                cursor: demoTogglingStaff ? "not-allowed" : "pointer",
+                transition: "background 0.3s ease",
+                opacity: demoTogglingStaff ? 0.6 : 1,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: demoStaffEnabled ? 24 : 3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                  transition: "left 0.3s ease",
+                }}
+              />
+            </button>
+          </div>
+
+          {/* Admin toggle */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 14px",
+              borderRadius: 12,
+              background: demoAdminEnabled ? "#dbeafe" : "#fee2e2",
+              border: `1px solid ${demoAdminEnabled ? "#93c5fd" : "#fca5a5"}`,
+              transition: "all 0.3s ease",
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 700, color: demoAdminEnabled ? "#1e40af" : "#991b1b" }}>
+              <div>🎭 admin@msu.ac.th</div>
+              <div style={{ fontWeight: 600, fontSize: 11, opacity: 0.8 }}>
+                {demoAdminEnabled
+                  ? (locale === "th" ? "🟢 เปิดใช้งาน" : "🟢 Enabled")
+                  : (locale === "th" ? "🔴 ปิดการเข้าสู่ระบบ" : "🔴 Disabled")}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={demoTogglingAdmin}
+              onClick={async () => {
+                setDemoTogglingAdmin(true);
+                try {
+                  const supabase = createSupabaseBrowserClient();
+                  const { data: sd } = await supabase.auth.getSession();
+                  const token = sd.session?.access_token;
+                  const res = await fetch("/api/admin/demo-accounts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ adminEnabled: !demoAdminEnabled }),
+                  });
+                  if (res.ok) {
+                    setDemoAdminEnabled(!demoAdminEnabled);
+                    notify({ title: locale === "th" ? "อัปเดตการเข้าถึงสำเร็จ" : "Access Updated", kind: "success" });
+                  } else {
+                    const d = await res.json().catch(() => ({}));
+                    notify({ title: locale === "th" ? "ไม่สำเร็จ" : "Failed", message: (d as { error?: string }).error || "", kind: "error" });
+                  }
+                } catch {
+                  notify({ title: locale === "th" ? "เกิดข้อผิดพลาด" : "Error", kind: "error" });
+                } finally {
+                  setDemoTogglingAdmin(false);
+                }
+              }}
+              style={{
+                width: 48,
+                height: 26,
+                borderRadius: 13,
+                border: "none",
+                background: demoAdminEnabled ? "#3b82f6" : "#d1d5db",
+                position: "relative",
+                cursor: demoTogglingAdmin ? "not-allowed" : "pointer",
+                transition: "background 0.3s ease",
+                opacity: demoTogglingAdmin ? 0.6 : 1,
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  top: 3,
+                  left: demoAdminEnabled ? 24 : 3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                  transition: "left 0.3s ease",
+                }}
+              />
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="tab-row" style={{ display: "flex", gap: 10, margin: "16px 0", borderBottom: "1px solid var(--line)", paddingBottom: 8 }}>
