@@ -404,6 +404,7 @@ export function BookingsList({ locale }: { locale: Locale }) {
                   <div>
                     <Link
                       href={`/${locale}/app/bookings/${booking.reference}`}
+                      prefetch={false}
                       style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)", textDecoration: "underline", textUnderlineOffset: 3 }}
                     >
                       {booking.reference}
@@ -468,6 +469,7 @@ export function BookingsList({ locale }: { locale: Locale }) {
                   <Link
                     className="secondary-button"
                     href={`/${locale}/app/bookings/${booking.reference}`}
+                    prefetch={false}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     <ExternalLink size={14} />

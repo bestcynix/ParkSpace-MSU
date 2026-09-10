@@ -298,6 +298,9 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
       setPendingAvatar(null);
       setRemoveCurrentAvatar(false);
       setEditing(false);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("profile-updated"));
+      }
       notify({ title: t.saveProfile, kind: "success" });
     } catch (error) {
       if (uploadedAvatarPath && !uploadedAvatarPath.startsWith("data:")) {
