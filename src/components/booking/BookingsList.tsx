@@ -174,12 +174,11 @@ export function BookingsList({ locale }: { locale: Locale }) {
       }
 
       // Background ensure token exists in database for scanner validation
-      const supabase = createSupabaseBrowserClient();
-      try {
-        await supabase.rpc("issue_booking_qr", { p_booking_id: booking.id });
-      } catch {
-        // ignore background token issue
-      }
+      void fetch("/api/bookings/issue-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: booking.id }),
+      }).catch(() => {});
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.qrUnavailable);
     } finally {

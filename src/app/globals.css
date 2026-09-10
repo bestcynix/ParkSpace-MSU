@@ -3257,13 +3257,38 @@ button.role-chip:disabled {
 .qr-pass-heading {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   text-align: left;
 }
 
+.qr-pass-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  color: #9a7800;
+  flex-shrink: 0;
+}
+
+.qr-pass-icon svg {
+  display: block;
+}
+
 .qr-pass-heading .empty-icon {
-  width: 42px;
-  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  border-radius: 12px;
+  background: var(--gold-soft);
+  color: #9a7800;
+  flex-shrink: 0;
 }
 
 .qr-pass-heading strong,

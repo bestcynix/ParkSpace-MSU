@@ -133,11 +133,11 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
       setBooking(formattedBooking);
 
       // Background ensure QR token exists
-      try {
-        await supabase.rpc("issue_booking_qr", { p_booking_id: formattedBooking.id });
-      } catch {
-        // ignore
-      }
+      void fetch("/api/bookings/issue-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: formattedBooking.id }),
+      }).catch(() => {});
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : t.operationalData);
     } finally {

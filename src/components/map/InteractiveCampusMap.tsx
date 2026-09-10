@@ -47,6 +47,7 @@ export function InteractiveCampusMap({
   const [calibMsg, setCalibMsg] = useState("");
   const [calibSaving, setCalibSaving] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const diagramContainerRef = useRef<HTMLDivElement>(null);
   const areaCodes = areas.map((area) => area.code).join(",");
 
   useEffect(() => {
@@ -176,10 +177,18 @@ export function InteractiveCampusMap({
     setOffset({ x: 0, y: 0 });
   }
 
-  function handleWheel(event: WheelEvent<HTMLDivElement>) {
-    event.preventDefault();
-    changeZoom(event.deltaY < 0 ? 0.12 : -0.12);
-  }
+  useEffect(() => {
+    const el = diagramContainerRef.current;
+    if (!el) return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      changeZoom(e.deltaY < 0 ? 0.12 : -0.12);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [mode]);
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -257,10 +266,10 @@ export function InteractiveCampusMap({
       {mode === "diagram" ? (
         <div className="diagram-map-shell">
           <div
+            ref={diagramContainerRef}
             className={`interactive-diagram ${dragging ? "is-dragging" : ""}`}
             role="application"
             aria-label={`${t.diagram2D} · ${t.dragMap}`}
-            onWheel={handleWheel}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={stopDragging}

@@ -137,12 +137,20 @@ export function ImageCropperModal({
     };
   }, [isDragging, handleMouseMove, handleTouchMove, handleDragEnd]);
 
-  // Wheel zoom support
-  function handleWheel(e: WheelEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const delta = e.deltaY < 0 ? 0.08 : -0.08;
-    setZoom((z) => Math.min(3.0, Math.max(0.2, Number((z + delta).toFixed(2)))));
-  }
+  // Wheel zoom support with non-passive event listener
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      setZoom((z) => Math.min(3.0, Math.max(0.2, Number((z + delta).toFixed(2)))));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   function handleRotate() {
     setRotation((r) => (r + 90) % 360);
@@ -252,7 +260,6 @@ export function ImageCropperModal({
           }}
           onMouseDown={handleMouseDown}
           onTouchStart={handleTouchStart}
-          onWheel={handleWheel}
         >
           {/* Active Image with fitted base size */}
           {/* eslint-disable-next-line @next/next/no-img-element */}

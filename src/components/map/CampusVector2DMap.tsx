@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useId, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   Compass,
   Layers,
@@ -89,10 +89,18 @@ export function CampusVector2DMap({
     setOffset({ x: 0, y: 0 });
   }
 
-  function handleWheel(e: WheelEvent<HTMLDivElement>) {
-    e.preventDefault();
-    changeZoom(e.deltaY < 0 ? 0.15 : -0.15);
-  }
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      changeZoom(e.deltaY < 0 ? 0.15 : -0.15);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, []);
 
   function handlePointerDown(e: PointerEvent<HTMLDivElement>) {
     if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("input")) {
@@ -235,7 +243,6 @@ export function CampusVector2DMap({
           userSelect: "none",
           touchAction: "none",
         }}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={stopDragging}

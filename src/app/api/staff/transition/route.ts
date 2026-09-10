@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 type ActionType = "CHECK_IN" | "CHECK_OUT" | "CANCEL" | "NO_SHOW" | "OVERRIDE";
 
@@ -16,7 +17,8 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.replace(/^Bearer\s+/i, "");
 
-    const client = createServerClient(supabaseUrl, serviceRoleKey || supabaseAnonKey, {
+    // 1. User verification client
+    const cookieClient = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -25,38 +27,97 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    let userId: string | null = null;
+    // 2. Database client (bypasses RLS so staff can update bookings)
+    const adminClient = serviceRoleKey
+      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
+      : cookieClient;
+
+    let user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null = null;
     if (token) {
-      const { data: userData } = await client.auth.getUser(token);
-      userId = userData.user?.id ?? null;
-    } else {
-      const { data: userData } = await client.auth.getUser();
-      userId = userData.user?.id ?? null;
+      const { data: userData } = await cookieClient.auth.getUser(token);
+      if (userData.user) user = userData.user;
+    }
+    if (!user) {
+      const { data: userData } = await cookieClient.auth.getUser();
+      if (userData.user) user = userData.user;
+    }
+    if (!user && serviceRoleKey && token) {
+      const { data: userData } = await adminClient.auth.getUser(token);
+      if (userData.user) user = userData.user;
     }
 
-    if (!userId) {
+    if (!user?.id) {
       return NextResponse.json({ error: "Sign in required" }, { status: 401 });
     }
 
-    // Role check
-    let roles: string[] = [];
-    try {
-      const { data: userRoles } = await client
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      roles = (userRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
-    } catch {
-      const { data: profile } = await client.from("profiles").select("user_type").eq("id", userId).maybeSingle();
-      if (profile?.user_type) roles = [String(profile.user_type).toLowerCase().trim()];
+    const userEmail = (user.email || "").toLowerCase().trim();
+    let isStaff = false;
+    let isAdmin = false;
+
+    // Layer 1: Core MSU Super Admin / Admin / Staff email bypass
+    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+      isAdmin = true;
+      isStaff = true;
+    } else if (userEmail === "staff@msu.ac.th") {
+      isStaff = true;
     }
 
-    const isStaff = roles.includes("staff");
-    const isAdmin = roles.includes("admin");
+    // Layer 2: user_roles table (using adminClient to avoid RLS restrictions)
+    if ((!isStaff || !isAdmin) && user.id) {
+      try {
+        const { data: userRoles } = await adminClient
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+        const roles = (userRoles ?? []).map((r: { role: string }) => String(r.role).toLowerCase().trim());
+        if (roles.includes("admin") || roles.includes("developer")) {
+          isAdmin = true;
+          isStaff = true;
+        } else if (roles.includes("staff")) {
+          isStaff = true;
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    // Layer 3: profiles.user_type
+    if ((!isStaff || !isAdmin) && user.id) {
+      try {
+        const { data: profile } = await adminClient
+          .from("profiles")
+          .select("user_type")
+          .eq("id", user.id)
+          .maybeSingle();
+        const uType = String(profile?.user_type ?? "").toLowerCase().trim();
+        if (uType === "admin" || uType === "developer") {
+          isAdmin = true;
+          isStaff = true;
+        } else if (uType === "staff") {
+          isStaff = true;
+        }
+      } catch {
+        // continue
+      }
+    }
+
+    // Layer 4: user_metadata
+    if ((!isStaff || !isAdmin) && user.user_metadata) {
+      const metaType = String(user.user_metadata.user_type || user.user_metadata.role || "").toLowerCase().trim();
+      if (metaType === "admin" || metaType === "developer") {
+        isAdmin = true;
+        isStaff = true;
+      } else if (metaType === "staff") {
+        isStaff = true;
+      }
+    }
 
     if (!isStaff && !isAdmin) {
       return NextResponse.json({ error: "Staff or Admin role required" }, { status: 403 });
     }
+
+    const client = adminClient;
+    const userId = user.id;
 
     const body = await request.json();
     const { booking_id, action, note, override_status, updated_plate } = body as {

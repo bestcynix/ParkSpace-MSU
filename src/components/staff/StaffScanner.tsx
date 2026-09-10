@@ -223,6 +223,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
 
       const res = await fetch("/api/staff/scan", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
@@ -237,6 +238,15 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       const data = await res.json();
 
       if (!res.ok || !data.result) {
+        if (res.status === 401 || res.status === 403) {
+          const roleMsg = isTh
+            ? "จำเป็นต้องเข้าสู่ระบบด้วยบัญชีเจ้าหน้าที่ (Staff) หรือผู้ดูแลระบบ (Admin) เพื่อสแกนและตรวจสอบข้อมูล"
+            : "Staff or Admin role required to scan and verify bookings.";
+          setResult(null);
+          setNotice({ text: roleMsg, type: "error" });
+          return;
+        }
+
         const errorMsg = data.error || (isTh ? "ไม่พบข้อมูลการจองหรือบัตรไม่ถูกต้อง" : "Booking not found or invalid pass");
         setResult({
           booking_id: "",
@@ -317,6 +327,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
 
       const res = await fetch("/api/staff/transition", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
