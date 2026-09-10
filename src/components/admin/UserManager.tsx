@@ -72,7 +72,8 @@ const quickRoles: ManagedRole[] = ["admin", "staff", "user"];
 
 export const SUPER_ADMIN_EMAIL = "68011211206@msu.ac.th";
 export function isSuperAdminEmail(email?: string | null): boolean {
-  return (email || "").trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+  const e = (email || "").trim().toLowerCase();
+  return e === SUPER_ADMIN_EMAIL || e === "69010518004@msu.ac.th";
 }
 
 function getManagedRoles(user: Pick<UserRecord, "roles" | "user_type">): ManagedRole[] {
@@ -554,7 +555,7 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     if (isSuperAdminEmail(user.email)) {
       notify({
         title: locale === "th" ? "ไม่อนุญาตให้เปลี่ยนยศ" : "Cannot Change Role",
-        message: locale === "th" ? `บัญชี ${SUPER_ADMIN_EMAIL} เป็น Admin หลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถปลดหรือเปลี่ยนยศได้` : "Primary Super Admin role cannot be modified.",
+        message: locale === "th" ? "บัญชีผู้ดูแลระบบหลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถปลดหรือเปลี่ยนยศได้" : "Super Admin account is permanently protected and cannot be modified.",
         kind: "error",
       });
       return;

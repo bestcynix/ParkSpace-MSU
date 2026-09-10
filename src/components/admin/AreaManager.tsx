@@ -113,8 +113,18 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   const [message, setMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [isDemoAdmin, setIsDemoAdmin] = useState(false);
   const selectedArea = editingId ? areas.find((area) => area.id === editingId) ?? null : null;
   const { confirm, notify } = useNotifications();
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    void createSupabaseBrowserClient().auth.getSession().then((res: any) => {
+      if (res?.data?.session?.user?.email?.toLowerCase() === "admin@msu.ac.th") {
+        setIsDemoAdmin(true);
+      }
+    });
+  }, []);
 
   const statusCounts = useMemo(() => ({
     open: areas.filter((a) => a.current_status !== "CLOSED").length,
@@ -276,6 +286,43 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     }
     setSaving(true);
     setMessage("");
+
+    if (isDemoAdmin) {
+      await new Promise((r) => setTimeout(r, 400));
+      const simulatedArea: AreaRow = {
+        id: editingId || `demo-area-${Date.now()}`,
+        code: normalizedCode,
+        name_th: draft.name_th.trim(),
+        name_en: draft.name_en.trim(),
+        description_th: draft.description_th.trim() || null,
+        description_en: draft.description_en.trim() || null,
+        capacity: draft.capacity.trim() ? Number(draft.capacity) : null,
+        capacity_source: draft.capacity_source,
+        capacity_verified: true,
+        slot_mode: draft.slot_mode,
+        slot_layout_source: "VERIFIED_SURVEY",
+        slot_layout_verified: true,
+        data_status: draft.data_status,
+        current_status: draft.current_status,
+        vehicle_types: draft.vehicle_types,
+        latitude: draft.latitude.trim() ? Number(draft.latitude) : null,
+        longitude: draft.longitude.trim() ? Number(draft.longitude) : null,
+        source_reference: draft.source_reference.trim() || null,
+        cover_image_path: draft.cover_image_path.trim() || null,
+        entrance_image_path: draft.entrance_image_path.trim() || null,
+      };
+      setAreas((current) => editingId ? current.map((area) => area.id === simulatedArea.id ? simulatedArea : area) : [...current, simulatedArea].sort((a, b) => a.code.localeCompare(b.code)));
+      setEditingId(simulatedArea.id);
+      setDraft(draftFromArea(simulatedArea));
+      setSaving(false);
+      notify({
+        title: locale === "th" ? "จำลองการบันทึกพื้นที่สำเร็จ" : "Simulated Save",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     const payload = {
       code: normalizedCode,
       name_th: draft.name_th.trim(),
@@ -327,6 +374,18 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     });
     if (!confirmed) return;
     setMessage("");
+
+    if (isDemoAdmin) {
+      setAreas((current) => current.filter((item) => item.id !== area.id));
+      if (editingId === area.id) void startCreate();
+      notify({
+        title: locale === "th" ? "จำลองการลบสำเร็จ" : "Simulated Delete",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     try {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.from("parking_areas").delete().eq("id", area.id);

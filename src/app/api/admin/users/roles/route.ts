@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
       .eq("id", target_user_id)
       .maybeSingle();
 
-    if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
+    const targetEmail = targetProfile?.email?.toLowerCase();
+    if (targetEmail === "68011211206@msu.ac.th" || targetEmail === "69010518004@msu.ac.th") {
       return NextResponse.json(
         { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของ Admin หลัก (Super Admin)" },
         { status: 403 }

@@ -70,7 +70,17 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [isDemoAdmin, setIsDemoAdmin] = useState(false);
   const { confirm, notify } = useNotifications();
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    void createSupabaseBrowserClient().auth.getSession().then((res: any) => {
+      if (res?.data?.session?.user?.email?.toLowerCase() === "admin@msu.ac.th") {
+        setIsDemoAdmin(true);
+      }
+    });
+  }, []);
 
   const selectedRow = useMemo(() => rows.find((row) => row.id === selectedRowId) ?? null, [rows, selectedRowId]);
   const selectedSlots = useMemo(() => slots.filter((slot) => slot.row_id === selectedRowId || (!slot.row_id && selectedRow && slot.row_label === selectedRow.row_label)), [selectedRow, selectedRowId, slots]);
@@ -151,6 +161,43 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
     }
     setSaving(true);
     setMessage("");
+
+    if (isDemoAdmin) {
+      await new Promise((r) => setTimeout(r, 300));
+      if (editingRowId) {
+        setRows((cur) => cur.map((r) => (r.id === editingRowId ? { ...r, status: rowDraft.status, slot_type: rowDraft.slotType } : r)));
+      } else {
+        const dummyRow: ParkingRow = {
+          id: `demo-row-${Date.now()}`,
+          row_label: label,
+          display_order: rows.length + 1,
+          status: rowDraft.status,
+          slot_type: rowDraft.slotType,
+          allowed_vehicle_types: [rowDraft.slotType],
+          data_status: "VERIFIED",
+        };
+        const dummySlots: ParkingSlot[] = Array.from({ length: count }, (_, index) => ({
+          id: `demo-slot-${Date.now()}-${index}`,
+          row_id: dummyRow.id,
+          slot_code: `${areaCode}-${label}-${String(index + 1).padStart(2, "0")}`,
+          row_label: label,
+          position: index + 1,
+          slot_type: rowDraft.slotType,
+          status: rowDraft.status === "CLOSED" ? "CLOSED" : "AVAILABLE",
+          data_status: "VERIFIED",
+        }));
+        setRows((cur) => [...cur, dummyRow]);
+        setSlots((cur) => [...cur, ...dummySlots]);
+        setSelectedRowId(dummyRow.id);
+      }
+      setSaving(false);
+      notify({
+        title: locale === "th" ? "จำลองการบันทึกแถวสำเร็จ" : "Simulated Row Save",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
     try {
       const supabase = createSupabaseBrowserClient();
       if (editingRowId) {
@@ -185,6 +232,20 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
     if (!confirmed) return;
     setSaving(true);
     setMessage("");
+
+    if (isDemoAdmin) {
+      setRows((cur) => cur.filter((r) => r.id !== row.id));
+      setSlots((cur) => cur.filter((s) => s.row_id !== row.id));
+      if (selectedRowId === row.id) setSelectedRowId(null);
+      setSaving(false);
+      notify({
+        title: locale === "th" ? "จำลองการลบแถวสำเร็จ" : "Simulated Row Delete",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     try {
       const supabase = createSupabaseBrowserClient();
       const { error } = await supabase.from("parking_rows").delete().eq("id", row.id);
@@ -211,6 +272,30 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
     }
     setSaving(true);
     setMessage("");
+
+    if (isDemoAdmin) {
+      const startPosition = selectedSlots.length ? Math.max(...selectedSlots.map((s) => s.position)) + 1 : 1;
+      const dummySlots: ParkingSlot[] = Array.from({ length: count }, (_, index) => ({
+        id: `demo-slot-${Date.now()}-${index}`,
+        row_id: selectedRow.id,
+        slot_code: `${areaCode}-${selectedRow.row_label}-${String(startPosition + index).padStart(2, "0")}`,
+        row_label: selectedRow.row_label,
+        position: startPosition + index,
+        slot_type: selectedRow.slot_type,
+        status: selectedRow.status === "CLOSED" ? "CLOSED" : "AVAILABLE",
+        data_status: "VERIFIED",
+      }));
+      setSlots((cur) => [...cur, ...dummySlots]);
+      setNewSlotCount("1");
+      setSaving(false);
+      notify({
+        title: locale === "th" ? "จำลองการเพิ่มช่องสำเร็จ" : "Simulated Slot Creation",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     try {
       const startPosition = selectedSlots.length ? Math.max(...selectedSlots.map((slot) => slot.position)) + 1 : 1;
       const newSlots = Array.from({ length: count }, (_, index) => ({ parking_area_id: areaId, row_id: selectedRow.id, slot_code: `${areaCode}-${selectedRow.row_label}-${String(startPosition + index).padStart(2, "0")}`, row_label: selectedRow.row_label, position: startPosition + index, slot_type: selectedRow.slot_type, status: selectedRow.status === "CLOSED" ? "CLOSED" : "AVAILABLE", source_reference: `OFFICIAL_LAYOUT:${areaCode}`, data_status: "VERIFIED" }));
@@ -230,11 +315,21 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
   async function updateSlot(slot: ParkingSlot, field: "status" | "slot_type", value: SlotStatus | SlotType) {
     if (!isSupabaseConfigured()) return;
     const next = { ...slot, [field]: value } as ParkingSlot;
-    setSlots((current) => current.map((item) => item.id === slot.id ? next : item));
+    setSlots((current) => current.map((item) => (item.id === slot.id ? next : item)));
+
+    if (isDemoAdmin) {
+      notify({
+        title: locale === "th" ? "จำลองการเปลี่ยนสถานะช่อง" : "Simulated Slot Update",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     const { error } = await createSupabaseBrowserClient().from("parking_slots").update({ [field]: value, updated_at: new Date().toISOString() }).eq("id", slot.id);
     if (error) {
       setMessage(error.message);
-      setSlots((current) => current.map((item) => item.id === slot.id ? slot : item));
+      setSlots((current) => current.map((item) => (item.id === slot.id ? slot : item)));
       return;
     }
     await audit("UPDATE_PARKING_SLOT", slot.id, slot, next);
@@ -245,6 +340,17 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
     if (!isSupabaseConfigured()) return;
     const confirmed = await confirm({ title: t.deleteSlot, message: slot.slot_code, confirmLabel: t.delete, cancelLabel: t.close, danger: true });
     if (!confirmed) return;
+
+    if (isDemoAdmin) {
+      setSlots((current) => current.filter((item) => item.id !== slot.id));
+      notify({
+        title: locale === "th" ? "จำลองการลบช่องสำเร็จ" : "Simulated Slot Delete",
+        message: locale === "th" ? "โหมด Demo Admin สำหรับการนำเสนอ (ข้อมูลจริงไม่ถูกเปลี่ยนแปลง)" : "Demo presentation mode (no real changes saved).",
+        kind: "info",
+      });
+      return;
+    }
+
     try {
       const { error } = await createSupabaseBrowserClient().from("parking_slots").delete().eq("id", slot.id);
       if (error) throw error;

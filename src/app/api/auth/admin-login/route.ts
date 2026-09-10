@@ -13,6 +13,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid demo admin credentials" }, { status: 400 });
     }
 
+    try {
+      const configRes = await fetch(new URL("/api/admin/demo-accounts", request.url));
+      if (configRes.ok) {
+        const cfg = (await configRes.json()) as { adminEnabled?: boolean };
+        if (cfg.adminEnabled === false) {
+          return NextResponse.json({ error: "Demo admin account login disabled by administrator" }, { status: 403 });
+        }
+      }
+    } catch {
+      // continue
+    }
+
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 

@@ -681,7 +681,8 @@ button {
   font-size: 16px;
 }
 
-.profile-card span {
+.profile-card > span,
+.profile-card-copy span {
   display: block;
   margin-top: 5px;
   color: var(--muted);
@@ -4062,13 +4063,15 @@ button.role-chip:disabled {
 .profile-hero-card { margin: 20px 0 0; padding: 22px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow-card); }
 .profile-avatar-wrap { position: relative; width: 88px; height: 88px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; }
 .profile-avatar-image { display: block; width: 88px; height: 88px; border-radius: 28px; object-fit: cover; box-shadow: 0 4px 14px rgba(0,0,0,0.08); border: 2.5px solid var(--surface); }
-.profile-avatar { display: flex; align-items: center; justify-content: center; width: 88px; height: 88px; border-radius: 28px; background: #1e293b; color: #94a3b8; box-shadow: 0 4px 14px rgba(0,0,0,0.08); border: 2.5px solid var(--surface); line-height: 0; padding: 0; margin: 0; box-sizing: border-box; }
-.profile-avatar svg { display: block; margin: auto; }
-.profile-avatar-actions { position: absolute; z-index: 5; transition: all 0.2s ease; }
+.profile-avatar-wrap .profile-avatar,
+.profile-avatar { display: grid !important; place-items: center !important; width: 88px !important; height: 88px !important; border-radius: 28px !important; background: #1e293b !important; color: #94a3b8 !important; box-shadow: 0 4px 14px rgba(0,0,0,0.08) !important; border: 2.5px solid var(--surface) !important; line-height: 1 !important; padding: 0 !important; margin: 0 !important; box-sizing: border-box !important; }
+.profile-avatar-wrap .profile-avatar svg,
+.profile-avatar svg { display: block !important; margin: auto !important; width: 44px !important; height: 44px !important; }
+.profile-avatar-actions { position: absolute; z-index: 10; transition: all 0.2s ease; }
 .profile-avatar-actions.is-single-badge { bottom: -2px; right: -2px; display: flex; align-items: center; justify-content: center; }
 .profile-avatar-actions.is-editing-actions { bottom: -10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: var(--surface, #ffffff); border: 1.5px solid var(--line, #e2e8f0); border-radius: 24px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); white-space: nowrap; }
 .avatar-upload-button, .avatar-action-button, .avatar-remove-button { display: inline-grid; place-items: center; border-radius: 50%; border: none; cursor: pointer; transition: all 0.2s ease; }
-.profile-avatar-actions.is-single-badge .avatar-upload-button { width: 30px; height: 30px; border: 2px solid var(--surface, #ffffff); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+.profile-avatar-actions.is-single-badge .avatar-upload-button { width: 32px; height: 32px; border: 2.5px solid var(--surface, #ffffff); box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 .profile-avatar-actions.is-editing-actions .avatar-upload-button, .avatar-action-button, .avatar-remove-button { width: 28px; height: 28px; }
 .avatar-upload-button { background: var(--gold, #d0a900); color: #5e4b00; }
 .avatar-action-button { background: #f1f5f9; color: #334155; }

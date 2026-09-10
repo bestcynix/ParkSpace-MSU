@@ -4,6 +4,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { HeaderUserDropdown } from "@/components/layout/HeaderUserDropdown";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { AdminDemoBanner } from "@/components/admin/AdminDemoBanner";
 
@@ -41,7 +42,10 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
       <aside className="admin-sidebar">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingRight: 4 }}>
           <Logo locale={locale} dark />
-          <ThemeToggle locale={locale} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <ThemeToggle locale={locale} />
+            <HeaderUserDropdown locale={locale} />
+          </div>
         </div>
         <nav className="admin-nav" aria-label={`${role} navigation`}>
           {items.map(([key, label, Icon, path]) => {

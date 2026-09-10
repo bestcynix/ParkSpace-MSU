@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     const targetEmail = targetProfile?.email?.toLowerCase();
-    if (targetEmail === "68011211206@msu.ac.th") {
+    if (targetEmail === "68011211206@msu.ac.th" || targetEmail === "69010518004@msu.ac.th") {
       return NextResponse.json(
         { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ Admin หลัก (Super Admin)" },
         { status: 403 }

@@ -69,6 +69,23 @@ export function LiveAreaStatus({
     }
 
     async function loadStatus() {
+      try {
+        const res = await fetch("/api/parking/live-capacity");
+        if (res.ok) {
+          const apiData = (await res.json()) as { summaries?: Record<string, LiveAreaSummary> };
+          const found = apiData.summaries?.[areaCode.toUpperCase()];
+          if (found) {
+            if (active) {
+              setStatus(getLiveAreaStatus(found, fallback));
+              setCounts(found);
+            }
+            return;
+          }
+        }
+      } catch {
+        // Fallback to RPC
+      }
+
       if (!isSupabaseConfigured()) return;
       const { startsAt, endsAt } = getOperationalTimeWindow();
       try {

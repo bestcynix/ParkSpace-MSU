@@ -255,7 +255,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!profile || !editing) return;
+    if (!profile || !editing || isReadOnlySystemAccount) return;
     setSaving(true);
     let uploadedAvatarPath: string | null = null;
     try {
@@ -556,7 +556,7 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img className="profile-avatar-image" src={displayedAvatarUrl} alt={t.profileImage} />
           ) : (
-            <span className="profile-avatar"><UserRound size={40} /></span>
+            <div className="profile-avatar"><UserRound size={44} /></div>
           )}
           {!isReadOnlySystemAccount ? (
             <div className={`profile-avatar-actions ${editing ? "is-editing-actions" : "is-single-badge"}`}>

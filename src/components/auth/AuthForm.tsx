@@ -48,37 +48,41 @@ export function AuthForm({ locale, mode }: { locale: Locale; mode: "login" | "re
       const authEmail = normalizeLoginIdentifier(email);
 
       // Check demo account access and auto-initialize if needed
-      if (isLogin && authEmail === "staff@msu.ac.th" && password === "staff123") {
-        try {
-          const demoCheckRes = await fetch("/api/admin/demo-accounts");
-          const demoStatus = await demoCheckRes.json().catch(() => ({})) as { staffEnabled?: boolean };
-          if (demoStatus.staffEnabled === false) {
-            throw new Error(locale === "th" ? "บัญชีเจ้าหน้าที่สาธิตถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Demo staff login has been disabled by an administrator");
+      if (isLogin && authEmail === "staff@msu.ac.th") {
+        const demoCheckRes = await fetch("/api/admin/demo-accounts");
+        const demoStatus = (await demoCheckRes.json().catch(() => ({}))) as { staffEnabled?: boolean };
+        if (demoStatus.staffEnabled === false) {
+          throw new Error(locale === "th" ? "บัญชีเจ้าหน้าที่ส่วนกลาง (staff@msu.ac.th) ถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Staff login has been disabled by an administrator");
+        }
+        if (password === "staff123") {
+          try {
+            await fetch("/api/auth/staff-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ identifier: "staff", password: "staff123" }),
+            });
+          } catch {
+            // continue
           }
-          await fetch("/api/auth/staff-login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier: "staff", password: "staff123" }),
-          });
-        } catch (e) {
-          if (e instanceof Error && (e.message.includes("ปิดการเข้าสู่ระบบ") || e.message.includes("disabled"))) throw e;
         }
       }
 
-      if (isLogin && authEmail === "admin@msu.ac.th" && password === "admin123") {
-        try {
-          const demoCheckRes = await fetch("/api/admin/demo-accounts");
-          const demoStatus = await demoCheckRes.json().catch(() => ({})) as { adminEnabled?: boolean };
-          if (demoStatus.adminEnabled === false) {
-            throw new Error(locale === "th" ? "บัญชีผู้ดูแลระบบสาธิตถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Demo admin login has been disabled by an administrator");
+      if (isLogin && authEmail === "admin@msu.ac.th") {
+        const demoCheckRes = await fetch("/api/admin/demo-accounts");
+        const demoStatus = (await demoCheckRes.json().catch(() => ({}))) as { adminEnabled?: boolean };
+        if (demoStatus.adminEnabled === false) {
+          throw new Error(locale === "th" ? "บัญชีผู้ดูแลระบบสาธิต (admin@msu.ac.th) ถูกปิดการเข้าสู่ระบบชั่วคราวโดยผู้ดูแลระบบ" : "Demo admin login has been disabled by an administrator");
+        }
+        if (password === "admin123") {
+          try {
+            await fetch("/api/auth/admin-login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ identifier: "admin", password: "admin123" }),
+            });
+          } catch {
+            // continue
           }
-          await fetch("/api/auth/admin-login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identifier: "admin", password: "admin123" }),
-          });
-        } catch (e) {
-          if (e instanceof Error && (e.message.includes("ปิดการเข้าสู่ระบบ") || e.message.includes("disabled"))) throw e;
         }
       }
 

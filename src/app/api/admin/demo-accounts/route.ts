@@ -2,22 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
-const CONFIG_PATH = join(process.cwd(), ".demo-accounts-config.json");
+const CONFIG_PATH = join(tmpdir(), "parkspace-demo-accounts-config.json");
 
 type DemoConfig = { staffEnabled: boolean; adminEnabled: boolean };
+
+let memoryConfig: DemoConfig = { staffEnabled: true, adminEnabled: true };
 
 async function readConfig(): Promise<DemoConfig> {
   try {
     const raw = await readFile(CONFIG_PATH, "utf-8");
-    return JSON.parse(raw) as DemoConfig;
+    const parsed = JSON.parse(raw) as DemoConfig;
+    memoryConfig = parsed;
+    return parsed;
   } catch {
-    return { staffEnabled: true, adminEnabled: true };
+    return memoryConfig;
   }
 }
 
 async function writeConfig(config: DemoConfig) {
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  memoryConfig = config;
+  try {
+    await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2), "utf-8");
+  } catch {
+    // Retain in memoryConfig if filesystem write fails
+  }
 }
 
 export async function GET() {

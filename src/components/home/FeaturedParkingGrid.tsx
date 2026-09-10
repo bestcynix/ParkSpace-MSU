@@ -29,6 +29,20 @@ export function FeaturedParkingGrid({ locale }: { locale: Locale }) {
     let refreshTimer: number | undefined;
 
     async function loadSummaries() {
+      try {
+        // Fetch from high-accuracy real-time API
+        const res = await fetch("/api/parking/live-capacity");
+        if (res.ok) {
+          const apiData = (await res.json()) as { summaries?: Record<string, LiveAreaSummary> };
+          if (apiData.summaries && Object.keys(apiData.summaries).length > 0) {
+            if (active) setLiveSummaries(apiData.summaries);
+            return;
+          }
+        }
+      } catch {
+        // Fallback to direct RPC
+      }
+
       if (!isSupabaseConfigured()) return;
       const { startsAt, endsAt } = getOperationalTimeWindow();
       try {
