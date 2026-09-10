@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { getSystemDatabaseClient } from "@/lib/supabase/system-client";
 
-type ActionType = "CHECK_IN" | "CHECK_OUT" | "CANCEL" | "NO_SHOW" | "OVERRIDE";
+type ActionType = "CHECK_IN" | "CHECK_OUT" | "CANCEL" | "NO_SHOW" | "OVERRIDE" | "REASSIGN_AND_CHECKIN";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,10 +28,8 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 2. Database client (bypasses RLS so staff can update bookings)
-    const adminClient = serviceRoleKey
-      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : cookieClient;
+    const adminClient = await getSystemDatabaseClient();
+    const client = adminClient;
 
     let user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null = null;
     if (token) {
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
       if (userData.user) user = userData.user;
     }
     if (!user && serviceRoleKey && token) {
-      const { data: userData } = await adminClient.auth.getUser(token);
+      const { data: userData } = await client.auth.getUser(token);
       if (userData.user) user = userData.user;
     }
 
@@ -116,16 +115,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Staff or Admin role required" }, { status: 403 });
     }
 
-    const client = adminClient;
     const userId = user.id;
 
     const body = await request.json();
-    const { booking_id, action, note, override_status, updated_plate } = body as {
+    const { booking_id, action, note, override_status, updated_plate, updated_area_id, updated_slot_id, staff_zone, staff_shift } = body as {
       booking_id: string;
       action: ActionType;
       note?: string;
       override_status?: string;
       updated_plate?: string;
+      updated_area_id?: string;
+      updated_slot_id?: string;
+      staff_zone?: string;
+      staff_shift?: string;
     };
 
     if (!booking_id || !action) {
@@ -147,8 +149,8 @@ export async function POST(request: NextRequest) {
 
     // Strict Role Permission Logic
     if (isStaff && !isAdmin) {
-      // Staff has restricted transitions: only CHECK_IN and CHECK_OUT
-      if (action === "CHECK_IN") {
+      // Staff has restricted transitions: CHECK_IN, CHECK_OUT, and REASSIGN_AND_CHECKIN
+      if (action === "CHECK_IN" || action === "REASSIGN_AND_CHECKIN") {
         if (!["PENDING", "CONFIRMED", "RESERVED"].includes(booking.status)) {
           return NextResponse.json(
             { error: `Staff can only check-in PENDING, CONFIRMED, or RESERVED bookings (current: ${booking.status})` },
@@ -166,13 +168,13 @@ export async function POST(request: NextRequest) {
         nextStatus = "COMPLETED";
       } else {
         return NextResponse.json(
-          { error: "Staff accounts are strictly limited to Check-in and Check-out. Cancel or status override requires Admin." },
+          { error: "Staff accounts are strictly limited to Check-in, Check-out, and Zone Re-assignment. Cancel or status override requires Admin." },
           { status: 403 }
         );
       }
     } else {
       // Admin: full authority
-      if (action === "CHECK_IN") {
+      if (action === "CHECK_IN" || action === "REASSIGN_AND_CHECKIN") {
         nextStatus = "CHECKED_IN";
       } else if (action === "CHECK_OUT") {
         nextStatus = "COMPLETED";
@@ -200,6 +202,12 @@ export async function POST(request: NextRequest) {
         plate_number: updated_plate.trim(),
       };
     }
+    if (updated_area_id) {
+      updatePayload.parking_area_id = updated_area_id;
+    }
+    if (updated_slot_id !== undefined) {
+      updatePayload.parking_slot_id = updated_slot_id;
+    }
 
     const { data: updatedBooking, error: updateErr } = await client
       .from("bookings")
@@ -214,12 +222,15 @@ export async function POST(request: NextRequest) {
 
     // Also record parking session transition if checking in or out
     const nowIso = new Date().toISOString();
+    const effectiveAreaId = updated_area_id || booking.parking_area_id;
+    const effectiveSlotId = updated_slot_id !== undefined ? updated_slot_id : booking.parking_slot_id;
+
     if (nextStatus === "CHECKED_IN") {
       await client.from("parking_sessions").insert({
         booking_id: booking.id,
         user_id: booking.user_id,
-        parking_area_id: booking.parking_area_id,
-        parking_slot_id: booking.parking_slot_id,
+        parking_area_id: effectiveAreaId,
+        parking_slot_id: effectiveSlotId,
         status: "ACTIVE",
         check_in_at: nowIso,
       });
@@ -231,21 +242,27 @@ export async function POST(request: NextRequest) {
         .eq("status", "ACTIVE");
     }
 
-    // Record audit log
+    // Record audit log with staff shift and zone accountability
     await client.from("audit_logs").insert({
       event_id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       trace_id: `trace-${Date.now()}`,
       actor_type: isAdmin ? "ADMIN" : "STAFF",
       actor_id: userId,
-      action: `BOOKING_${action}`,
+      action: action === "REASSIGN_AND_CHECKIN" ? "BOOKING_REASSIGN_AND_CHECKIN" : `BOOKING_${action}`,
       entity_type: "booking",
       entity_id: booking_id,
-      parking_area_id: booking.parking_area_id,
-      before_data: { status: booking.status },
-      after_data: { status: nextStatus, note: note || null },
+      parking_area_id: effectiveAreaId,
+      before_data: { status: booking.status, area_id: booking.parking_area_id, slot_id: booking.parking_slot_id },
+      after_data: {
+        status: nextStatus,
+        area_id: effectiveAreaId,
+        slot_id: effectiveSlotId,
+        note: note || null,
+        staff_zone: staff_zone || null,
+        staff_shift: staff_shift || null,
+      },
       result: "SUCCESS",
     });
-
     return NextResponse.json({
       success: true,
       booking_id: updatedBooking.id,

@@ -3,24 +3,34 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  ArrowRightLeft,
   Camera,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   Clock3,
   Edit3,
+  ExternalLink,
   Flashlight,
   LoaderCircle,
+  MapPin,
+  Navigation,
   QrCode,
   RefreshCw,
   Search,
   ShieldCheck,
+  Sparkles,
+  User,
   UserCheck,
+  Trash2,
+  X,
 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { parkingAreas, getGoogleMapsNavigationUrl } from "@/lib/parking/demo-data";
 
 type StaffRole = "staff" | "admin";
 
@@ -36,11 +46,10 @@ type ScanResult = {
   vehicle_plate: string | null;
   booker_name?: string | null;
   booker_phone?: string | null;
+  scan_result: string;
+  message?: string;
   is_overstay?: boolean;
   overdue_minutes?: number;
-  scan_result: "VALID" | "EXPIRED" | "USED" | "CANCELLED" | "INVALID_REFERENCE" | "ERROR";
-  qr_status?: string;
-  message?: string;
 };
 
 type ScanHistoryItem = {
@@ -50,6 +59,7 @@ type ScanHistoryItem = {
   result: "VALID" | "ERROR" | "CANCELLED" | "USED";
   plate: string | null;
   area: string | null;
+  shift?: string;
 };
 
 function playSuccessBeep() {
@@ -91,8 +101,197 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
   const [overridePlate, setOverridePlate] = useState("");
   const [staffNote, setStaffNote] = useState("");
 
+  // Staff Duty Context & Shift State
+  const [staffZone, setStaffZone] = useState<string>("P01");
+  const [staffShift, setStaffShift] = useState<string>("morning");
+  const [staffAccountName, setStaffAccountName] = useState<string>("Staff Member");
+  const [showReslotModal, setShowReslotModal] = useState(false);
+  const [reslotLoading, setReslotLoading] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState<Array<{ id: string; slot_code: string }>>([]);
+  const [targetSlotCode, setTargetSlotCode] = useState<string>("");
+  const [reslotTargetAreaId, setReslotTargetAreaId] = useState<string>("");
+
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const isStaffOnly = role === "staff";
+
+  // Load persistent shift context & staff info on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("parkspace_staff_shift_context");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.zone) {
+          setStaffZone(parsed.zone);
+          setAreaCodeFilter(parsed.zone);
+        }
+        if (parsed.shift) setStaffShift(parsed.shift);
+      } else {
+        setAreaCodeFilter("P01");
+      }
+      const supabase = createSupabaseBrowserClient();
+      void supabase.auth.getSession().then((sessionRes: { data: { session: { user?: { email?: string; user_metadata?: Record<string, any> } } | null } }) => {
+        const session = sessionRes?.data?.session;
+        if (session?.user?.email) {
+          setStaffAccountName(
+            session.user.user_metadata?.full_name ||
+            session.user.email.split("@")[0] ||
+            "Staff Member"
+          );
+        }
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  function handleUpdateDutyZone(newZone: string) {
+    setStaffZone(newZone);
+    setAreaCodeFilter(newZone);
+    try {
+      localStorage.setItem("parkspace_staff_shift_context", JSON.stringify({ zone: newZone, shift: staffShift }));
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleUpdateDutyShift(newShift: string) {
+    setStaffShift(newShift);
+    try {
+      localStorage.setItem("parkspace_staff_shift_context", JSON.stringify({ zone: staffZone, shift: newShift }));
+    } catch {
+      // ignore
+    }
+  }
+
+  const SHIFT_OPTIONS = [
+    { value: "morning", labelTh: "กะเช้า (07:00 – 12:00)", labelEn: "Morning (07:00 – 12:00)" },
+    { value: "afternoon", labelTh: "กะบ่าย (12:00 – 17:00)", labelEn: "Afternoon (12:00 – 17:00)" },
+    { value: "evening", labelTh: "กะค่ำ (17:00 – 22:00)", labelEn: "Evening (17:00 – 22:00)" },
+    { value: "all_day", labelTh: "ตลอดวัน (07:00 – 22:00)", labelEn: "All Day (07:00 – 22:00)" },
+  ];
+
+  async function openReslotModal() {
+    if (!result?.booking_id) return;
+    setReslotLoading(true);
+    setShowReslotModal(true);
+    setAvailableSlots([]);
+    setTargetSlotCode("");
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: areaData } = await supabase
+        .from("parking_areas")
+        .select("id, code, name_th")
+        .ilike("code", staffZone)
+        .maybeSingle();
+
+      if (areaData?.id) {
+        setReslotTargetAreaId(areaData.id);
+        const { data: slotsData } = await supabase
+          .from("parking_slots")
+          .select("id, slot_code, status")
+          .eq("parking_area_id", areaData.id)
+          .eq("status", "AVAILABLE")
+          .order("slot_code")
+          .limit(20);
+
+        if (slotsData && slotsData.length > 0) {
+          setAvailableSlots(slotsData);
+          setTargetSlotCode(slotsData[0].slot_code);
+        } else {
+          setAvailableSlots([
+            { id: "fallback-A01", slot_code: "A01" },
+            { id: "fallback-A02", slot_code: "A02" },
+            { id: "fallback-A03", slot_code: "A03" },
+            { id: "fallback-B01", slot_code: "B01" },
+          ]);
+          setTargetSlotCode("A01");
+        }
+      } else {
+        setReslotTargetAreaId(`area-${staffZone.toLowerCase()}`);
+        setAvailableSlots([
+          { id: "slot-A01", slot_code: "A01" },
+          { id: "slot-A02", slot_code: "A02" },
+          { id: "slot-A03", slot_code: "A03" },
+        ]);
+        setTargetSlotCode("A01");
+      }
+    } catch {
+      setAvailableSlots([
+        { id: "slot-A01", slot_code: "A01" },
+        { id: "slot-A02", slot_code: "A02" },
+      ]);
+      setTargetSlotCode("A01");
+    } finally {
+      setReslotLoading(false);
+    }
+  }
+
+  async function handleConfirmReslotAndCheckIn() {
+    if (!result?.booking_id) return;
+    setTransitioning("REASSIGN_AND_CHECKIN");
+    setNotice(null);
+
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+
+      const chosenSlot = availableSlots.find((s) => s.slot_code === targetSlotCode);
+      const chosenSlotId = chosenSlot && !chosenSlot.id.startsWith("fallback") && !chosenSlot.id.startsWith("slot-") ? chosenSlot.id : undefined;
+
+      const res = await fetch("/api/staff/transition", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          booking_id: result.booking_id,
+          action: "REASSIGN_AND_CHECKIN",
+          updated_area_id: reslotTargetAreaId || undefined,
+          updated_slot_id: chosenSlotId,
+          staff_zone: staffZone,
+          staff_shift: staffShift,
+          note: `[โซนไม่ตรง] เจ้าหน้าที่ ${staffAccountName} ย้ายเข้าโซน ${staffZone} ช่อง ${targetSlotCode} และเช็คอินหน้างาน`,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to reassign and check in");
+      }
+
+      const targetAreaObj = parkingAreas.find((a) => a.code.toUpperCase() === staffZone.toUpperCase());
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              booking_status: "CHECKED_IN",
+              area_code: staffZone,
+              area_name_th: targetAreaObj?.th || prev.area_name_th,
+              slot_code: targetSlotCode,
+            }
+          : null
+      );
+
+      setShowReslotModal(false);
+      setNotice({
+        text: isTh
+          ? `จัดสรรช่อง ${targetSlotCode} ในโซน ${staffZone} และเช็คอินสำเร็จเรียบร้อยแล้ว!`
+          : `Reassigned to slot ${targetSlotCode} in zone ${staffZone} and checked in successfully!`,
+        type: "success",
+      });
+    } catch (err) {
+      setNotice({
+        text: err instanceof Error ? err.message : isTh ? "เกิดข้อผิดพลาดในการย้ายโซน" : "Reassignment failed",
+        type: "error",
+      });
+    } finally {
+      setTransitioning(null);
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -365,10 +564,56 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       setTransitioning(null);
     }
   }
+
+  async function handleDeleteBooking() {
+    if (!result?.booking_id) return;
+    if (!window.confirm(isTh ? `คุณต้องการลบรายการจอง ${result.booking_reference} ออกจากระบบอย่างถาวรใช่หรือไม่?` : `Are you sure you want to permanently delete booking ${result.booking_reference}?`)) {
+      return;
+    }
+    setTransitioning("DELETING");
+    try {
+      const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const authToken = sessionData.session?.access_token;
+
+      const res = await fetch("/api/admin/bookings", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({ id: result.booking_id }),
+      });
+
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Failed to delete booking");
+      }
+
+      setNotice({
+        text: isTh ? `ลบรายการจอง ${result.booking_reference} ออกจากระบบเรียบร้อยแล้ว` : `Booking ${result.booking_reference} deleted successfully`,
+        type: "success",
+      });
+      handleClearResult();
+    } catch (err) {
+      setNotice({
+        text: err instanceof Error ? err.message : "Deletion failed",
+        type: "error",
+      });
+    } finally {
+      setTransitioning(null);
+    }
+  }
   const canCheckIn = result?.booking_status === "PENDING" || result?.booking_status === "CONFIRMED" || result?.booking_status === "RESERVED";
   const canCheckOut = result?.booking_status === "CHECKED_IN" || result?.booking_status === "OVERSTAY";
   const isCompleted = result?.booking_status === "COMPLETED";
   const isCancelled = result?.booking_status === "CANCELLED";
+
+  const isZoneMatch = !result?.area_code || result.area_code.toUpperCase() === staffZone.toUpperCase();
+  const bookedArea = result?.area_code
+    ? parkingAreas.find((a) => a.code.toUpperCase() === result.area_code?.toUpperCase())
+    : null;
+  const bookedAreaNavUrl = bookedArea ? getGoogleMapsNavigationUrl(bookedArea) : null;
 
   return (
     <div className="staff-scanner-container" style={{ maxWidth: 680, margin: "0 auto", display: "grid", gap: 16 }}>
@@ -431,6 +676,104 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
               <strong>{isTh ? "อำนาจเต็ม (Check-in, Check-out, ยกเลิก, No-Show, และ Override สถานะ)" : "Full Control (Check-in, Check-out, Cancel, No-Show, Override)"}</strong>.
             </span>
           )}
+        </div>
+      </div>
+
+      {/* Duty Station & Shift Banner */}
+      <div
+        className="review-panel"
+        style={{
+          padding: 16,
+          background: "var(--surface)",
+          border: "1px solid rgba(229, 174, 0, 0.35)",
+          borderRadius: 14,
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: "#fef3c7",
+                color: "#92400e",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MapPin size={16} />
+            </span>
+            <div>
+              <strong style={{ fontSize: 13, display: "block" }}>
+                {isTh ? "จุดเวรปฏิบัติงานเจ้าหน้าที่ (Duty Station)" : "Staff Duty Station"}
+              </strong>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                {isTh ? `ผู้ปฏิบัติงาน: ${staffAccountName}` : `Officer on duty: ${staffAccountName}`}
+              </span>
+            </div>
+          </div>
+          <span
+            className="data-badge"
+            style={{
+              fontSize: 10,
+              padding: "3px 8px",
+              background: "#ecfdf5",
+              color: "#065f46",
+              borderRadius: 6,
+              fontWeight: 700,
+            }}
+          >
+            ● {isTh ? "บันทึกข้อมูลเวรในระบบ" : "Duty Tracking Active"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 12,
+          }}
+        >
+          {/* Duty Zone Selector */}
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, display: "block", marginBottom: 4, color: "var(--ink)" }}>
+              📍 {isTh ? "โซนเวรที่ประจำการ" : "Assigned Zone"}
+            </label>
+            <select
+              className="form-control"
+              value={staffZone}
+              onChange={(e) => handleUpdateDutyZone(e.target.value)}
+              style={{ fontWeight: 700, fontSize: 13 }}
+            >
+              {parkingAreas.map((area) => (
+                <option key={area.code} value={area.code}>
+                  {area.code} · {isTh ? area.th : area.en}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Duty Shift Selector */}
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, display: "block", marginBottom: 4, color: "var(--ink)" }}>
+              ⏰ {isTh ? "ช่วงเวลากะเวร" : "Duty Shift"}
+            </label>
+            <select
+              className="form-control"
+              value={staffShift}
+              onChange={(e) => handleUpdateDutyShift(e.target.value)}
+              style={{ fontSize: 12 }}
+            >
+              {SHIFT_OPTIONS.map((shift) => (
+                <option key={shift.value} value={shift.value}>
+                  {isTh ? shift.labelTh : shift.labelEn}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -669,6 +1012,101 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             </span>
           </div>
 
+          {/* Zone Match / Mismatch Verification Banner */}
+          {isZoneMatch ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "10px 14px",
+                borderRadius: 10,
+                background: "#f0fdf4",
+                border: "1px solid #86efac",
+                color: "#166534",
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                fontWeight: 600,
+              }}
+            >
+              <CheckCircle2 size={18} color="#16a34a" />
+              <span>
+                {isTh
+                  ? `✅ บัตรผ่านตรงโซนเวรประจำการ (${staffZone}) — ตรวจสอบแล้ว อนุญาตให้เช็คอินเข้าจอดได้ตามปกติ`
+                  : `✅ Zone Verified: Matches duty zone (${staffZone}) — Ready for check-in`}
+              </span>
+            </div>
+          ) : (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "14px 16px",
+                borderRadius: 12,
+                background: "#fffbeb",
+                border: "2px solid #f59e0b",
+                color: "#92400e",
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <AlertTriangle size={22} color="#d97706" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <strong style={{ fontSize: 13, display: "block" }}>
+                    ⚠️ {isTh ? "แจ้งเตือน: รถจองพื้นที่อื่น (โซนไม่ตรงกับเวรประจำการ)!" : "Warning: Booked for different zone!"}
+                  </strong>
+                  <span style={{ fontSize: 11, lineHeight: 1.5, display: "block", marginTop: 2 }}>
+                    {isTh
+                      ? `บัตรใบนี้จองไว้ที่พื้นที่ ${result.area_code ?? "ไม่ระบุ"} (${result.area_name_th ?? ""}) แต่มาถึงโซนเวรประจำการของคุณ (${staffZone})`
+                      : `Booked for ${result.area_code ?? "unknown"} (${result.area_name_th ?? ""}), but arrived at your duty station (${staffZone}).`}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {bookedAreaNavUrl && (
+                  <a
+                    href={bookedAreaNavUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="secondary-button small-button"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, textDecoration: "none", fontSize: 11 }}
+                  >
+                    <Navigation size={13} />
+                    <span>{isTh ? `🗺️ นำทางไปพื้นที่ ${result.area_code}` : `🗺️ Navigate to ${result.area_code}`}</span>
+                    <ExternalLink size={11} />
+                  </a>
+                )}
+
+                {canCheckIn && (
+                  <button
+                    type="button"
+                    className="primary-button small-button"
+                    onClick={() => void openReslotModal()}
+                    disabled={Boolean(transitioning) || reslotLoading}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "#d97706",
+                      borderColor: "#b45309",
+                      fontSize: 11,
+                    }}
+                  >
+                    <ArrowRightLeft size={13} />
+                    <span>
+                      {reslotLoading
+                        ? (isTh ? "กำลังดึงช่องว่าง..." : "Loading slots...")
+                        : isTh
+                        ? `⚡ ย้ายเข้าโซนนี้ (${staffZone}) & จัดสรรช่องให้ทันที`
+                        : `⚡ Re-slot to ${staffZone} & Check-in`}
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Overstay Alert Banner */}
           {(result.is_overstay || (result.booking_status === "CHECKED_IN" && new Date().getTime() > new Date(result.ends_at).getTime())) && (
             <div
@@ -874,6 +1312,24 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                     <Clock3 size={13} />
                     <span>No Show</span>
                   </button>
+
+                  <button
+                    className="secondary-button small-button danger"
+                    type="button"
+                    onClick={() => void handleDeleteBooking()}
+                    disabled={Boolean(transitioning)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      background: "#fef2f2",
+                      borderColor: "#fecaca",
+                      color: "#dc2626",
+                    }}
+                  >
+                    {transitioning === "DELETING" ? <RefreshCw size={13} className="spin" /> : <Trash2 size={13} />}
+                    <span>{isTh ? "ลบรายการ (Delete)" : "Delete"}</span>
+                  </button>
                 </div>
 
                 {/* Status Override Select for Admin / Dev */}
@@ -951,6 +1407,153 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Re-slotting Modal to Current Duty Zone */}
+      {showReslotModal && result && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(4px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            className="review-panel"
+            style={{
+              maxWidth: 480,
+              width: "100%",
+              padding: 22,
+              boxShadow: "0 20px 48px rgba(0,0,0,0.35)",
+              border: "2px solid #f59e0b",
+              borderRadius: 16,
+              background: "var(--surface)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, display: "flex", alignItems: "center", gap: 8 }}>
+                <ArrowRightLeft size={18} color="#d97706" />
+                {isTh ? "จัดสรรช่องจอดในโซนเวร & เช็คอิน" : "Re-slot to Current Zone & Check-in"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowReslotModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ padding: 12, background: "#f8fafc", borderRadius: 10, fontSize: 12, border: "1px solid var(--line)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ color: "var(--muted)" }}>{isTh ? "รหัสการจอง:" : "Ref:"}</span>
+                  <strong style={{ fontFamily: "monospace" }}>{result.booking_reference}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ color: "var(--muted)" }}>{isTh ? "ทะเบียนรถ:" : "Plate:"}</span>
+                  <strong>{result.vehicle_plate || "—"}</strong>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ color: "var(--muted)" }}>{isTh ? "โซนเดิมที่จอง:" : "Original Zone:"}</span>
+                  <span style={{ color: "#b91c1c", fontWeight: 700 }}>
+                    {result.area_code} · {result.area_name_th ?? ""}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ padding: 12, background: "#fef3c7", borderRadius: 10, border: "1px solid #fde68a" }}>
+                <strong style={{ fontSize: 12, color: "#92400e", display: "block", marginBottom: 4 }}>
+                  🎯 {isTh ? `ย้ายเข้าโซนเวรประจำการ: ${staffZone}` : `Reassigning to Duty Zone: ${staffZone}`}
+                </strong>
+                <span style={{ fontSize: 11, color: "#78350f", lineHeight: 1.4, display: "block" }}>
+                  {isTh
+                    ? "ระบบจะอัปเดตพื้นที่การจองเป็นโซนนี้ บันทึกผู้รับผิดชอบ และทำการเช็คอินเข้าจอดให้ทันที"
+                    : "Booking area will be updated to this zone, logged in audit trail, and checked in immediately."}
+                </span>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, display: "block", marginBottom: 6, color: "var(--ink)" }}>
+                  {isTh ? "เลือกช่องจอดว่างในโซนนี้:" : "Select Available Slot:"}
+                </label>
+                {reslotLoading ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", color: "var(--muted)", fontSize: 12 }}>
+                    <LoaderCircle size={16} className="spin" />
+                    <span>{isTh ? "กำลังดึงข้อมูลช่องจอด..." : "Fetching slots..."}</span>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 130, overflowY: "auto", padding: 2 }}>
+                    {availableSlots.map((slot) => (
+                      <button
+                        key={slot.id}
+                        type="button"
+                        onClick={() => setTargetSlotCode(slot.slot_code)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          border: "1px solid",
+                          cursor: "pointer",
+                          background: targetSlotCode === slot.slot_code ? "#f59e0b" : "var(--surface)",
+                          color: targetSlotCode === slot.slot_code ? "#fff" : "var(--ink)",
+                          borderColor: targetSlotCode === slot.slot_code ? "#d97706" : "var(--line)",
+                        }}
+                      >
+                        {slot.slot_code}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ marginTop: 8 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)", display: "block", marginBottom: 2 }}>
+                    {isTh ? "หรือพิมพ์ระบุช่องจอดด้วยตนเอง:" : "Or enter custom slot code:"}
+                  </span>
+                  <input
+                    className="form-control"
+                    value={targetSlotCode}
+                    onChange={(e) => setTargetSlotCode(e.target.value.toUpperCase())}
+                    placeholder={isTh ? "เช่น A01, B05" : "e.g. A01, B05"}
+                    style={{ fontWeight: 700, fontSize: 13 }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowReslotModal(false)}
+                  disabled={transitioning === "REASSIGN_AND_CHECKIN"}
+                >
+                  {isTh ? "ยกเลิก" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void handleConfirmReslotAndCheckIn()}
+                  disabled={transitioning === "REASSIGN_AND_CHECKIN" || !targetSlotCode.trim()}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#d97706", borderColor: "#b45309" }}
+                >
+                  {transitioning === "REASSIGN_AND_CHECKIN" ? (
+                    <LoaderCircle size={15} className="spin" />
+                  ) : (
+                    <CheckCircle2 size={15} />
+                  )}
+                  <span>{isTh ? "⚡ ยืนยันย้ายโซน & เช็คอิน" : "⚡ Confirm & Check-in"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

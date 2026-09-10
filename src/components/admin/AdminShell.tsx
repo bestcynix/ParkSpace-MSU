@@ -3,6 +3,7 @@ import { Activity, BarChart3, CalendarCheck, Database, FileText, HeartPulse, Lay
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 
 export function AdminShell({ locale, role, children }: { locale: Locale; role: "admin" | "staff"; children: React.ReactNode }) {
@@ -36,7 +37,10 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
   return (
     <div className="admin-layout">
       <aside className="admin-sidebar">
-        <Logo locale={locale} dark />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingRight: 4 }}>
+          <Logo locale={locale} dark />
+          <ThemeToggle locale={locale} />
+        </div>
         <nav className="admin-nav" aria-label={`${role} navigation`}>
           {items.map(([key, label, Icon, path]) => {
             const ItemIcon = Icon as typeof LayoutDashboard;

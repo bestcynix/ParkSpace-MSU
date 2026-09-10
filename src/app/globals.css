@@ -22,6 +22,41 @@
   --shadow-card: 0 12px 36px rgba(30, 38, 55, 0.07);
 }
 
+[data-theme="dark"],
+.dark-theme {
+  --ink: #f3f4f6;
+  --muted: #9ca3af;
+  --line: #2d3748;
+  --surface: #1a202c;
+  --canvas: #0f172a;
+  --shadow-card: 0 12px 36px rgba(0, 0, 0, 0.5);
+  --gold: #f8c928;
+  --gold-deep: #fbbf24;
+  --gold-soft: rgba(248, 201, 40, 0.16);
+  --green: #22c55e;
+  --green-soft: rgba(34, 197, 94, 0.16);
+  --amber: #f59e0b;
+  --amber-soft: rgba(245, 158, 11, 0.16);
+  --blue: #3b82f6;
+  --blue-soft: rgba(59, 130, 246, 0.16);
+  --red: #ef4444;
+  --red-soft: rgba(239, 68, 68, 0.16);
+}
+
+.theme-toggle-btn {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.theme-toggle-btn .theme-icon {
+  transition: transform 200ms ease;
+}
+
+.theme-toggle-btn:hover .theme-icon {
+  transform: rotate(20deg) scale(1.1);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -88,6 +123,7 @@ button {
 
 .header-actions {
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .icon-button {
@@ -3262,20 +3298,28 @@ button.role-chip:disabled {
 }
 
 .qr-pass-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  margin: 0;
-  border-radius: 12px;
-  background: var(--gold-soft);
-  color: #9a7800;
-  flex-shrink: 0;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 12px !important;
+  background: var(--gold-soft) !important;
+  color: #9a7800 !important;
+  flex-shrink: 0 !important;
+  line-height: 1 !important;
 }
 
 .qr-pass-icon svg {
-  display: block;
+  display: block !important;
+  margin: auto !important;
+  width: 22px !important;
+  height: 22px !important;
 }
 
 .qr-pass-heading .empty-icon {

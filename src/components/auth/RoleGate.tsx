@@ -32,33 +32,59 @@ export function RoleGate({ locale, role, children }: { locale: Locale; role: Pro
           if (mounted) setState("blocked");
           return;
         }
-        const userId = sessionData.session.user.id;
-        let userRoles: string[] = [];
-        const { data: roleData, error } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", userId);
+        const user = sessionData.session.user;
+        const userId = user.id;
+        const userEmail = (user.email || "").toLowerCase().trim();
 
-        if (!error && roleData && roleData.length > 0) {
-          userRoles = roleData.map((item: { role?: unknown }) => {
-            const r = String(item.role ?? "").toLowerCase().trim();
-            return r === "developer" ? "admin" : r;
-          });
-        } else {
-          // Fallback to profiles.user_type
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("user_type")
-            .eq("id", userId)
-            .maybeSingle();
-          if (profile?.user_type) {
-            const ut = String(profile.user_type).toLowerCase().trim();
-            userRoles = [ut === "developer" ? "admin" : ut];
-          }
+        let hasAccess = false;
+
+        // Layer 1: Core MSU Super Admin / Admin / Staff email bypass
+        if (role === "admin" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th")) {
+          hasAccess = true;
+        } else if (role === "staff" && (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th" || userEmail === "staff@msu.ac.th")) {
+          hasAccess = true;
         }
 
-        const satisfyingRoles: string[] = ROLE_HIERARCHY[role] ?? [role];
-        const hasAccess = userRoles.some((userRole: string) => satisfyingRoles.includes(userRole));
+        // Layer 2: user_roles table
+        if (!hasAccess) {
+          const { data: roleData, error } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", userId);
+
+          let userRoles: string[] = [];
+          if (!error && roleData && roleData.length > 0) {
+            userRoles = roleData.map((item: { role?: unknown }) => {
+              const r = String(item.role ?? "").toLowerCase().trim();
+              return r === "developer" ? "admin" : r;
+            });
+          }
+
+          // Layer 3: profiles.user_type
+          if (userRoles.length === 0) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("user_type")
+              .eq("id", userId)
+              .maybeSingle();
+            if (profile?.user_type) {
+              const ut = String(profile.user_type).toLowerCase().trim();
+              userRoles = [ut === "developer" ? "admin" : ut];
+            }
+          }
+
+          // Layer 4: user_metadata
+          if (userRoles.length === 0 && user.user_metadata) {
+            const metaType = String(user.user_metadata.user_type || user.user_metadata.role || "").toLowerCase().trim();
+            if (metaType) {
+              userRoles = [metaType === "developer" ? "admin" : metaType];
+            }
+          }
+
+          const satisfyingRoles: string[] = ROLE_HIERARCHY[role] ?? [role];
+          hasAccess = userRoles.some((userRole: string) => satisfyingRoles.includes(userRole));
+        }
+
         if (mounted) setState(hasAccess ? "allowed" : "blocked");
       } catch {
         if (mounted) setState("blocked");

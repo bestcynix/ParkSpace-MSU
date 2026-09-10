@@ -15,6 +15,9 @@ import { DatabaseExplorer } from "@/components/admin/DatabaseExplorer";
 import { TraceExplorer } from "@/components/admin/TraceExplorer";
 import { FeatureFlagsManager } from "@/components/admin/FeatureFlagsManager";
 import { TeamDirectory } from "@/components/project/TeamDirectory";
+import { AdminBookingsManager } from "@/components/admin/AdminBookingsManager";
+import { SystemHealthPanel } from "@/components/admin/SystemHealthPanel";
+import { SystemSettingsPanel } from "@/components/admin/SystemSettingsPanel";
 import { ConsoleLiveData, type ConsoleView } from "@/components/admin/ConsoleLiveData";
 
 type Role = "admin" | "staff";
@@ -23,10 +26,12 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
   const t = getCopy(locale);
   const title = role === "admin" ? t.admin : t.staff;
   const subtitle = role === "admin" ? t.liveOperations : `${t.staff} · ${t.liveOperations}`;
+  const isTh = locale === "th";
   const sectionLabel =
     section === "dashboard" ? t.dashboard
     : section === "operations" ? t.liveOperations
     : section === "parking-areas" ? t.areas
+    : section === "bookings" ? (isTh ? "จัดการการจอง" : "Manage Bookings")
     : section === "users" ? t.users
     : section === "analytics" ? t.analytics
     : section === "scan" ? t.scanQr
@@ -37,8 +42,13 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
     : section === "errors" ? t.errors
     : section === "feedback" ? t.feedbackCenter
     : section === "team" ? t.teamMembersLabel
+    : section === "health" ? (isTh ? "สุขภาพระบบ" : "System Health")
+    : section === "settings" ? (isTh ? "ตั้งค่าระบบ" : "System Settings")
     : section.replaceAll("-", " ");
 
+  const isBookings = role === "admin" && section === "bookings";
+  const isHealth = role === "admin" && section === "health";
+  const isSettings = role === "admin" && section === "settings";
   const isFeedbackReview = role === "admin" && section === "feedback";
   const isErrorReview = role === "admin" && section === "errors";
   const isAreaManager = role === "admin" && section === "parking-areas";
@@ -53,6 +63,9 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
   const isIncidents = section === "incidents";
 
   const hasDedicatedSection =
+    isBookings ||
+    isHealth ||
+    isSettings ||
     isAreaManager ||
     isUserManager ||
     isAnalytics ||
@@ -84,7 +97,10 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
 
         <ConsoleLiveData locale={locale} role={role} view={consoleView} />
 
-        {isAreaManager ? <AreaManager locale={locale} role={role} />
+        {isBookings ? <AdminBookingsManager locale={locale} />
+          : isHealth ? <SystemHealthPanel locale={locale} />
+          : isSettings ? <SystemSettingsPanel locale={locale} />
+          : isAreaManager ? <AreaManager locale={locale} role={role} />
           : isUserManager ? <UserManager locale={locale} role={role} />
           : isAnalytics ? <AnalyticsPanel locale={locale} role={role} />
           : isAudit ? <AuditLogPanel locale={locale} role={role} />

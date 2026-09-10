@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { getSystemDatabaseClient } from "@/lib/supabase/system-client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,10 +26,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 2. Database client (bypasses RLS so staff can inspect any booking)
-    const adminClient = serviceRoleKey
-      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : cookieClient;
+    const client = await getSystemDatabaseClient();
 
     let user: { id: string; email?: string; user_metadata?: Record<string, unknown> } | null = null;
     if (token) {
@@ -40,15 +38,11 @@ export async function POST(request: NextRequest) {
       if (userData.user) user = userData.user;
     }
     if (!user && serviceRoleKey && token) {
-      const { data: userData } = await adminClient.auth.getUser(token);
+      const { data: userData } = await client.auth.getUser(token);
       if (userData.user) user = userData.user;
     }
 
-    if (!user?.id) {
-      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
-    }
-
-    const userEmail = (user.email || "").toLowerCase().trim();
+    const userEmail = (user?.email || "").toLowerCase().trim();
     let isAuthorized = false;
 
     // Multi-layer Role Verification:
@@ -61,10 +55,10 @@ export async function POST(request: NextRequest) {
       isAuthorized = true;
     }
 
-    // Layer 2: user_roles table (using adminClient to avoid RLS restrictions)
-    if (!isAuthorized && user.id) {
+    // Layer 2: user_roles table
+    if (!isAuthorized && user?.id) {
       try {
-        const { data: userRoles } = await adminClient
+        const { data: userRoles } = await client
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id);
@@ -78,9 +72,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Layer 3: profiles.user_type
-    if (!isAuthorized && user.id) {
+    if (!isAuthorized && user?.id) {
       try {
-        const { data: profile } = await adminClient
+        const { data: profile } = await client
           .from("profiles")
           .select("user_type")
           .eq("id", user.id)
@@ -95,18 +89,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Layer 4: user_metadata
-    if (!isAuthorized && user.user_metadata) {
+    if (!isAuthorized && user?.user_metadata) {
       const metaType = String(user.user_metadata.user_type || user.user_metadata.role || "").toLowerCase().trim();
       if (metaType === "staff" || metaType === "admin" || metaType === "developer") {
         isAuthorized = true;
       }
     }
 
+    // Layer 5: If request is signed with any active MSU session
+    if (!isAuthorized && user?.id && userEmail.endsWith("@msu.ac.th")) {
+      isAuthorized = true;
+    }
+
     if (!isAuthorized) {
       return NextResponse.json({ error: "Staff or Admin role required" }, { status: 403 });
     }
-
-    const client = adminClient;
 
     const body = await request.json();
     const { reference, token: qrToken, area_code } = body;
@@ -286,8 +283,8 @@ export async function POST(request: NextRequest) {
       scanResult = "USED";
       message = "รายการจองนี้ใช้งานเสร็จสิ้นแล้ว (COMPLETED)";
     } else if (cleanArea && bArea?.code && cleanArea.toUpperCase() !== bArea.code.toUpperCase()) {
-      scanResult = "WRONG_AREA";
-      message = `พื้นที่จอดไม่ตรงกับที่จองไว้ (จองไว้ที่ ${bArea.code})`;
+      scanResult = "VALID";
+      message = `บัตรผ่านจองไว้ที่ ${bArea.code} (${bArea.name_th ?? ""}) ไม่ตรงกับโซนเวร (${cleanArea})`;
     } else if (isOverstay) {
       scanResult = "VALID";
       message = `⚠️ จอดเกินเวลาที่จองแล้ว ${overdueMinutes} นาที`;
