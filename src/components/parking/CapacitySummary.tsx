@@ -40,7 +40,15 @@ function typeLabel(t: Copy, value: string) {
   }
 }
 
-export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale: Locale }) {
+export function CapacitySummary({
+  areaCode,
+  locale,
+  refreshSignal,
+}: {
+  areaCode: string;
+  locale: Locale;
+  refreshSignal?: number;
+}) {
   const t = getCopy(locale);
   const [rows, setRows] = useState<CapacityRow[]>(defaultStandardRows);
   const [loading, setLoading] = useState(true);
@@ -102,7 +110,8 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
 
     void loadSummary();
 
-    if (!isSupabaseConfigured()) {
+    // If parent component manages real-time pooling via refreshSignal, don't open duplicate channel
+    if (!isSupabaseConfigured() || refreshSignal !== undefined) {
       return () => {
         active = false;
       };
@@ -128,7 +137,7 @@ export function CapacitySummary({ areaCode, locale }: { areaCode: string; locale
       window.clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [areaCode]);
+  }, [areaCode, refreshSignal]);
 
   if (loading) {
     return (

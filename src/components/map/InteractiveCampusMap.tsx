@@ -196,6 +196,19 @@ export function InteractiveCampusMap({
     ? `${focusPoint.latitude},${focusPoint.longitude}`
     : focusArea ? getGoogleMapsSearchQuery(focusArea) : "มหาวิทยาลัยมหาสารคาม ตำบลขามเรียง จังหวัดมหาสารคาม";
   const googleMapsUrl = focusArea ? getGoogleMapsNavigationUrl(focusArea, focusPoint) : "https://www.google.com/maps/search/?api=1&query=มหาวิทยาลัยมหาสารคาม";
+  const [isIOS, setIsIOS] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined") {
+      setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent));
+    }
+  }, []);
+
+  const appleMapsUrl = focusPoint
+    ? `https://maps.apple.com/?daddr=${focusPoint.latitude},${focusPoint.longitude}&dirflg=d`
+    : focusArea
+    ? `https://maps.apple.com/?daddr=${focusArea.latitude},${focusArea.longitude}&dirflg=d`
+    : "https://maps.apple.com/?daddr=16.24704,103.24936";
   const googleEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(destinationQuery)}&z=${focusPoint ? 18 : 16}&ie=UTF8&iwloc=&output=embed`;
   const satelliteUrl = focusPoint
     ? `https://www.google.com/maps/@?api=1&map_action=map&center=${focusPoint.latitude},${focusPoint.longitude}&zoom=18&basemap=satellite`
@@ -393,6 +406,18 @@ export function InteractiveCampusMap({
               </button>
             ) : null}
             <Link className="secondary-button" href={`/${locale}/parking/${focusArea.id}`}>{t.details}</Link>
+            {isIOS ? (
+              <a
+                className="secondary-button"
+                href={appleMapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                title={isTh ? "เปิดนำทางด้วย Apple Maps" : "Navigate with Apple Maps"}
+              >
+                <span>Apple Maps</span>
+                <ExternalLink size={13} />
+              </a>
+            ) : null}
             <a className="primary-button" href={googleMapsUrl} target="_blank" rel="noreferrer">{mapActionLabel}<ExternalLink size={14} /></a>
           </div>
         </div>

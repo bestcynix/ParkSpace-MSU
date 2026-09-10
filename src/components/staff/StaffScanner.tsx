@@ -119,6 +119,8 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
   const [editingField, setEditingField] = useState(false);
   const [overridePlate, setOverridePlate] = useState("");
   const [staffNote, setStaffNote] = useState("");
+  const [plateSuggestions, setPlateSuggestions] = useState<Array<{ id: string; reference: string; plate: string; status: string; slot: string | null }>>([]);
+  const [isSearchingPlate, setIsSearchingPlate] = useState(false);
 
   // Staff Duty Context & Shift State
   const [staffZone, setStaffZone] = useState<string>("P01");
@@ -181,6 +183,45 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
       // ignore
     }
   }
+
+  useEffect(() => {
+    const query = manualCode.trim();
+    if (!query || query.length < 2) {
+      setPlateSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsSearchingPlate(true);
+        const supabase = createSupabaseBrowserClient();
+        const { data } = await supabase
+          .from("bookings")
+          .select("id, reference, status, vehicle_snapshot, parking_slots(slot_code)")
+          .or(`reference.ilike.%${query}%,vehicle_snapshot->>plate.ilike.%${query}%,vehicle_snapshot->>plate_number.ilike.%${query}%`)
+          .order("created_at", { ascending: false })
+          .limit(4);
+
+        if (data) {
+          setPlateSuggestions(
+            data.map((b: any) => ({
+              id: b.id,
+              reference: b.reference,
+              plate: b.vehicle_snapshot?.plate || b.vehicle_snapshot?.plate_number || b.reference,
+              status: b.status,
+              slot: b.parking_slots?.slot_code || null,
+            }))
+          );
+        }
+      } catch {
+        // ignore
+      } finally {
+        setIsSearchingPlate(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [manualCode]);
 
   const SHIFT_OPTIONS = [
     { value: "morning", labelTh: "กะเช้า (07:00 – 12:00)", labelEn: "Morning (07:00 – 12:00)" },
@@ -1038,7 +1079,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 className="form-control"
-                placeholder={isTh ? "เช่น MSUPK-202609-XXXXX หรือ QR Reference" : "e.g. MSUPK-202609-XXXXX or QR Ref"}
+                placeholder={isTh ? "ค้นหาด้วยรหัสการจอง หรือ ทะเบียนรถ (เช่น 1กข 9999)" : "Search by booking ref or plate (e.g. 1AB 9999)"}
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 style={{ flex: 1 }}
@@ -1049,10 +1090,41 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                 disabled={Boolean(transitioning) || !manualCode.trim()}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                {transitioning === "VALIDATING" ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />}
+                {transitioning === "VALIDATING" || isSearchingPlate ? <LoaderCircle size={15} className="spin" /> : <Search size={15} />}
                 <span>{isTh ? "ตรวจสอบ" : "Verify"}</span>
               </button>
             </div>
+            {plateSuggestions.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "4px 0" }}>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  {isSearchingPlate ? "…" : isTh ? "ผลการค้นหาด่วน:" : "Quick matches:"}
+                </span>
+                {plateSuggestions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setManualCode(item.reference);
+                      void validateReference(item.reference);
+                    }}
+                    className="data-badge"
+                    style={{
+                      cursor: "pointer",
+                      padding: "3px 8px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      background: "#f1f5f9",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 6,
+                      color: "var(--ink)",
+                    }}
+                    title={isTh ? "คลิกเพื่อตรวจสอบบัตรผ่านนี้ทันที" : "Click to inspect pass"}
+                  >
+                    🚗 {item.plate} ({item.status})
+                  </button>
+                ))}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 className="form-control"

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock,
   Database,
+  Download,
   ExternalLink,
   FileText,
   Filter,
@@ -955,6 +956,47 @@ function OperationsList({
   ];
   const unavailable = isTh ? "อ่านข้อมูลสดไม่ได้" : "Live data is unavailable.";
 
+  function exportOperationsCsv() {
+    const header = [
+      "Area Code",
+      "Area Name",
+      "Total Slots",
+      "Available Slots",
+      "Reserved Slots",
+      "Occupied Slots",
+      "Occupancy Rate",
+      "Operational Status",
+    ];
+    const rows = areas.map((a) => {
+      const s = summaries[a.code.toUpperCase()];
+      const total = s?.total ?? a.capacity ?? 0;
+      const occ = s?.occupied ?? 0;
+      const res = s?.reserved ?? 0;
+      const av = s?.available ?? (total - occ - res);
+      const pct = total > 0 ? Math.round(((occ + res) / total) * 100) : 0;
+      return [
+        a.code,
+        `"${(isTh ? a.name_th : a.name_en).replaceAll('"', '""')}"`,
+        String(total),
+        String(av),
+        String(res),
+        String(occ),
+        `${pct}%`,
+        s ? areaStatus(a, s) : a.current_status,
+      ];
+    });
+    const csvContent = "\uFEFF" + [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `parkspace-msu-operations-${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section aria-label={t.liveOperations}>
       <div className="section-heading">
@@ -971,6 +1013,16 @@ function OperationsList({
               {t.areas}
             </Link>
           ) : null}
+          <button
+            className="secondary-button small-button"
+            type="button"
+            onClick={exportOperationsCsv}
+            title={isTh ? "ส่งออกสถิติพื้นที่จอดรถเป็น CSV" : "Export operations report as CSV"}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+          >
+            <Download size={14} />
+            <span>{isTh ? "ส่งออก CSV" : "Export CSV"}</span>
+          </button>
           <button className="secondary-button small-button" type="button" onClick={onRefresh} disabled={refreshing}>
             <RefreshCw size={14} className={refreshing ? "spin" : undefined} />
             {t.refreshAvailability}
@@ -1087,6 +1139,11 @@ function OperationsList({
                 const summary = summaries[area.code.toUpperCase()];
                 const status = areaStatus(area, summary);
                 const areaName = isTh ? area.name_th : area.name_en;
+                const isNearCapacity = Boolean(
+                  summary?.total &&
+                  summary.total > 0 &&
+                  (summary.occupied + summary.reserved) / summary.total >= 0.9
+                );
                 const capacity = summary?.total
                   ? `${summary.available}/${summary.total} ${t.available} (จอง ${summary.reserved} · จอด ${summary.occupied})`
                   : area.capacity != null
@@ -1095,7 +1152,29 @@ function OperationsList({
                 return (
                   <Link className="ops-card" href={`/${locale}/parking/${area.code.toLowerCase()}`} key={area.id}>
                     <header>
-                      <strong>{area.code}</strong>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <strong>{area.code}</strong>
+                        {isNearCapacity ? (
+                          <span
+                            style={{
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              border: "1px solid #fca5a5",
+                              fontSize: 10,
+                              fontWeight: 700,
+                              padding: "1px 6px",
+                              borderRadius: 6,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 3,
+                            }}
+                            title={isTh ? "อัตราการจอดและจองสูงกว่า 90%" : "Occupancy exceeds 90%"}
+                          >
+                            <AlertTriangle size={11} />
+                            {isTh ? "หนาแน่น (>90%)" : "Near Capacity"}
+                          </span>
+                        ) : null}
+                      </div>
                       <StatusBadge status={status} locale={locale} />
                     </header>
                     <p>

@@ -21,6 +21,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
     latitude: area.latitude,
     longitude: area.longitude,
   });
+  const [refreshSignal, setRefreshSignal] = useState(0);
   const [stats, setStats] = useState({
     capacity: area.estimatedCapacity ?? 100,
     available: area.estimatedCapacity ?? 100,
@@ -90,6 +91,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
       window.clearTimeout(refreshTimer);
       refreshTimer = window.setTimeout(() => {
         void loadLiveArea();
+        setRefreshSignal(Date.now());
       }, 400);
     }
 
@@ -112,13 +114,21 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
   const bookingHref = canShowSlotLayout ? `/${locale}/parking/${area.id}/slots` : `/${locale}/app/bookings/new?area=${area.id}`;
   const bookingLabel = canShowSlotLayout ? t.selectSlot : t.reserveArea;
 
+  const areaSummary = {
+    total: stats.capacity,
+    available: stats.available,
+    reserved: stats.reserved,
+    occupied: stats.occupied,
+    closed: 0,
+  };
+
   return (
     <div className="app-frame">
       <div className="mobile-page page-wrap">
         <div className="page-topbar"><Link className="back-button" href={`/${locale}/parking`} aria-label={t.back}><ArrowLeft size={18} /></Link><div><h1>{t.details}</h1><p>{area.code} · {title}</p></div></div>
         <AreaImage areaCode={area.code} title={title} locale={locale} className="detail-image" loading="eager" />
         <main className="detail-content">
-          <div className="detail-title-row"><div><h1>{title}<span>{locale === "th" ? area.en : area.th}</span></h1></div><LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} /></div>
+          <div className="detail-title-row"><div><h1>{title}<span>{locale === "th" ? area.en : area.th}</span></h1></div><LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} summary={areaSummary} /></div>
           <div className="inline-actions" style={{ marginTop: 13 }}>
             <span className="data-badge"><ShieldCheck size={12} /> {t.officialMap}</span>
             <span className="data-badge">{slotMode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span>
@@ -171,7 +181,7 @@ export function ParkingDetailClient({ locale, area }: { locale: Locale; area: Pa
               </ol>
             </div>
           ) : null}
-          {tab === "overview" ? <CapacitySummary areaCode={area.code} locale={locale} /> : null}
+          {tab === "overview" ? <CapacitySummary areaCode={area.code} locale={locale} refreshSignal={refreshSignal} /> : null}
           <div className="sticky-action"><a className="secondary-button" href={getGoogleMapsNavigationUrl(area, verifiedPoint)} target="_blank" rel="noreferrer"><Navigation size={16} />{t.navigate}</a><Link className="primary-button" href={bookingHref}>{bookingLabel}</Link></div>
         </main>
       </div>

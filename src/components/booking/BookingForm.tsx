@@ -275,6 +275,14 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       }
       const selectedVehicle = vehicles.find((item) => item.id === vehicleId);
       const selectedVehicleType = (selectedVehicle?.vehicle_type as VehicleType | undefined) ?? vehicleType;
+
+      if (!selectedVehicle && !vehicle.trim()) {
+        const plateMsg = locale === "th" ? "กรุณาระบุเลขทะเบียนรถสำหรับเข้าจอด" : "Please enter a valid license plate";
+        setMessage(plateMsg);
+        notify({ title: locale === "th" ? "ข้อมูลไม่ครบถ้วน" : "Missing Info", message: plateMsg, kind: "warning" });
+        return;
+      }
+
       if (selectedSlot?.type && !["ANY", "OTHER"].includes(selectedSlot.type) && selectedSlot.type !== selectedVehicleType) {
         setMessage(t.vehicleSlotMismatch);
         notify({ title: t.vehicleSlotMismatch, message: `${t.slotType}: ${slotTypeLabel(locale, selectedSlot.type)}`, kind: "warning" });
@@ -392,6 +400,94 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       <p>{title} · {locale === "th" ? "มหาวิทยาลัยมหาสารคาม" : "Mahasarakham University"}</p>
       <div className="form-group"><label htmlFor="date"><CalendarDays size={13} style={{ verticalAlign: "-2px" }} /> {t.selectDate}</label><input className="form-control" id="date" type="date" min={todayStr} value={date} onChange={(event) => handleDateChange(event.target.value)} required /></div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><div className="form-group"><label htmlFor="start"><Clock3 size={13} style={{ verticalAlign: "-2px" }} /> {t.startTime}</label><input className="form-control" id="start" type="time" min={date === todayStr ? getCurrentTimeStr() : undefined} value={startTime} onChange={(event) => handleStartTimeChange(event.target.value)} required /></div><div className="form-group"><label htmlFor="end">{t.endTime}</label><input className="form-control" id="end" type="time" min={startTime} value={endTime} onChange={(event) => handleEndTimeChange(event.target.value)} required /></div></div>
+
+      {/* Vehicle Selection or Manual Plate Entry */}
+      <div className="form-group" style={{ marginTop: 10 }}>
+        <label htmlFor="vehicle-select" style={{ display: "flex", justifyContent: "space-between" }}>
+          <span>
+            <Car size={13} style={{ verticalAlign: "-2px" }} /> {t.vehiclePlate}
+          </span>
+          {vehicles.length > 0 && vehicleId ? (
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>
+              {locale === "th" ? "ยานพาหนะที่บันทึกไว้" : "Saved vehicle"}
+            </span>
+          ) : null}
+        </label>
+        {vehicles.length > 0 ? (
+          <div style={{ display: "grid", gap: 8 }}>
+            <select
+              id="vehicle-select"
+              className="form-control"
+              value={vehicleId}
+              onChange={(e) => {
+                const vid = e.target.value;
+                setVehicleId(vid);
+                const found = vehicles.find((v) => v.id === vid);
+                if (found) {
+                  setVehicle(found.plate);
+                  setVehicleType((found.vehicle_type as VehicleType) || "CAR");
+                } else {
+                  setVehicle("");
+                }
+              }}
+            >
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.plate} ({v.province || (locale === "th" ? "มหาสารคาม" : "Maha Sarakham")}) · {v.brand || ""} {v.model || ""} [{slotTypeLabel(locale, v.vehicle_type)}]
+                </option>
+              ))}
+              <option value="">{locale === "th" ? "+ กรอกทะเบียนคันอื่นด้วยตนเอง" : "+ Enter custom plate"}</option>
+            </select>
+            {vehicleId === "" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 8, marginTop: 4 }}>
+                <input
+                  className="form-control"
+                  placeholder={locale === "th" ? "เช่น 1กข 9999 มหาสารคาม" : "e.g. 1AB 9999"}
+                  value={vehicle}
+                  onChange={(e) => setVehicle(formatThaiPlate(e.target.value))}
+                  required
+                />
+                <select
+                  className="form-control"
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value as VehicleType)}
+                >
+                  <option value="CAR">{t.car}</option>
+                  <option value="MOTORCYCLE">{t.motorcycle}</option>
+                  <option value="PICKUP">{t.pickup}</option>
+                  <option value="VAN">{t.van}</option>
+                  <option value="EV">{t.ev}</option>
+                  <option value="ANY">{t.otherVehicle}</option>
+                </select>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 8 }}>
+            <input
+              id="vehicle"
+              className="form-control"
+              placeholder={locale === "th" ? "เช่น 1กข 9999 มหาสารคาม" : "e.g. 1AB 9999"}
+              value={vehicle}
+              onChange={(e) => setVehicle(formatThaiPlate(e.target.value))}
+              required
+            />
+            <select
+              className="form-control"
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value as VehicleType)}
+            >
+              <option value="CAR">{t.car}</option>
+              <option value="MOTORCYCLE">{t.motorcycle}</option>
+              <option value="PICKUP">{t.pickup}</option>
+              <option value="VAN">{t.van}</option>
+              <option value="EV">{t.ev}</option>
+              <option value="ANY">{t.otherVehicle}</option>
+            </select>
+          </div>
+        )}
+      </div>
+
       {(() => {
         const effectiveVehicleType = selectedVehicleForType(vehicles, vehicleId)?.vehicle_type ?? vehicleType;
         const isTypeMismatch = Boolean(
@@ -430,3 +526,8 @@ function slotTypeLabel(locale: Locale, value: string) {
     default: return t.otherVehicle;
   }
 }
+
+function formatThaiPlate(input: string): string {
+  return input.replace(/\s+/g, " ").trim().toUpperCase();
+}
+
