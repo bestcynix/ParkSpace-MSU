@@ -213,6 +213,16 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     return () => window.clearTimeout(timer);
   }, [loadAreas]);
 
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
   function updateDraft<K extends keyof AreaDraft>(key: K, value: AreaDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
   }
@@ -396,9 +406,14 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       setMessage(locale === "th" ? `ลบพื้นที่ ${area.code} สำเร็จ` : `Deleted area ${area.code}`);
       notify({ title: locale === "th" ? `ลบพื้นที่ ${area.code} สำเร็จ` : `Deleted ${area.code}`, kind: "success" });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : t.operationalData;
+      let detail = error instanceof Error ? error.message : t.operationalData;
+      if (detail.includes("violates foreign key constraint") || detail.includes("foreign key")) {
+        detail = locale === "th"
+          ? "ไม่สามารถลบพื้นที่นี้ได้ เนื่องจากมีรายการจองหรือช่องจอดผูกอยู่กับพื้นที่นี้ กรุณายกเลิก/ลบรายการจองหรือย้ายช่องจอดก่อนลบพื้นที่"
+          : "Cannot delete this area because there are active bookings or parking slots linked to it. Please remove them first.";
+      }
       setMessage(detail);
-      notify({ title: t.operationalData, message: detail, kind: "error" });
+      notify({ title: locale === "th" ? "ไม่สามารถลบพื้นที่ได้" : "Cannot Delete Area", message: detail, kind: "error" });
     }
   }
 

@@ -69,7 +69,7 @@ export type AdminBookingItem = {
 
 export function AdminBookingsManager({ locale }: { locale: Locale }) {
   const isTh = locale === "th";
-  const { notify } = useNotifications();
+  const { confirm, notify } = useNotifications();
   const searchParams = useSearchParams();
   const urlStatus = searchParams?.get("status");
 
@@ -186,11 +186,15 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
   }
 
   async function handleDelete(id: string, ref: string) {
-    const confirmed = window.confirm(
-      isTh
-        ? `คุณแน่ใจหรือไม่ที่จะลบรายการจอง ${ref}? การกระทำนี้ไม่สามารถย้อนกลับได้`
-        : `Are you sure you want to permanently delete booking ${ref}?`
-    );
+    const confirmed = await confirm({
+      title: isTh ? "ยืนยันการลบรายการจอง" : "Confirm Delete Booking",
+      message: isTh
+        ? `คุณแน่ใจหรือไม่ที่จะลบรายการจอง ${ref} ออกจากระบบ? การกระทำนี้ไม่สามารถย้อนกลับได้`
+        : `Are you sure you want to permanently delete booking ${ref}? This cannot be undone.`,
+      confirmLabel: isTh ? "ลบรายการจอง" : "Delete Booking",
+      cancelLabel: isTh ? "ยกเลิก" : "Cancel",
+      danger: true,
+    });
     if (!confirmed) return;
 
     setDeletingId(id);

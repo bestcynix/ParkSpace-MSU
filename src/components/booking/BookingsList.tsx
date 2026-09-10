@@ -274,22 +274,43 @@ export function BookingsList({ locale }: { locale: Locale }) {
     }
   }
 
+  function parseLocalTime(isoString?: string | null): string {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "";
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${hours}:${minutes}`;
+    } catch {
+      return "";
+    }
+  }
+
   function openEdit(booking: Booking) {
     setEditingBooking(booking);
     setEditPlate(booking.vehicle_snapshot?.plate ?? "");
-    setEditStartsAt(booking.starts_at ? booking.starts_at.slice(11, 16) : "");
-    setEditEndsAt(booking.ends_at ? booking.ends_at.slice(11, 16) : "");
+    setEditStartsAt(parseLocalTime(booking.starts_at) || "10:00");
+    setEditEndsAt(parseLocalTime(booking.ends_at) || "13:00");
   }
 
   async function handleSaveEdit(e: FormEvent) {
     e.preventDefault();
     if (!editingBooking) return;
+    if (editEndsAt <= editStartsAt) {
+      notify({
+        title: isTh ? "เวลาไม่ถูกต้อง" : "Invalid Time Range",
+        message: isTh ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น" : "End time must be after start time",
+        kind: "warning",
+      });
+      return;
+    }
     setSavingEdit(true);
     try {
       const supabase = createSupabaseBrowserClient();
       const bDate = editingBooking.booking_date;
-      const updatedStarts = `${bDate}T${editStartsAt || "08:00"}:00`;
-      const updatedEnds = `${bDate}T${editEndsAt || "12:00"}:00`;
+      const updatedStarts = `${bDate}T${editStartsAt || "10:00"}:00+07:00`;
+      const updatedEnds = `${bDate}T${editEndsAt || "13:00"}:00+07:00`;
       const updatedSnapshot = { plate: editPlate.trim() };
 
       const { error } = await supabase

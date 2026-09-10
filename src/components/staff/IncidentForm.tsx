@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ExternalLink,
   FileWarning,
@@ -586,14 +588,50 @@ export function IncidentForm({ locale, role = "staff" }: { locale: Locale; role?
                   alignItems: "center",
                   gap: 6,
                   background: "var(--canvas)",
-                  padding: "4px 10px",
+                  padding: "3px 8px",
                   borderRadius: 20,
                   border: "1px solid var(--line)",
                   fontSize: 12,
                   fontWeight: 600,
                 }}
               >
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: page <= 1 ? "not-allowed" : "pointer",
+                    opacity: page <= 1 ? 0.35 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: 2,
+                    color: "inherit",
+                  }}
+                  aria-label={isTh ? "หน้าก่อนหน้า" : "Previous page"}
+                >
+                  <ChevronLeft size={14} />
+                </button>
                 <span>{page} / {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: page >= totalPages ? "not-allowed" : "pointer",
+                    opacity: page >= totalPages ? 0.35 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    padding: 2,
+                    color: "inherit",
+                  }}
+                  aria-label={isTh ? "หน้าถัดไป" : "Next page"}
+                >
+                  <ChevronRight size={14} />
+                </button>
               </div>
             </div>
           </div>

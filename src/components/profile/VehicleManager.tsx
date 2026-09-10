@@ -63,6 +63,18 @@ export function VehicleManager({ locale }: { locale: Locale }) {
     return () => { active = false; };
   }, [configured, t.operationalData, t.signInRequired]);
 
+  const isDirty = Boolean(editingVehicleId || form.plate.trim() || form.province.trim());
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
   function updateField(field: keyof typeof emptyForm, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -177,9 +189,14 @@ export function VehicleManager({ locale }: { locale: Locale }) {
       if (detailsVehicleId === vehicle.id) setDetailsVehicleId(null);
       notify({ title: t.deleteVehicle, kind: "success" });
     } catch (error) {
-      const detail = error instanceof Error ? error.message : t.operationalData;
+      let detail = error instanceof Error ? error.message : t.operationalData;
+      if (detail.includes("violates foreign key constraint") || detail.includes("foreign key")) {
+        detail = locale === "th"
+          ? "ไม่สามารถลบข้อมูลรถคันนี้ได้ เนื่องจากมีประวัติการจองผูกกับรถคันนี้อยู่"
+          : "Cannot delete this vehicle because it is linked to existing booking records.";
+      }
       setMessage(detail);
-      notify({ title: t.operationalData, message: detail, kind: "error" });
+      notify({ title: locale === "th" ? "ไม่สามารถลบข้อมูลรถได้" : "Cannot Delete Vehicle", message: detail, kind: "error" });
     }
   }
 

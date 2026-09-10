@@ -164,6 +164,12 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
     setErrorMsg("");
     try {
       const supabase = createSupabaseBrowserClient();
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        setErrorMsg(isTh ? "กรุณาเข้าสู่ระบบเพื่อดูรายละเอียดการจองนี้" : "Please sign in to view this booking");
+        return;
+      }
+
       const { data, error } = await supabase
         .from("bookings")
         .select(`
@@ -253,23 +259,44 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
     }
   };
 
+  function parseLocalTime(isoString?: string | null): string {
+    if (!isoString) return "";
+    try {
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return "";
+      const hours = String(d.getHours()).padStart(2, "0");
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      return `${hours}:${minutes}`;
+    } catch {
+      return "";
+    }
+  }
+
   const openEditModal = () => {
     if (!booking) return;
     setEditPlate(booking.vehicle_snapshot?.plate || booking.vehicle_snapshot?.plate_number || "");
-    setEditStartsAt(booking.starts_at ? booking.starts_at.slice(11, 16) : "");
-    setEditEndsAt(booking.ends_at ? booking.ends_at.slice(11, 16) : "");
+    setEditStartsAt(parseLocalTime(booking.starts_at) || "10:00");
+    setEditEndsAt(parseLocalTime(booking.ends_at) || "13:00");
     setEditing(true);
   };
 
   const handleSaveEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!booking) return;
+    if (editEndsAt <= editStartsAt) {
+      notify({
+        title: isTh ? "เวลาไม่ถูกต้อง" : "Invalid Time Range",
+        message: isTh ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น" : "End time must be after start time",
+        kind: "warning",
+      });
+      return;
+    }
     setSavingEdit(true);
     try {
       const supabase = createSupabaseBrowserClient();
       const bDate = booking.booking_date;
-      const updatedStarts = `${bDate}T${editStartsAt || "08:00"}:00`;
-      const updatedEnds = `${bDate}T${editEndsAt || "12:00"}:00`;
+      const updatedStarts = `${bDate}T${editStartsAt || "10:00"}:00+07:00`;
+      const updatedEnds = `${bDate}T${editEndsAt || "13:00"}:00+07:00`;
       const updatedSnapshot = { plate: editPlate.trim() };
 
       const { error } = await supabase
@@ -317,15 +344,28 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
   }
 
   if (errorMsg || !booking) {
+    const isAuthError = errorMsg.includes("เข้าสู่ระบบ") || errorMsg.includes("sign in");
     return (
       <div className="empty-card" style={{ padding: 32, textAlign: "center" }}>
         <CircleAlert size={36} color="var(--red, #ef4444)" style={{ margin: "0 auto 12px" }} />
         <h2>{errorMsg || (isTh ? "ไม่พบข้อมูลการจอง" : "Booking not found")}</h2>
-        <p style={{ margin: "10px 0 20px" }}>{isTh ? "รหัสการจองไม่ถูกต้อง หรือคุณไม่มีสิทธิ์เข้าถึง" : "Invalid reference or no access."}</p>
-        <Link className="primary-button" href={`/${locale}/app/bookings`}>
-          <ArrowLeft size={16} />
-          <span>{isTh ? "กลับไปรายการจองของฉัน" : "Back to My Bookings"}</span>
-        </Link>
+        <p style={{ margin: "10px 0 20px" }}>
+          {isAuthError
+            ? (isTh ? "กรุณาเข้าสู่ระบบด้วยบัญชีที่คุณใช้ทำการจอง" : "Please sign in with the account used for this booking.")
+            : (isTh ? "รหัสการจองไม่ถูกต้อง หรือคุณไม่มีสิทธิ์เข้าถึง" : "Invalid reference or no access.")}
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          {isAuthError ? (
+            <Link className="primary-button" href={`/${locale}/login`}>
+              <span>{t.login}</span>
+            </Link>
+          ) : (
+            <Link className="primary-button" href={`/${locale}/app/bookings`}>
+              <ArrowLeft size={16} />
+              <span>{isTh ? "กลับไปรายการจองของฉัน" : "Back to My Bookings"}</span>
+            </Link>
+          )}
+        </div>
       </div>
     );
   }

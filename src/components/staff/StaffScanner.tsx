@@ -31,6 +31,7 @@ import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { parkingAreas, getGoogleMapsNavigationUrl } from "@/lib/parking/demo-data";
+import { useNotifications } from "@/components/layout/NotificationProvider";
 
 type StaffRole = "staff" | "admin";
 
@@ -86,6 +87,7 @@ function playSuccessBeep() {
 export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?: StaffRole }) {
   const t = getCopy(locale);
   const isTh = locale === "th";
+  const { confirm, notify } = useNotifications();
   const [manualCode, setManualCode] = useState("");
   const [areaCodeFilter, setAreaCodeFilter] = useState("");
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -567,9 +569,17 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
 
   async function handleDeleteBooking() {
     if (!result?.booking_id) return;
-    if (!window.confirm(isTh ? `คุณต้องการลบรายการจอง ${result.booking_reference} ออกจากระบบอย่างถาวรใช่หรือไม่?` : `Are you sure you want to permanently delete booking ${result.booking_reference}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: isTh ? "ยืนยันการลบรายการจอง" : "Confirm Delete Booking",
+      message: isTh
+        ? `คุณแน่ใจหรือไม่ว่าต้องการลบรายการจอง ${result.booking_reference} ออกจากระบบอย่างถาวร? การกระทำนี้ไม่สามารถย้อนกลับได้`
+        : `Are you sure you want to permanently delete booking ${result.booking_reference}? This action cannot be undone.`,
+      confirmLabel: isTh ? "ลบรายการจอง" : "Delete Booking",
+      cancelLabel: isTh ? "ยกเลิก" : "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+
     setTransitioning("DELETING");
     try {
       const supabase = createSupabaseBrowserClient();
@@ -590,15 +600,27 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
         throw new Error(d.error || "Failed to delete booking");
       }
 
+      const successText = isTh ? `ลบรายการจอง ${result.booking_reference} ออกจากระบบเรียบร้อยแล้ว` : `Booking ${result.booking_reference} deleted successfully`;
       setNotice({
-        text: isTh ? `ลบรายการจอง ${result.booking_reference} ออกจากระบบเรียบร้อยแล้ว` : `Booking ${result.booking_reference} deleted successfully`,
+        text: successText,
         type: "success",
+      });
+      notify({
+        title: isTh ? "ลบรายการสำเร็จ" : "Deleted Successfully",
+        message: result.booking_reference,
+        kind: "success",
       });
       handleClearResult();
     } catch (err) {
+      const errText = err instanceof Error ? err.message : "Deletion failed";
       setNotice({
-        text: err instanceof Error ? err.message : "Deletion failed",
+        text: errText,
         type: "error",
+      });
+      notify({
+        title: isTh ? "เกิดข้อผิดพลาดในการลบ" : "Delete Error",
+        message: errText,
+        kind: "error",
       });
     } finally {
       setTransitioning(null);
