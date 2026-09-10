@@ -142,6 +142,42 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     });
   }, [areas, searchQuery, statusFilter]);
 
+  const isDirty = useMemo(() => {
+    if (editingId && selectedArea) {
+      const initial = draftFromArea(selectedArea);
+      return (
+        draft.code !== initial.code ||
+        draft.name_th !== initial.name_th ||
+        draft.name_en !== initial.name_en ||
+        draft.description_th !== initial.description_th ||
+        draft.description_en !== initial.description_en ||
+        draft.capacity !== initial.capacity ||
+        draft.capacity_source !== initial.capacity_source ||
+        draft.slot_mode !== initial.slot_mode ||
+        draft.data_status !== initial.data_status ||
+        draft.current_status !== initial.current_status ||
+        draft.latitude !== initial.latitude ||
+        draft.longitude !== initial.longitude ||
+        draft.source_reference !== initial.source_reference ||
+        draft.cover_image_path !== initial.cover_image_path ||
+        draft.entrance_image_path !== initial.entrance_image_path ||
+        draft.vehicle_types.length !== initial.vehicle_types.length ||
+        draft.vehicle_types.some((v) => !initial.vehicle_types.includes(v))
+      );
+    }
+    return (
+      draft.code !== "" ||
+      draft.name_th !== "" ||
+      draft.name_en !== "" ||
+      draft.description_th !== "" ||
+      draft.description_en !== "" ||
+      draft.cover_image_path !== "" ||
+      draft.entrance_image_path !== "" ||
+      draft.latitude !== "" ||
+      draft.longitude !== ""
+    );
+  }, [draft, editingId, selectedArea]);
+
   const loadAreas = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       setLoading(false);
@@ -154,8 +190,6 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       if (error) throw error;
       const loadedAreas = (data ?? []) as AreaRow[];
       setAreas(loadedAreas);
-      setEditingId((current) => current || (loadedAreas.length > 0 ? loadedAreas[0].id : null));
-      setDraft((current) => current.code ? current : (loadedAreas.length > 0 ? draftFromArea(loadedAreas[0]) : emptyDraft));
       setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.operationalData);
@@ -177,14 +211,36 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     setDraft((current) => ({ ...current, vehicle_types: current.vehicle_types.includes(value) ? current.vehicle_types.filter((item) => item !== value) : [...current.vehicle_types, value] }));
   }
 
-  function startEdit(area: AreaRow) {
+  async function confirmDiscardIfDirty(): Promise<boolean> {
+    if (!isDirty) return true;
+    return await confirm({
+      title: locale === "th" ? "ทิ้งการแก้ไขที่ยังไม่ได้บันทึก?" : "Discard unsaved changes?",
+      message: locale === "th"
+        ? "คุณมีข้อมูลที่มีการเปลี่ยนแปลงแต่ยังไม่ได้บันทึก ต้องการยกเลิกและทิ้งข้อมูลที่แก้ไขหรือไม่?"
+        : "You have unsaved changes. Are you sure you want to discard them?",
+      confirmLabel: locale === "th" ? "ทิ้งข้อมูล" : "Discard",
+      cancelLabel: locale === "th" ? "แก้ไขต่อ" : "Keep editing",
+      danger: true,
+    });
+  }
+
+  async function startEdit(area: AreaRow) {
+    if (editingId === area.id) return;
+    if (isDirty) {
+      const ok = await confirmDiscardIfDirty();
+      if (!ok) return;
+    }
     setEditingId(area.id);
     setDraft(draftFromArea(area));
     setMessage("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function startCreate() {
+  async function startCreate() {
+    if (isDirty) {
+      const ok = await confirmDiscardIfDirty();
+      if (!ok) return;
+    }
     setEditingId(null);
     setDraft(emptyDraft);
     setMessage("");
@@ -260,7 +316,15 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
 
   async function deleteArea(area: AreaRow) {
     if (role !== "admin") return;
-    const confirmed = await confirm({ title: t.confirmDelete, message: `${area.code} · ${area.name_th}`, confirmLabel: t.delete, cancelLabel: t.close, danger: true });
+    const confirmed = await confirm({
+      title: locale === "th" ? `ยืนยันการลบพื้นที่ ${area.code}?` : `Confirm delete ${area.code}?`,
+      message: locale === "th"
+        ? `คำเตือนสำคัญ: คุณกำลังจะลบพื้นที่ "${area.code} · ${area.name_th}" ออกจากระบบอย่างถาวร! ผังแถวและช่องจอดทั้งหมดในพื้นที่นี้จะถูกลบออกด้วย และอาจส่งผลกระทบต่อประวัติการจอง การดำเนินการนี้ไม่สามารถย้อนกลับได้`
+        : `Warning: You are about to permanently delete "${area.code} · ${area.name_en}". All parking rows and slots in this area will also be deleted. This cannot be undone.`,
+      confirmLabel: locale === "th" ? "ยืนยันลบข้อมูลถาวร" : "Permanently Delete",
+      cancelLabel: locale === "th" ? "ยกเลิก ไม่ลบ" : "Cancel, Keep Area",
+      danger: true,
+    });
     if (!confirmed) return;
     setMessage("");
     try {
@@ -269,9 +333,9 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
       if (error) throw error;
       await writeAudit("DELETE_PARKING_AREA", area.id, area, null);
       setAreas((current) => current.filter((item) => item.id !== area.id));
-      if (editingId === area.id) startCreate();
-      setMessage(t.delete);
-      notify({ title: t.delete, kind: "success" });
+      if (editingId === area.id) void startCreate();
+      setMessage(locale === "th" ? `ลบพื้นที่ ${area.code} สำเร็จ` : `Deleted area ${area.code}`);
+      notify({ title: locale === "th" ? `ลบพื้นที่ ${area.code} สำเร็จ` : `Deleted ${area.code}`, kind: "success" });
     } catch (error) {
       const detail = error instanceof Error ? error.message : t.operationalData;
       setMessage(detail);
@@ -280,11 +344,39 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
   }
 
   return <div className="data-manager">
-    <div className="data-manager-heading"><div><p className="eyebrow">{t.admin}</p><h2>{t.areas}</h2><p className="page-subtitle">{t.realMetrics} · {t.sourceLabel}</p></div><button className="primary-button" type="button" onClick={startCreate}><Plus size={16} />{t.addArea}</button></div>
+    <div className="data-manager-heading">
+      <div>
+        <p className="eyebrow">{t.admin}</p>
+        <h2>{t.areas}</h2>
+        <p className="page-subtitle">{t.realMetrics} · {t.sourceLabel}</p>
+      </div>
+      <button className="primary-button" type="button" onClick={() => void startCreate()}>
+        <Plus size={16} />{t.addArea}
+      </button>
+    </div>
     {message ? <div className="form-note" role="status">{message}</div> : null}
     <div className="data-manager-layout">
       <form className="form-card data-editor-card" onSubmit={(event) => void saveArea(event)}>
-        <div className="form-section-title"><MapPinned size={22} /><div><h2>{editingId ? t.edit : t.create}</h2><p>{t.admin} · {t.noPrivateData}</p></div></div>
+        <div className="form-section-title">
+          <MapPinned size={22} />
+          <div>
+            <h2>
+              {editingId
+                ? (locale === "th" ? `กำลังแก้ไขพื้นที่: ${selectedArea?.code ?? ""}` : `Editing Area: ${selectedArea?.code ?? ""}`)
+                : (locale === "th" ? "สร้างพื้นที่จอดรถใหม่" : "Create New Parking Area")}
+              {isDirty ? (
+                <span style={{ fontSize: 13, color: "#d97706", marginLeft: 8, fontWeight: 500 }}>
+                  ({locale === "th" ? "มีการแก้ไขที่ยังไม่บันทึก" : "Unsaved changes"})
+                </span>
+              ) : null}
+            </h2>
+            <p>
+              {editingId
+                ? (locale === "th" ? `กำลังแก้ไขข้อมูล ${selectedArea?.name_th ?? ""} (${selectedArea?.code ?? ""})` : `Editing ${selectedArea?.name_en ?? ""} (${selectedArea?.code ?? ""})`)
+                : (locale === "th" ? "กรอกข้อมูลเพื่อสร้างพื้นที่จอดรถใหม่ หรือคลิกเลือกพื้นที่จากรายการด้านขวาเพื่อแก้ไข" : "Fill details to create a new area or select an area on the right to edit.")}
+            </p>
+          </div>
+        </div>
         <div className="support-form-grid">
           <div className="form-group"><label htmlFor="area-code">{t.area} / Code</label><input id="area-code" className="form-control" value={draft.code} onChange={(event) => updateDraft("code", event.target.value)} placeholder="P01" required disabled={Boolean(editingId)} /></div>
           <div className="form-group"><label htmlFor="area-capacity">{t.estimatedCapacity}</label><input id="area-capacity" className="form-control" type="number" min="0" value={draft.capacity} onChange={(event) => updateDraft("capacity", event.target.value)} /></div>
@@ -319,7 +411,17 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
         </div>
         <fieldset className="vehicle-type-fieldset"><legend>{t.allowedVehicleTypes}</legend><div className="vehicle-type-options">{supportedVehicleTypes.map((value) => <label key={value}><input type="checkbox" checked={draft.vehicle_types.includes(value)} onChange={() => toggleVehicleType(value)} /><span>{value === "CAR" ? t.car : value === "MOTORCYCLE" ? t.motorcycle : value === "PICKUP" ? t.pickup : value === "VAN" ? t.van : value === "EV" ? t.ev : t.otherVehicle}</span></label>)}</div></fieldset>
         <div className="support-form-grid"><div className="form-group"><label htmlFor="area-description-th">{t.description} · TH</label><textarea id="area-description-th" className="form-control" rows={4} value={draft.description_th} onChange={(event) => updateDraft("description_th", event.target.value)} /></div><div className="form-group"><label htmlFor="area-description-en">{t.description} · EN</label><textarea id="area-description-en" className="form-control" rows={4} value={draft.description_en} onChange={(event) => updateDraft("description_en", event.target.value)} /></div></div>
-        <div className="support-form-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}{saving ? "…" : t.save}</button>{editingId ? <button className="secondary-button" type="button" onClick={startCreate}>{t.cancel}</button> : null}</div>
+        <div className="support-form-actions">
+          <button className="primary-button" type="submit" disabled={saving}>
+            {saving ? <LoaderCircle size={16} className="spin" /> : <Save size={16} />}
+            {saving ? "…" : editingId ? (locale === "th" ? "บันทึกการแก้ไข" : "Save Changes") : (locale === "th" ? "บันทึกพื้นที่ใหม่" : "Create Area")}
+          </button>
+          {editingId ? (
+            <button className="secondary-button" type="button" onClick={() => void startCreate()}>
+              {locale === "th" ? "ยกเลิกการแก้ไข" : "Cancel editing"}
+            </button>
+          ) : null}
+        </div>
       </form>
       <section className="review-panel data-list-panel">
         <div className="section-heading">
@@ -367,18 +469,25 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
               <article
                 className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`}
                 key={area.id}
-                onClick={() => startEdit(area)}
+                onClick={() => void startEdit(area)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    startEdit(area);
+                    void startEdit(area);
                   }
                 }}
               >
                 <div>
-                  <strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong>
+                  <strong>
+                    {area.code} · {locale === "th" ? area.name_th : area.name_en}
+                    {selectedArea?.id === area.id ? (
+                      <span style={{ marginLeft: 8, fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "rgba(59,130,246,0.15)", color: "#3b82f6", fontWeight: 600 }}>
+                        {locale === "th" ? "กำลังแก้ไข" : "Editing"}
+                      </span>
+                    ) : null}
+                  </strong>
                   <small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small>
                   <small>{area.current_status === "CLOSED" ? t.areaClosed : t.areaOpen} · {Array.isArray(area.vehicle_types) ? area.vehicle_types.length : 0} {t.vehicleTypes}</small>
                 </div>
@@ -388,7 +497,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      startEdit(area);
+                      void startEdit(area);
                     }}
                     aria-label={`${t.edit} ${area.code}`}
                   >

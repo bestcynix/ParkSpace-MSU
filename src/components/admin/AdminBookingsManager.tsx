@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Calendar,
   CalendarCheck,
@@ -69,15 +70,24 @@ export type AdminBookingItem = {
 export function AdminBookingsManager({ locale }: { locale: Locale }) {
   const isTh = locale === "th";
   const { notify } = useNotifications();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams?.get("status");
 
   const [bookings, setBookings] = useState<AdminBookingItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus?.toUpperCase() || "ALL");
   const [areaFilter, setAreaFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const pageSize = 12;
+
+  useEffect(() => {
+    if (urlStatus && urlStatus.toUpperCase() !== statusFilter) {
+      setStatusFilter(urlStatus.toUpperCase());
+      setPage(1);
+    }
+  }, [urlStatus]);
 
   // Inspect Modal
   const [selectedBooking, setSelectedBooking] = useState<AdminBookingItem | null>(null);
@@ -280,6 +290,26 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {/* Status filter dropdown */}
+          <select
+            className="form-control"
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
+            style={{ height: 38, fontSize: 12, minWidth: 150 }}
+            aria-label={isTh ? "กรองสถานะการจอง" : "Filter booking status"}
+          >
+            <option value="ALL">{isTh ? "สถานะทั้งหมด (All)" : "All Statuses"}</option>
+            <option value="PENDING">{isTh ? "รอเข้าจอด (Pending)" : "Pending"}</option>
+            <option value="CONFIRMED">{isTh ? "ยืนยันแล้ว (Confirmed)" : "Confirmed"}</option>
+            <option value="CHECKED_IN">{isTh ? "กำลังใช้งาน (Checked In)" : "Checked In"}</option>
+            <option value="COMPLETED">{isTh ? "เช็คเอาท์แล้ว (Completed)" : "Completed"}</option>
+            <option value="CANCELLED">{isTh ? "ยกเลิกแล้ว (Cancelled)" : "Cancelled"}</option>
+            <option value="OVERSTAY">{isTh ? "เกินเวลา (Overstay)" : "Overstay"}</option>
+          </select>
+
           {/* Area filter */}
           <select
             className="form-control"
@@ -289,6 +319,7 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
               setPage(1);
             }}
             style={{ height: 38, fontSize: 12, width: 130 }}
+            aria-label={isTh ? "กรองพื้นที่" : "Filter area"}
           >
             <option value="ALL">{isTh ? "ทุกพื้นที่ (All Areas)" : "All Areas"}</option>
             {areaOptions.map((code) => (

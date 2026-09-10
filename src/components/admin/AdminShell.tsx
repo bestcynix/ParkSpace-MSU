@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, BookOpen, CalendarCheck, Database, FileText, HeartPulse, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
+import { Activity, AlertTriangle, BarChart3, BookOpen, CalendarCheck, Database, FileText, HeartPulse, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
@@ -18,6 +18,7 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
     ["scan", isTh ? "สแกนบัตรผ่าน" : "Scan QR Pass", QrCode, "/scan"],
     ["areas", isTh ? "พื้นที่จอดรถ" : "Parking Areas", MapPinned, "/parking-areas"],
     ["bookings", isTh ? "จัดการการจอง" : "Manage Bookings", CalendarCheck, "/bookings"],
+    ["incidents", isTh ? "จัดการเหตุการณ์" : "Incidents", AlertTriangle, "/incidents"],
     ["users", isTh ? "ผู้ใช้งาน" : "Users", Users, "/users"],
     ["database", isTh ? "ฐานข้อมูล" : "Database", Database, "/database"],
     ["traces", isTh ? "ติดตาม Trace & Latency" : "Trace & Latency", Wrench, "/traces"],

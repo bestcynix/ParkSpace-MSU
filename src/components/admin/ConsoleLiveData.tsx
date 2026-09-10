@@ -8,6 +8,7 @@ import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { StatusBadge } from "@/components/parking/StatusBadge";
 import type { ParkingStatus } from "@/lib/parking/demo-data";
+import { getOperationalTimeWindow } from "@/components/parking/LiveAreaStatus";
 
 type ConsoleRole = "admin" | "staff";
 export type ConsoleView = "summary" | "operations" | "staff" | "health";
@@ -103,6 +104,12 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
   const [areas, setAreas] = useState<AreaRow[]>([]);
   const [summaries, setSummaries] = useState<Record<string, LiveSummary>>({});
   const [incidentCount, setIncidentCount] = useState<number | null>(null);
+  const [opStats, setOpStats] = useState<{
+    reserved: number;
+    occupied: number;
+    incidents: number;
+    totalBookings: number;
+  } | null>(null);
   const [errorCount, setErrorCount] = useState<number | null>(null);
   const [areaCount, setAreaCount] = useState<number | null>(null);
   const [health, setHealth] = useState<HealthSnapshot>(initialHealth);
@@ -141,7 +148,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       if (showBusyState) setRefreshing(true);
       const startedAt = performance.now();
       const now = new Date();
-      const endsAt = new Date(now.getTime() + 60 * 60 * 1000);
+      const { startsAt, endsAt } = getOperationalTimeWindow();
 
       const areasRequest = supabase
         .from("parking_areas")
@@ -149,23 +156,22 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
         .order("code");
       const capacityRequest = supabase.rpc("get_parking_capacity_by_type", {
         p_area_code: null,
-        p_starts_at: now.toISOString(),
-        p_ends_at: endsAt.toISOString(),
+        p_starts_at: startsAt,
+        p_ends_at: endsAt,
       });
-      const incidentsRequest = supabase
-        .from("incidents")
-        .select("id", { count: "exact", head: true })
-        .neq("status", "RESOLVED");
+      const statsRequest = fetch("/api/admin/operations/stats")
+        .then((res) => (res.ok ? res.json() : null))
+        .catch(() => null);
       const errorsRequest = supabase
         .from("error_logs")
         .select("id", { count: "exact", head: true })
         .gte("created_at", new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString());
       const authRequest = supabase.auth.getUser();
 
-      const [areasResult, capacityResult, incidentsResult, errorResult, authResult] = await Promise.all([
+      const [areasResult, capacityResult, statsResult, errorResult, authResult] = await Promise.all([
         areasRequest,
         capacityRequest,
-        incidentsRequest,
+        statsRequest,
         errorsRequest,
         authRequest,
       ]);
@@ -175,7 +181,7 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
       const nextErrors: LoadErrors = {
         areas: areasResult.error?.message ?? "",
         capacity: capacityResult.error?.message ?? "",
-        incidents: incidentsResult.error?.message ?? "",
+        incidents: "",
         errors: errorResult.error?.message ?? "",
       };
 
@@ -184,7 +190,15 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
         setAreaCount(areasResult.count ?? 0);
       }
       if (!capacityResult.error) setSummaries(summariesFromRows((capacityResult.data ?? []) as CapacityRow[]));
-      if (!incidentsResult.error && incidentsResult.count != null) setIncidentCount(incidentsResult.count);
+      if (statsResult) {
+        setOpStats({
+          reserved: statsResult.reserved ?? 0,
+          occupied: statsResult.occupied ?? 0,
+          incidents: statsResult.incidents ?? 0,
+          totalBookings: statsResult.totalBookings ?? 0,
+        });
+        setIncidentCount(statsResult.incidents ?? 0);
+      }
       if (!errorResult.error && errorResult.count != null) setErrorCount(errorResult.count);
 
       let authState: HealthState = authResult.error || !authResult.data.user ? "unavailable" : "healthy";
@@ -239,13 +253,28 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
     };
   }, [locale, refreshKey, role]);
 
-  const totals = useMemo(() => Object.values(summaries).reduce((total, summary) => ({
-    total: total.total + summary.total,
-    available: total.available + summary.available,
-    reserved: total.reserved + summary.reserved,
-    occupied: total.occupied + summary.occupied,
-    closed: total.closed + summary.closed,
-  }), { ...emptySummary }), [summaries]);
+  const totals = useMemo(() => {
+    const raw = Object.values(summaries).reduce((total, summary) => ({
+      total: total.total + summary.total,
+      available: total.available + summary.available,
+      reserved: total.reserved + summary.reserved,
+      occupied: total.occupied + summary.occupied,
+      closed: total.closed + summary.closed,
+    }), { ...emptySummary });
+
+    if (opStats) {
+      const res = opStats.reserved;
+      const occ = opStats.occupied;
+      const avail = Math.max(0, raw.total - res - occ - raw.closed);
+      return {
+        ...raw,
+        reserved: res,
+        occupied: occ,
+        available: raw.total > 0 ? avail : raw.available,
+      };
+    }
+    return raw;
+  }, [summaries, opStats]);
 
   const filteredAreas = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(locale === "th" ? "th-TH" : "en-US");
@@ -262,24 +291,111 @@ export function ConsoleLiveData({ locale, role, view }: { locale: Locale; role: 
   const loadingLabel = locale === "th" ? "กำลังตรวจสอบ…" : "Checking…";
   const liveCountLabel = locale === "th" ? "จำนวนช่องจอดตามเวลาจริง" : "Real-time slot count";
   const incidentLabel = locale === "th" ? "เหตุการณ์ที่ยังไม่ปิด" : "Unresolved incidents";
-  const systemHealthKpis: Array<[string, string, LucideIcon, string, HealthState]> = [
-    ["Database", health.database === "checking" ? loadingLabel : healthLabel(health.database, locale), Database, databaseDetail(health, areaCount, locale), health.database],
-    ["Auth / RLS", health.auth === "checking" ? loadingLabel : healthLabel(health.auth, locale), ShieldCheck, authDetail(health.auth, role, locale), health.auth],
-    ["Realtime", health.realtime === "checking" ? loadingLabel : healthLabel(health.realtime, locale), Radio, realtimeDetail(health.realtime, locale), health.realtime],
-    ["Errors", errorCount == null ? errors.errors ? unavailable : loadingLabel : errorCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), AlertTriangle, locale === "th" ? "24 ชั่วโมงล่าสุด" : "Last 24 hours", errors.errors ? "unavailable" : errorCount == null ? "checking" : errorCount > 0 ? "degraded" : "healthy"],
+
+  type KpiItem = {
+    label: string;
+    value: string;
+    Icon: LucideIcon;
+    detail: string;
+    state: HealthState;
+    href?: string;
+    actionLabel?: string;
+  };
+
+  const systemHealthKpis: KpiItem[] = [
+    { label: "Database", value: health.database === "checking" ? loadingLabel : healthLabel(health.database, locale), Icon: Database, detail: databaseDetail(health, areaCount, locale), state: health.database, href: role === "admin" ? `/${locale}/admin/database` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ฐานข้อมูล" : "Database") : undefined },
+    { label: "Auth / RLS", value: health.auth === "checking" ? loadingLabel : healthLabel(health.auth, locale), Icon: ShieldCheck, detail: authDetail(health.auth, role, locale), state: health.auth, href: role === "admin" ? `/${locale}/admin/users` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ผู้ใช้" : "Users") : undefined },
+    { label: "Realtime", value: health.realtime === "checking" ? loadingLabel : healthLabel(health.realtime, locale), Icon: Radio, detail: realtimeDetail(health.realtime, locale), state: health.realtime, href: role === "admin" ? `/${locale}/admin/traces` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "Traces" : "Traces") : undefined },
+    { label: "Errors", value: errorCount == null ? errors.errors ? unavailable : loadingLabel : errorCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), Icon: AlertTriangle, detail: locale === "th" ? "24 ชั่วโมงล่าสุด" : "Last 24 hours", state: errors.errors ? "unavailable" : errorCount == null ? "checking" : errorCount > 0 ? "degraded" : "healthy", href: role === "admin" ? `/${locale}/admin/errors` : undefined, actionLabel: role === "admin" ? (locale === "th" ? "ดูข้อผิดพลาด" : "Errors") : undefined },
   ];
-  const operationsKpis: Array<[string, string, LucideIcon, string, HealthState]> = [
-    [t.available, errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.available.toLocaleString(locale === "th" ? "th-TH" : "en-US"), Activity, liveCountLabel, errors.capacity ? "unavailable" : "healthy"],
-    [t.reserved, errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.reserved.toLocaleString(locale === "th" ? "th-TH" : "en-US"), QrCode, liveCountLabel, errors.capacity ? "unavailable" : "healthy"],
-    [t.occupied, errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.occupied.toLocaleString(locale === "th" ? "th-TH" : "en-US"), MapPinned, liveCountLabel, errors.capacity ? "unavailable" : "healthy"],
-    [t.incidents, incidentCount == null ? errors.incidents ? unavailable : loadingLabel : incidentCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"), AlertTriangle, incidentLabel, errors.incidents ? "unavailable" : incidentCount == null ? "checking" : incidentCount > 0 ? "degraded" : "healthy"],
+
+  const operationsKpis: KpiItem[] = [
+    {
+      label: t.available,
+      value: errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.available.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
+      Icon: Activity,
+      detail: liveCountLabel,
+      state: errors.capacity ? "unavailable" : "healthy",
+      href: view === "operations" ? undefined : `/${locale}/${role}/operations`,
+      actionLabel: view === "operations" ? undefined : (locale === "th" ? "ดูผังพื้นที่" : "View Areas"),
+    },
+    {
+      label: t.reserved,
+      value: errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.reserved.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
+      Icon: QrCode,
+      detail: locale === "th" ? "คลิกเพื่อกรอง / จัดการรายการจอง" : "Click to view reservations",
+      state: errors.capacity ? "unavailable" : "healthy",
+      href: role === "admin" ? `/${locale}/admin/bookings?status=PENDING` : `/${locale}/staff/operations?filter=reserved`,
+      actionLabel: locale === "th" ? "ดูรายการจอง →" : "View Bookings →",
+    },
+    {
+      label: t.occupied,
+      value: errors.capacity ? unavailable : loading && !Object.keys(summaries).length ? loadingLabel : totals.occupied.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
+      Icon: MapPinned,
+      detail: locale === "th" ? "คลิกเพื่อกรอง / ตรวจสอบรถที่จอด" : "Click to view parked cars",
+      state: errors.capacity ? "unavailable" : "healthy",
+      href: role === "admin" ? `/${locale}/admin/bookings?status=CHECKED_IN` : `/${locale}/staff/operations?filter=occupied`,
+      actionLabel: locale === "th" ? "ดูรถที่กำลังจอด →" : "View Parked →",
+    },
+    {
+      label: t.incidents,
+      value: incidentCount == null ? errors.incidents ? unavailable : loadingLabel : incidentCount.toLocaleString(locale === "th" ? "th-TH" : "en-US"),
+      Icon: AlertTriangle,
+      detail: incidentLabel,
+      state: errors.incidents ? "unavailable" : incidentCount == null ? "checking" : incidentCount > 0 ? "degraded" : "healthy",
+      href: `/${locale}/${role}/incidents`,
+      actionLabel: locale === "th" ? "จัดการเหตุการณ์ →" : "Manage Incidents →",
+    },
   ];
+
   const kpis = view === "health" ? systemHealthKpis : operationsKpis;
 
   return (
     <>
       <div className="dashboard-grid" aria-live="polite" aria-busy={loading || refreshing}>
-        {kpis.map(([label, value, Icon, detail, state]) => <div className="dashboard-card" key={label}><Icon size={18} color={healthColor(state)} /><p>{label}</p><strong>{value}</strong><small style={{ color: healthColor(state) }}>{detail}</small></div>)}
+        {kpis.map((kpi) => {
+          const cardInner = (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                <kpi.Icon size={18} color={healthColor(kpi.state)} />
+                {kpi.actionLabel ? (
+                  <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "rgba(59,130,246,0.12)", color: "#3b82f6", fontWeight: 600 }}>
+                    {kpi.actionLabel}
+                  </span>
+                ) : null}
+              </div>
+              <p>{kpi.label}</p>
+              <strong>{kpi.value}</strong>
+              <small style={{ color: healthColor(kpi.state) }}>{kpi.detail}</small>
+            </>
+          );
+
+          if (kpi.href) {
+            return (
+              <Link
+                href={kpi.href}
+                className="dashboard-card"
+                key={kpi.label}
+                style={{
+                  cursor: "pointer",
+                  textDecoration: "none",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                }}
+              >
+                {cardInner}
+              </Link>
+            );
+          }
+
+          return (
+            <div className="dashboard-card" key={kpi.label}>
+              {cardInner}
+            </div>
+          );
+        })}
       </div>
       {view === "operations" ? <OperationsList locale={locale} areas={areas} summaries={summaries} filteredAreas={filteredAreas} loading={loading} refreshing={refreshing} errors={errors} query={query} filter={filter} updatedAt={updatedAt} onQueryChange={setQuery} onFilterChange={setFilter} onRefresh={() => setRefreshKey((value) => value + 1)} /> : null}
       {view === "staff" ? <StaffOverview locale={locale} totals={totals} incidentCount={incidentCount} errors={errors} loading={loading} /> : null}

@@ -109,7 +109,7 @@ export function OperationsPage({ locale, role, section }: { locale: Locale; role
           : isFeatureFlags ? <FeatureFlagsManager locale={locale} role="admin" />
           : isFeedbackReview || isErrorReview ? <FeedbackReview locale={locale} role="admin" includeErrors={section === "errors"} />
           : isScan ? <StaffScanner locale={locale} role={role} />
-          : isIncidents ? <IncidentForm locale={locale} />
+          : isIncidents ? <IncidentForm locale={locale} role={role} />
           : isTeam ? <TeamDirectory locale={locale} />
           : null}
       </RoleGate>
