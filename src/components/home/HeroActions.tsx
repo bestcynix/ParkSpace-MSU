@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Calendar, ParkingSquare } from "lucide-react";
+import { BookOpen, Calendar, ParkingSquare } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
@@ -54,6 +54,22 @@ export function HeroActions({ locale }: { locale: Locale }) {
           <span>{t.bookings}</span>
         </Link>
       )}
+      <Link
+        className="ghost-button"
+        href={`/${locale}/guide`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          background: "var(--gold-soft)",
+          borderColor: "rgba(248, 201, 40, 0.4)",
+          color: "#9a7800",
+          fontWeight: 700,
+        }}
+      >
+        <BookOpen size={15} />
+        <span>{locale === "th" ? "คู่มือ & ผังพรีเซนต์" : "Guide & Slides"}</span>
+      </Link>
     </div>
   );
 }

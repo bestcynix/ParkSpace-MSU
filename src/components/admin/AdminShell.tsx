@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, BarChart3, CalendarCheck, Database, FileText, HeartPulse, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
+import { Activity, BarChart3, BookOpen, CalendarCheck, Database, FileText, HeartPulse, LayoutDashboard, MapPinned, MessageSquare, QrCode, Settings, ShieldCheck, Users, Wrench } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { Logo } from "@/components/brand/Logo";
@@ -46,6 +46,11 @@ export function AdminShell({ locale, role, children }: { locale: Locale; role: "
             const ItemIcon = Icon as typeof LayoutDashboard;
             return <Link href={`${prefix}${path}`} key={key as string}><ItemIcon size={16} /><span>{label as string}</span></Link>;
           })}
+          <div style={{ height: 1, background: "rgba(255,255,255,0.1)", margin: "8px 0" }} />
+          <Link href={`/${locale}/guide`} style={{ color: "var(--gold)" }}>
+            <BookOpen size={16} />
+            <span>{isTh ? "คู่มือ & ผังพรีเซนต์" : "Guide & Sitemap"}</span>
+          </Link>
         </nav>
       </aside>
       <main className="admin-main">{children}<PublicFooter locale={locale} /></main>
