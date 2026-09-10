@@ -168,10 +168,10 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
     [editorRole, members],
   );
   const displayMembers = useMemo(
-    () => dataState === "fallback"
+    () => dataState === "fallback" || loading
       ? [fallbackMember]
       : visibleMembers,
-    [dataState, visibleMembers],
+    [dataState, loading, visibleMembers],
   );
   const loadingCopy = locale === "th" ? "กำลังโหลดสมาชิกทีม…" : "Loading team members…";
   const emptyCopy = locale === "th" ? "ยังไม่มีสมาชิกทีมที่เผยแพร่" : "No team members are currently published";
@@ -188,10 +188,14 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
 
     try {
       const supabase = createSupabaseBrowserClient();
-      const { data, error } = await supabase
+      const request = supabase
         .from("project_team_members")
         .select(fields)
         .order("display_order", { ascending: true });
+      const { data, error } = await Promise.race([
+        request,
+        new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error("Team request timed out")), 8000)),
+      ]);
       if (error) throw error;
 
       const nextMembers = normalizeMembers(data);
@@ -386,7 +390,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
   }
 
   const editorRoleLabel = editorRole === "admin" ? t.admin : t.developer;
-  const count = loading ? "…" : dataState === "fallback" ? 1 : visibleMembers.length;
+  const count = dataState === "fallback" ? 1 : loading ? "…" : visibleMembers.length;
 
   return (
     <section className="team-directory" aria-labelledby="team-directory-heading" aria-busy={loading} data-source={dataState}>
@@ -398,11 +402,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
         {editorRole ? <span className="data-badge">{t.teamEditor} · {editorRoleLabel}</span> : null}
       </div>
 
-      {loading ? (
-        <div className="empty-card" role="status">
-          <p>{loadingCopy}</p>
-        </div>
-      ) : displayMembers.length ? (
+      {displayMembers.length ? (
         <div className="team-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))" }}>
           {displayMembers.map((member, index) => {
             const name = locale === "th" ? member.name_th : member.name_en;
@@ -435,6 +435,7 @@ export function TeamDirectory({ locale }: { locale: Locale }) {
               </article>
             );
           })}
+          {loading ? <p className="field-hint team-live-hint" role="status">{loadingCopy}</p> : null}
         </div>
       ) : (
         <div className="empty-card" role="status">
