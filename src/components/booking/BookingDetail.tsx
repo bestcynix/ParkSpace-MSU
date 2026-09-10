@@ -283,10 +283,28 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
   const handleSaveEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!booking) return;
+
+    const todayStr = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+    const currentTimeStr = (() => {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    })();
+
+    if (booking.booking_date === todayStr && editStartsAt < currentTimeStr) {
+      notify({
+        title: isTh ? "เวลาไม่ถูกต้อง" : "Invalid Time",
+        message: isTh ? "เวลาเริ่มต้นได้ผ่านไปแล้ว ไม่สามารถเลือกเวลาย้อนหลังได้" : "Start time has already passed. Cannot select past time.",
+        kind: "warning",
+      });
+      return;
+    }
     if (editEndsAt <= editStartsAt) {
       notify({
         title: isTh ? "เวลาไม่ถูกต้อง" : "Invalid Time Range",
-        message: isTh ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น" : "End time must be after start time",
+        message: isTh ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น (ห้ามเลือกเวลาย้อนกลับ)" : "End time must be after start time",
         kind: "warning",
       });
       return;
@@ -611,8 +629,18 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
                     id="edit-starts-field"
                     className="form-control"
                     type="time"
+                    min={booking.booking_date === (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })() ? (() => { const d = new Date(); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; })() : undefined}
                     value={editStartsAt}
-                    onChange={(e) => setEditStartsAt(e.target.value)}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      setEditStartsAt(newStart);
+                      if (editEndsAt <= newStart) {
+                        const [h, m] = newStart.split(":").map(Number);
+                        const nextH = Math.min(23, h + 2);
+                        const nextEnd = `${String(nextH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                        setEditEndsAt(nextEnd > newStart ? nextEnd : "23:59");
+                      }
+                    }}
                     required
                   />
                 </div>
@@ -622,6 +650,7 @@ export function BookingDetail({ locale, reference }: { locale: Locale; reference
                     id="edit-ends-field"
                     className="form-control"
                     type="time"
+                    min={editStartsAt}
                     value={editEndsAt}
                     onChange={(e) => setEditEndsAt(e.target.value)}
                     required

@@ -52,12 +52,49 @@ function todayString() {
   return `${today.getFullYear()}-${month}-${day}`;
 }
 
+function getCurrentTimeStr() {
+  const d = new Date();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function getSafeInitialTimes(targetDate?: string) {
+  const today = todayString();
+  const isToday = !targetDate || targetDate === today;
+
+  if (!isToday) {
+    return { start: "09:00", end: "12:00" };
+  }
+
+  const now = new Date();
+  const mins = now.getMinutes();
+  const roundedMins = Math.ceil((mins + 5) / 15) * 15;
+  now.setMinutes(roundedMins);
+  now.setSeconds(0);
+
+  const startH = now.getHours();
+  const startM = now.getMinutes();
+  const start = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
+
+  const endD = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  let endH = endD.getHours();
+  let endM = endD.getMinutes();
+  if (endD.getDate() !== now.getDate() || endH >= 24) {
+    endH = 23;
+    endM = 59;
+  }
+  const end = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+  return { start, end: end > start ? end : "23:59" };
+}
+
 export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingArea }) {
   const t = getCopy(locale);
   const [mode, setMode] = useState<SlotMode>(area.slotMode);
+  const defaultTimes = getSafeInitialTimes(todayString());
   const [date, setDate] = useState(todayString());
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("13:00");
+  const [startTime, setStartTime] = useState(defaultTimes.start);
+  const [endTime, setEndTime] = useState(defaultTimes.end);
   const [vehicleFilter, setVehicleFilter] = useState<SlotType | "ALL">("ALL");
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<ParkingSlot | null>(null);
@@ -105,6 +142,68 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configured, mode]);
 
+  function handleDateChange(newDate: string) {
+    const today = todayString();
+    if (newDate < today) {
+      notify({
+        title: locale === "th" ? "วันที่ไม่ถูกต้อง" : "Invalid Date",
+        message: locale === "th" ? "ไม่สามารถเลือกวันที่ในอดีตได้ (เลือกวันนี้หรือล่วงหน้าเท่านั้น)" : "Cannot select a past date. Choose today or future dates.",
+        kind: "warning",
+      });
+      setDate(today);
+      const safe = getSafeInitialTimes(today);
+      setStartTime(safe.start);
+      setEndTime(safe.end);
+      return;
+    }
+    setDate(newDate);
+    if (newDate === today) {
+      const current = getCurrentTimeStr();
+      if (startTime < current) {
+        const safe = getSafeInitialTimes(today);
+        setStartTime(safe.start);
+        setEndTime(safe.end);
+      }
+    }
+  }
+
+  function handleStartTimeChange(newStart: string) {
+    if (date === todayString()) {
+      const current = getCurrentTimeStr();
+      if (newStart < current) {
+        notify({
+          title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time",
+          message: locale === "th" ? "เวลาเริ่มต้นได้ผ่านไปแล้ว ไม่สามารถเลือกเวลาย้อนหลังได้" : "Start time has already passed. Cannot choose past time.",
+          kind: "warning",
+        });
+        const safe = getSafeInitialTimes(todayString());
+        setStartTime(safe.start);
+        if (endTime <= safe.start) {
+          setEndTime(safe.end);
+        }
+        return;
+      }
+    }
+    setStartTime(newStart);
+    if (endTime <= newStart) {
+      const [h, m] = newStart.split(":").map(Number);
+      const nextH = Math.min(23, h + 2);
+      const nextEnd = `${String(nextH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      setEndTime(nextEnd > newStart ? nextEnd : "23:59");
+    }
+  }
+
+  function handleEndTimeChange(newEnd: string) {
+    if (newEnd <= startTime) {
+      notify({
+        title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time Range",
+        message: locale === "th" ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น (ห้ามเลือกเวลาย้อนกลับ)" : "End time must be after start time.",
+        kind: "warning",
+      });
+    }
+    setEndTime(newEnd);
+  }
+
   async function refreshSlots(event?: React.FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setMessage("");
@@ -124,10 +223,33 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
       notify({ title: t.selectDate, kind: "warning" });
       return;
     }
-    if (endTime <= startTime) {
-      setMessage(t.endTime);
-      notify({ title: t.endTime, kind: "warning" });
+    const today = todayString();
+    if (date < today) {
+      const pastMsg = locale === "th" ? "ไม่สามารถเลือกวันที่ในอดีตได้ (เลือกวันนี้หรือล่วงหน้าเท่านั้น)" : "Cannot select a past date.";
+      setMessage(pastMsg);
+      notify({ title: locale === "th" ? "วันที่ไม่ถูกต้อง" : "Invalid Date", message: pastMsg, kind: "warning" });
       return;
+    }
+    if (endTime <= startTime) {
+      const revMsg = locale === "th" ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น (ห้ามเลือกเวลาย้อนกลับ)" : "End time must be after start time";
+      setMessage(revMsg);
+      notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time Range", message: revMsg, kind: "warning" });
+      return;
+    }
+    if (date === today) {
+      const current = getCurrentTimeStr();
+      if (startTime < current) {
+        const timeMsg = locale === "th" ? "เวลาเริ่มต้นได้ผ่านไปแล้ว ไม่สามารถเลือกเวลาย้อนหลังได้" : "Start time has already passed. Cannot choose past time.";
+        setMessage(timeMsg);
+        notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time", message: timeMsg, kind: "warning" });
+        return;
+      }
+      if (endTime <= current) {
+        const timeMsg = locale === "th" ? "ช่วงเวลาที่เลือกได้ผ่านไปแล้ว กรุณาเลือกช่วงเวลาใหม่" : "Selected time has already passed";
+        setMessage(timeMsg);
+        notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time", message: timeMsg, kind: "warning" });
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -232,8 +354,8 @@ export function SlotSelector({ locale, area }: { locale: Locale; area: ParkingAr
     <section className="slot-panel" aria-label={t.slotAvailability}>
       <div className="slot-panel-heading"><CalendarDays size={20} /><div><strong>{t.selectSlot}</strong><span>{t.slotAvailabilityNote}</span></div></div>
       <form className="slot-filter-form" onSubmit={refreshSlots}>
-        <div className="form-group"><label htmlFor="slot-date">{t.selectDate}</label><input className="form-control" id="slot-date" type="date" min={todayString()} value={date} onChange={(event) => setDate(event.target.value)} required /></div>
-        <div className="slot-time-fields"><div className="form-group"><label htmlFor="slot-start">{t.startTime}</label><input className="form-control" id="slot-start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required /></div><div className="form-group"><label htmlFor="slot-end">{t.endTime}</label><input className="form-control" id="slot-end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} required /></div></div>
+        <div className="form-group"><label htmlFor="slot-date">{t.selectDate}</label><input className="form-control" id="slot-date" type="date" min={todayString()} value={date} onChange={(event) => handleDateChange(event.target.value)} required /></div>
+        <div className="slot-time-fields"><div className="form-group"><label htmlFor="slot-start">{t.startTime}</label><input className="form-control" id="slot-start" type="time" min={date === todayString() ? getCurrentTimeStr() : undefined} value={startTime} onChange={(event) => handleStartTimeChange(event.target.value)} required /></div><div className="form-group"><label htmlFor="slot-end">{t.endTime}</label><input className="form-control" id="slot-end" type="time" min={startTime} value={endTime} onChange={(event) => handleEndTimeChange(event.target.value)} required /></div></div>
         <div className="form-group"><label htmlFor="slot-vehicle-filter">{t.vehicleType}</label><select className="form-control" id="slot-vehicle-filter" value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value as SlotType | "ALL")}><option value="ALL">{t.all}</option>{(["CAR", "MOTORCYCLE", "PICKUP", "VAN", "EV", "OTHER"] as SlotType[]).map((value) => <option value={value} key={value}>{slotTypeLabel(locale, value)}</option>)}</select></div>
         <button className="secondary-button" type="submit" disabled={loading}>{loading ? "…" : <><RefreshCw size={15} />{t.refreshAvailability}</>}</button>
       </form>

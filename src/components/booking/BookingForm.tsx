@@ -32,12 +32,57 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
+function getCurrentTimeStr() {
+  const d = new Date();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function getSafeInitialTimes(initialDate?: string, initialStart?: string, initialEnd?: string) {
+  const today = getTodayString();
+  const isToday = !initialDate || initialDate === today;
+  const current = getCurrentTimeStr();
+
+  if (!isToday) {
+    const start = initialStart ?? "09:00";
+    const end = initialEnd && initialEnd > start ? initialEnd : "12:00";
+    return { start, end };
+  }
+
+  // If today: calculate next valid slot (at least 5 mins from now rounded to 15m)
+  const now = new Date();
+  const mins = now.getMinutes();
+  const roundedMins = Math.ceil((mins + 5) / 15) * 15;
+  now.setMinutes(roundedMins);
+  now.setSeconds(0);
+
+  const startH = now.getHours();
+  const startM = now.getMinutes();
+  const defaultStart = `${String(startH).padStart(2, "0")}:${String(startM).padStart(2, "0")}`;
+
+  const start = initialStart && initialStart >= current ? initialStart : defaultStart;
+
+  const endD = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+  let endH = endD.getHours();
+  let endM = endD.getMinutes();
+  if (endD.getDate() !== now.getDate() || endH >= 24) {
+    endH = 23;
+    endM = 59;
+  }
+  const defaultEnd = `${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}`;
+  const end = initialEnd && initialEnd > start ? initialEnd : (defaultEnd > start ? defaultEnd : "23:59");
+
+  return { start, end };
+}
+
 export function BookingForm({ locale, area, selectedSlot, initialDate, initialStartTime, initialEndTime }: { locale: Locale; area: ParkingArea; selectedSlot?: { id: string; code: string; type?: string }; initialDate?: string; initialStartTime?: string; initialEndTime?: string }) {
   const t = getCopy(locale);
   const todayStr = getTodayString();
-  const [date, setDate] = useState(initialDate ?? todayStr);
-  const [startTime, setStartTime] = useState(initialStartTime ?? "10:00");
-  const [endTime, setEndTime] = useState(initialEndTime ?? "13:00");
+  const initialTimes = getSafeInitialTimes(initialDate, initialStartTime, initialEndTime);
+  const [date, setDate] = useState(initialDate && initialDate >= todayStr ? initialDate : todayStr);
+  const [startTime, setStartTime] = useState(initialTimes.start);
+  const [endTime, setEndTime] = useState(initialTimes.end);
   const [vehicle, setVehicle] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [vehicleType, setVehicleType] = useState<VehicleType>("CAR");
@@ -92,6 +137,67 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isDirty]);
 
+  function handleDateChange(newDate: string) {
+    if (newDate < todayStr) {
+      notify({
+        title: locale === "th" ? "วันที่ไม่ถูกต้อง" : "Invalid Date",
+        message: locale === "th" ? "ไม่สามารถเลือกวันที่ในอดีตได้ (เลือกวันนี้หรือล่วงหน้าเท่านั้น)" : "Cannot select a past date. Choose today or future dates.",
+        kind: "warning",
+      });
+      setDate(todayStr);
+      const safe = getSafeInitialTimes(todayStr);
+      setStartTime(safe.start);
+      setEndTime(safe.end);
+      return;
+    }
+    setDate(newDate);
+    if (newDate === todayStr) {
+      const current = getCurrentTimeStr();
+      if (startTime < current) {
+        const safe = getSafeInitialTimes(todayStr);
+        setStartTime(safe.start);
+        setEndTime(safe.end);
+      }
+    }
+  }
+
+  function handleStartTimeChange(newStart: string) {
+    if (date === todayStr) {
+      const current = getCurrentTimeStr();
+      if (newStart < current) {
+        notify({
+          title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time",
+          message: locale === "th" ? "เวลาเริ่มต้นได้ผ่านไปแล้ว ไม่สามารถเลือกเวลาย้อนหลังได้" : "Start time has already passed. Cannot choose past time.",
+          kind: "warning",
+        });
+        const safe = getSafeInitialTimes(todayStr);
+        setStartTime(safe.start);
+        if (endTime <= safe.start) {
+          setEndTime(safe.end);
+        }
+        return;
+      }
+    }
+    setStartTime(newStart);
+    if (endTime <= newStart) {
+      const [h, m] = newStart.split(":").map(Number);
+      const nextH = Math.min(23, h + 2);
+      const nextEnd = `${String(nextH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+      setEndTime(nextEnd > newStart ? nextEnd : "23:59");
+    }
+  }
+
+  function handleEndTimeChange(newEnd: string) {
+    if (newEnd <= startTime) {
+      notify({
+        title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time Range",
+        message: locale === "th" ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น (ห้ามเลือกเวลาย้อนกลับ)" : "End time must be after start time.",
+        kind: "warning",
+      });
+    }
+    setEndTime(newEnd);
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -106,21 +212,25 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       return;
     }
     if (date < todayStr) {
-      const pastMsg = locale === "th" ? "ไม่สามารถเลือกวันที่ในอดีตได้" : "Cannot book a date in the past";
+      const pastMsg = locale === "th" ? "ไม่สามารถเลือกวันที่ในอดีตได้ (เลือกวันนี้หรือล่วงหน้าเท่านั้น)" : "Cannot book a date in the past";
       setMessage(pastMsg);
       notify({ title: locale === "th" ? "วันที่ไม่ถูกต้อง" : "Invalid Date", message: pastMsg, kind: "warning" });
       return;
     }
     if (endTime <= startTime) {
-      setMessage(t.endTime);
-      notify({ title: t.endTime, kind: "warning" });
+      const revMsg = locale === "th" ? "เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น (ห้ามเลือกเวลาย้อนกลับ)" : "End time must be after start time";
+      setMessage(revMsg);
+      notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time Range", message: revMsg, kind: "warning" });
       return;
     }
     if (date === todayStr) {
-      const now = new Date();
-      const currentHours = String(now.getHours()).padStart(2, "0");
-      const currentMinutes = String(now.getMinutes()).padStart(2, "0");
-      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      const currentTimeStr = getCurrentTimeStr();
+      if (startTime < currentTimeStr) {
+        const timeMsg = locale === "th" ? "เวลาเริ่มต้นได้ผ่านไปแล้ว ไม่สามารถเลือกเวลาย้อนหลังได้" : "Start time has already passed. Cannot choose past time.";
+        setMessage(timeMsg);
+        notify({ title: locale === "th" ? "เวลาไม่ถูกต้อง" : "Invalid Time", message: timeMsg, kind: "warning" });
+        return;
+      }
       if (endTime <= currentTimeStr) {
         const timeMsg = locale === "th" ? "ช่วงเวลาที่เลือกได้ผ่านไปแล้ว กรุณาเลือกช่วงเวลาใหม่" : "Selected time has already passed";
         setMessage(timeMsg);
@@ -265,8 +375,8 @@ export function BookingForm({ locale, area, selectedSlot, initialDate, initialSt
       <div className="inline-actions"><span className="data-badge">{area.code}</span><span className="mockup-badge">{selectedSlot ? `${t.individualSlot} · ${selectedSlot.code}` : t.areaOnly}</span></div>
       <h1 style={{ marginTop: 13 }}>{t.bookingSummary}</h1>
       <p>{title} · {locale === "th" ? "มหาวิทยาลัยมหาสารคาม" : "Mahasarakham University"}</p>
-      <div className="form-group"><label htmlFor="date"><CalendarDays size={13} style={{ verticalAlign: "-2px" }} /> {t.selectDate}</label><input className="form-control" id="date" type="date" min={todayStr} value={date} onChange={(event) => setDate(event.target.value)} required /></div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><div className="form-group"><label htmlFor="start"><Clock3 size={13} style={{ verticalAlign: "-2px" }} /> {t.startTime}</label><input className="form-control" id="start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required /></div><div className="form-group"><label htmlFor="end">{t.endTime}</label><input className="form-control" id="end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} required /></div></div>
+      <div className="form-group"><label htmlFor="date"><CalendarDays size={13} style={{ verticalAlign: "-2px" }} /> {t.selectDate}</label><input className="form-control" id="date" type="date" min={todayStr} value={date} onChange={(event) => handleDateChange(event.target.value)} required /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><div className="form-group"><label htmlFor="start"><Clock3 size={13} style={{ verticalAlign: "-2px" }} /> {t.startTime}</label><input className="form-control" id="start" type="time" min={date === todayStr ? getCurrentTimeStr() : undefined} value={startTime} onChange={(event) => handleStartTimeChange(event.target.value)} required /></div><div className="form-group"><label htmlFor="end">{t.endTime}</label><input className="form-control" id="end" type="time" min={startTime} value={endTime} onChange={(event) => handleEndTimeChange(event.target.value)} required /></div></div>
       <div className="form-group"><label htmlFor="vehicle-choice"><Car size={13} style={{ verticalAlign: "-2px" }} /> {t.chooseVehicle}</label>{isSupabaseConfigured() ? <select className="form-control" id="vehicle-choice" value={vehicleId} onChange={(event) => { const nextId = event.target.value; setVehicleId(nextId); const nextVehicle = vehicles.find((item) => item.id === nextId); setVehicle(nextVehicle?.plate ?? ""); setVehicleType((nextVehicle?.vehicle_type as VehicleType) || "CAR"); }}><option value="">{loadingVehicles ? "…" : vehicles.length ? t.addVehicle : t.vehicleDataNote}</option>{vehicles.map((item) => <option value={item.id} key={item.id}>{item.plate}{item.province ? ` · ${item.province}` : ""}{item.usage_type === "ONE_DAY" ? ` · ${t.oneDayVehicle}` : ""}</option>)}</select> : null}<input className="form-control" id="vehicle" placeholder={t.vehiclePlate} value={vehicle} onChange={(event) => { const nextPlate = event.target.value; setVehicle(nextPlate); if (vehicles.find((item) => item.id === vehicleId)?.plate !== nextPlate) setVehicleId(""); }} required /><label htmlFor="booking-vehicle-type">{t.vehicleType}</label><select className="form-control" id="booking-vehicle-type" value={selectedVehicleForType(vehicles, vehicleId)?.vehicle_type ?? vehicleType} onChange={(event) => { setVehicleId(""); setVehicleType(event.target.value as VehicleType); }}><option value="CAR">{t.car}</option><option value="MOTORCYCLE">{t.motorcycle}</option><option value="PICKUP">{t.pickup}</option><option value="VAN">{t.van}</option><option value="EV">{t.ev}</option><option value="OTHER">{t.otherVehicle}</option></select>{selectedSlot?.type ? <small className="field-hint">{t.slotType}: {slotTypeLabel(locale, selectedSlot.type)}</small> : null}{isSupabaseConfigured() ? <Link className="text-link" href={`/${locale}/app/profile/vehicles`}>{t.addVehicle}</Link> : null}</div>
       <label style={{ display: "flex", alignItems: "start", gap: 9, marginTop: 20, color: "#59636e", fontSize: 12, lineHeight: 1.5 }}><input type="checkbox" checked={acceptRules} onChange={(event) => setAcceptRules(event.target.checked)} required />{t.parkingRules}</label>
       {message ? <div className="form-note" role="alert">{message}</div> : null}

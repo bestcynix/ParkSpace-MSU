@@ -59,15 +59,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required booking fields" }, { status: 400 });
     }
 
-    const startsAtDate = new Date(starts_at);
-    const endsAtDate = new Date(ends_at);
-    if (isNaN(startsAtDate.getTime()) || isNaN(endsAtDate.getTime()) || endsAtDate <= startsAtDate) {
-      return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
+    // 1. Date validation: Today or future dates only (in Bangkok UTC+7)
+    const nowUtc = Date.now();
+    const bkkOffset = 7 * 60 * 60 * 1000;
+    const todayBangkok = new Date(nowUtc + bkkOffset).toISOString().slice(0, 10);
+
+    if (booking_date < todayBangkok) {
+      return NextResponse.json({
+        error: "Cannot select a date in the past (ไม่สามารถเลือกวันที่ในอดีตได้ กรุณาเลือกวันนี้หรือวันล่วงหน้า)",
+      }, { status: 400 });
     }
 
-    const now = new Date();
-    if (endsAtDate.getTime() < now.getTime() - 5 * 60 * 1000) {
-      return NextResponse.json({ error: "Cannot create a booking in the past" }, { status: 400 });
+    const startsAtDate = new Date(starts_at);
+    const endsAtDate = new Date(ends_at);
+    if (isNaN(startsAtDate.getTime()) || isNaN(endsAtDate.getTime())) {
+      return NextResponse.json({ error: "Invalid start or end date format" }, { status: 400 });
+    }
+
+    // 2. Inverted time validation: End time must be strictly after start time
+    if (endsAtDate.getTime() <= startsAtDate.getTime()) {
+      return NextResponse.json({
+        error: "End time must be after start time (เวลาสิ้นสุดต้องอยู่หลังเวลาเริ่มต้น ห้ามเลือกเวลาย้อนกลับ)",
+      }, { status: 400 });
+    }
+
+    // 3. Minimum booking duration (at least 15 minutes)
+    if (endsAtDate.getTime() - startsAtDate.getTime() < 15 * 60 * 1000) {
+      return NextResponse.json({
+        error: "Booking duration must be at least 15 minutes (ระยะเวลาการจองต้องไม่น้อยกว่า 15 นาที)",
+      }, { status: 400 });
+    }
+
+    // 4. Past time validation: If booking is for today, start time cannot be in the past
+    // Allow a 3-minute grace buffer for client clock drift or submission network transit
+    const graceBufferMs = 3 * 60 * 1000;
+    if (booking_date === todayBangkok && startsAtDate.getTime() < nowUtc - graceBufferMs) {
+      return NextResponse.json({
+        error: "Start time cannot be in the past (เวลาเริ่มต้นได้ผ่านไปแล้ว กรุณาเลือกเวลาปัจจุบันหรือล่วงหน้า)",
+      }, { status: 400 });
+    }
+
+    if (endsAtDate.getTime() < nowUtc) {
+      return NextResponse.json({
+        error: "Cannot create a booking that has already ended (ช่วงเวลาที่ระบุได้สิ้นสุดลงแล้ว)",
+      }, { status: 400 });
     }
 
     // Ensure database constraints are strictly satisfied:
