@@ -197,10 +197,24 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/map`,
         urlLabelTh: "เปิดดูแผนผัง 2D Interactive 🗺️",
         urlLabelEn: "View 2D Interactive Map 🗺️",
-        imageSrc: "/guide/campus-vector-2d.png",
-        imageAlt: "2D Vector Campus Map",
+        imageSrc: "/guide/parking-p01-slots-grid.png",
+        imageAlt: "P01 Live Interactive Slot Selection Grid",
         badgeColor: "#0284c7",
         badgeBg: "#e0f2fe",
+        gallery: [
+          {
+            src: "/guide/booking-form-summary.png",
+            alt: "Booking Form & Vehicle Selection",
+            labelTh: "ฟอร์มสรุปการจอง & เลือกรถ",
+            labelEn: "Booking Form & Vehicle",
+          },
+          {
+            src: "/guide/campus-vector-2d.png",
+            alt: "2D Vector Campus Map",
+            labelTh: "แผนผังเวกเตอร์ 2D",
+            labelEn: "2D Vector Map",
+          },
+        ],
       },
       {
         id: 3,
@@ -237,6 +251,20 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         imageAlt: "QR Pass Card",
         badgeColor: "#b45309",
         badgeBg: "#fef3c7",
+        gallery: [
+          {
+            src: "/guide/booking-form-summary.png",
+            alt: "Booking Summary Form",
+            labelTh: "ฟอร์มระบุการจอง",
+            labelEn: "Booking Form",
+          },
+          {
+            src: "/guide/user-profile-history.png",
+            alt: "User Bookings History",
+            labelTh: "ประวัติการจองของฉัน",
+            labelEn: "My Bookings History",
+          },
+        ],
       },
       {
         id: 4,
@@ -401,10 +429,30 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         targetUrl: `/${locale}/app/notifications`,
         urlLabelTh: "เปิดดูศูนย์การแจ้งเตือน 🔔",
         urlLabelEn: "Open Notification Hub 🔔",
-        imageSrc: "/guide/notifications-profile.png",
-        imageAlt: "Notifications and Profile Overview",
+        imageSrc: "/guide/user-profile-overview.png",
+        imageAlt: "User Profile, Account Verification & Staff Role",
         badgeColor: "#16a34a",
         badgeBg: "#dcfce7",
+        gallery: [
+          {
+            src: "/guide/user-profile-history.png",
+            alt: "User Booking History & Management",
+            labelTh: "ประวัติการจอง & ลบบัญชี",
+            labelEn: "Booking History & Actions",
+          },
+          {
+            src: "/guide/user-vehicles-manage.png",
+            alt: "User Vehicle & License Plate Management",
+            labelTh: "จัดการรถและป้ายทะเบียน",
+            labelEn: "My Vehicles & Plates",
+          },
+          {
+            src: "/guide/notifications-profile.png",
+            alt: "Notification Hub",
+            labelTh: "ศูนย์การแจ้งเตือน",
+            labelEn: "Notifications Inbox",
+          },
+        ],
       },
       {
         id: 8,
