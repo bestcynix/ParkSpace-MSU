@@ -12,8 +12,10 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  Filter,
   LoaderCircle,
   MessageSquare,
+  Search,
   Star,
 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
@@ -89,6 +91,8 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
   const [bugPage, setBugPage] = useState(1);
   const [ratingPage, setRatingPage] = useState(1);
   const [errorPage, setErrorPage] = useState(1);
+  const [errorSearch, setErrorSearch] = useState("");
+  const [errorSeverity, setErrorSeverity] = useState("ALL");
 
   const loadReview = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -240,6 +244,47 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
     downloadFile(jsonContent, `parkspace_bugs_${timestamp}.json`, "application/json;charset=utf-8;");
   }
 
+  function exportErrorsCsv() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const headers = ["ID", "Created At", "Route", "Severity", "Message"];
+    const dataRows = filteredErrors.map((e) => [
+      `"${e.id}"`,
+      `"${e.created_at}"`,
+      `"${(e.route ?? "").replace(/"/g, '""')}"`,
+      `"${e.severity}"`,
+      `"${e.message.replace(/"/g, '""')}"`,
+    ]);
+    const csvContent = "\uFEFF" + [headers.join(","), ...dataRows.map((r) => r.join(","))].join("\r\n");
+    downloadFile(csvContent, `parkspace_errors_${timestamp}.csv`, "text/csv;charset=utf-8;");
+  }
+
+  function exportErrorsJson() {
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const jsonContent = JSON.stringify(filteredErrors, null, 2);
+    downloadFile(jsonContent, `parkspace_errors_${timestamp}.json`, "application/json;charset=utf-8;");
+  }
+
+  const filteredErrors = useMemo(() => {
+    const q = errorSearch.trim().toLowerCase();
+    return errors.filter((err) => {
+      if (errorSeverity !== "ALL" && err.severity.toUpperCase() !== errorSeverity) return false;
+      if (q) {
+        const matchRoute = (err.route || "").toLowerCase().includes(q);
+        const matchMsg = (err.message || "").toLowerCase().includes(q);
+        if (!matchRoute && !matchMsg) return false;
+      }
+      return true;
+    });
+  }, [errors, errorSearch, errorSeverity]);
+
+  const errorSeverityCounts = useMemo(() => ({
+    all: errors.length,
+    critical: errors.filter((e) => e.severity.toUpperCase() === "CRITICAL").length,
+    high: errors.filter((e) => e.severity.toUpperCase() === "HIGH").length,
+    medium: errors.filter((e) => e.severity.toUpperCase() === "MEDIUM").length,
+    low: errors.filter((e) => e.severity.toUpperCase() === "LOW").length,
+  }), [errors]);
+
   // Paginated Slices
   const totalBugPages = Math.max(1, Math.ceil(bugs.length / ITEMS_PER_PAGE));
   const paginatedBugs = bugs.slice((bugPage - 1) * ITEMS_PER_PAGE, bugPage * ITEMS_PER_PAGE);
@@ -247,8 +292,8 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
   const totalRatingPages = Math.max(1, Math.ceil(ratings.length / ITEMS_PER_PAGE));
   const paginatedRatings = ratings.slice((ratingPage - 1) * ITEMS_PER_PAGE, ratingPage * ITEMS_PER_PAGE);
 
-  const totalErrorPages = Math.max(1, Math.ceil(errors.length / ITEMS_PER_PAGE));
-  const paginatedErrors = errors.slice((errorPage - 1) * ITEMS_PER_PAGE, errorPage * ITEMS_PER_PAGE);
+  const totalErrorPages = Math.max(1, Math.ceil(filteredErrors.length / ITEMS_PER_PAGE));
+  const paginatedErrors = filteredErrors.slice((errorPage - 1) * ITEMS_PER_PAGE, errorPage * ITEMS_PER_PAGE);
 
   if (loading) {
     return (
@@ -305,6 +350,137 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
           </div>
         ) : null}
       </div>
+
+      {/* Dedicated Error Review Section when section === 'errors' */}
+      {includeErrors ? (
+        <section className="review-panel" aria-labelledby="error-logs-heading">
+          <div className="section-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <h2 id="error-logs-heading" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={20} color="#dc2626" />
+                {t.errorLogs} ({filteredErrors.length} / {errors.length})
+              </h2>
+              <p>{isTh ? "ติดตามข้อผิดพลาด ล็อกเส้นทาง และระดับความรุนแรงของระบบ" : "Track system error logs, route exceptions, and severity metrics"}</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ fontSize: 11, padding: "5px 10px", height: "auto" }}
+                onClick={exportErrorsCsv}
+                disabled={!filteredErrors.length}
+              >
+                <FileSpreadsheet size={14} />
+                Export CSV
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                style={{ fontSize: 11, padding: "5px 10px", height: "auto" }}
+                onClick={exportErrorsJson}
+                disabled={!filteredErrors.length}
+              >
+                <Download size={14} />
+                Export JSON
+              </button>
+            </div>
+          </div>
+
+          {/* Search & Severity Filter Bar */}
+          <div className="inline-actions" style={{ marginTop: 12, marginBottom: 14, gap: 8, flexWrap: "wrap" }}>
+            <div className="user-search-box" style={{ flex: "1 1 220px", margin: 0 }}>
+              <Search size={16} />
+              <input
+                aria-label={isTh ? "ค้นหา Error (Route, ข้อความ)..." : "Search errors (route, message)..."}
+                placeholder={isTh ? "ค้นหา Error (Route, ข้อความ)..." : "Search errors (route, message)..."}
+                value={errorSearch}
+                onChange={(event) => {
+                  setErrorSearch(event.target.value);
+                  setErrorPage(1);
+                }}
+              />
+            </div>
+            <label className="user-search-box" style={{ flex: "0 1 190px", margin: 0 }}>
+              <Filter size={16} />
+              <select
+                aria-label={isTh ? "กรองระดับความรุนแรง" : "Filter by severity"}
+                value={errorSeverity}
+                onChange={(event) => {
+                  setErrorSeverity(event.target.value);
+                  setErrorPage(1);
+                }}
+                style={{ width: "100%", border: 0, outline: 0, background: "transparent", color: "inherit", font: "inherit", cursor: "pointer" }}
+              >
+                <option value="ALL">{isTh ? "ทุกระดับความรุนแรง" : "All Severities"} ({errorSeverityCounts.all})</option>
+                <option value="CRITICAL">CRITICAL ({errorSeverityCounts.critical})</option>
+                <option value="HIGH">HIGH ({errorSeverityCounts.high})</option>
+                <option value="MEDIUM">MEDIUM ({errorSeverityCounts.medium})</option>
+                <option value="LOW">LOW ({errorSeverityCounts.low})</option>
+              </select>
+            </label>
+          </div>
+
+          {filteredErrors.length ? (
+            <>
+              <div className="review-list">
+                {paginatedErrors.map((error) => (
+                  <article
+                    className="review-item"
+                    key={error.id}
+                    style={{
+                      borderLeft: error.severity.toUpperCase() === "CRITICAL" || error.severity.toUpperCase() === "HIGH"
+                        ? "4px solid var(--red)"
+                        : "4px solid var(--amber)",
+                    }}
+                  >
+                    <div className="review-item-heading">
+                      <div>
+                        <strong style={{ fontFamily: "monospace", fontSize: 13 }}>{error.route || "/"}</strong>
+                        <small>{formatDate(error.created_at, locale)}</small>
+                      </div>
+                      <span className={`severity-badge ${error.severity.toLowerCase()}`}>{error.severity}</span>
+                    </div>
+                    <p style={{ fontFamily: "monospace", fontSize: 11.5, background: "var(--canvas)", padding: "8px 10px", borderRadius: 8, marginTop: 8, wordBreak: "break-all" }}>
+                      {error.message}
+                    </p>
+                  </article>
+                ))}
+              </div>
+              {totalErrorPages > 1 && (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 14 }}>
+                  <button
+                    className="secondary-button small-button"
+                    type="button"
+                    disabled={errorPage <= 1}
+                    onClick={() => setErrorPage((p) => Math.max(1, p - 1))}
+                    aria-label={isTh ? "หน้าก่อนหน้า" : "Previous page"}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span style={{ fontSize: 12, fontWeight: 600 }}>
+                    {isTh ? `หน้า ${errorPage} / ${totalErrorPages}` : `Page ${errorPage} of ${totalErrorPages}`} ({filteredErrors.length} {isTh ? "รายการ" : "items"})
+                  </span>
+                  <button
+                    className="secondary-button small-button"
+                    type="button"
+                    disabled={errorPage >= totalErrorPages}
+                    onClick={() => setErrorPage((p) => Math.min(totalErrorPages, p + 1))}
+                    aria-label={isTh ? "หน้าถัดไป" : "Next page"}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="review-empty">
+              {errors.length
+                ? (isTh ? "ไม่พบ Error ตามเงื่อนไขการค้นหา" : "No errors matching the filter criteria")
+                : t.noErrors}
+            </p>
+          )}
+        </section>
+      ) : null}
 
       {/* Analytics & Rating Breakdown Section */}
       <section className="review-panel" aria-labelledby="analytics-heading">
@@ -590,63 +766,7 @@ export function FeedbackReview({ locale, role, includeErrors = false }: { locale
         )}
       </section>
 
-      {/* Error Logs Section (if role allows) */}
-      {includeErrors ? (
-        <section className="review-panel">
-          <div className="section-heading">
-            <div>
-              <h2>{t.errorLogs} ({errors.length})</h2>
-              <p>{t.systemHealth} · {t.admin}</p>
-            </div>
-            <AlertTriangle size={20} color="#a27e00" />
-          </div>
-          {errors.length ? (
-            <>
-              <div className="review-list">
-                {paginatedErrors.map((error) => (
-                  <article className="review-item" key={error.id}>
-                    <div className="review-item-heading">
-                      <div>
-                        <strong>{error.route || "—"}</strong>
-                        <small>{formatDate(error.created_at, locale)}</small>
-                      </div>
-                      <span className={`severity-badge ${error.severity.toLowerCase()}`}>{error.severity}</span>
-                    </div>
-                    <p>{error.message}</p>
-                  </article>
-                ))}
-              </div>
-              {totalErrorPages > 1 && (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 14 }}>
-                  <button
-                    className="secondary-button small-button"
-                    type="button"
-                    disabled={errorPage <= 1}
-                    onClick={() => setErrorPage((p) => Math.max(1, p - 1))}
-                    aria-label={isTh ? "หน้าก่อนหน้า" : "Previous page"}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>
-                    {isTh ? `หน้า ${errorPage} / ${totalErrorPages}` : `Page ${errorPage} of ${totalErrorPages}`} ({errors.length} {isTh ? "รายการ" : "items"})
-                  </span>
-                  <button
-                    className="secondary-button small-button"
-                    type="button"
-                    disabled={errorPage >= totalErrorPages}
-                    onClick={() => setErrorPage((p) => Math.min(totalErrorPages, p + 1))}
-                    aria-label={isTh ? "หน้าถัดไป" : "Next page"}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <p className="review-empty">{t.noErrors}</p>
-          )}
-        </section>
-      ) : null}
+
 
       {message ? <div className="form-note" role="alert">{message}</div> : null}
     </div>

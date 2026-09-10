@@ -5,6 +5,10 @@ import { PublicFooter } from "@/components/layout/PublicFooter";
 import { SystemGuidePresentation } from "@/components/presentation/SystemGuidePresentation";
 import { isLocale, type Locale, getCopy } from "@/lib/i18n";
 
+export function generateStaticParams() {
+  return [{ locale: "th" }, { locale: "en" }];
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ locale: string }> }): Promise<Metadata> {
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";

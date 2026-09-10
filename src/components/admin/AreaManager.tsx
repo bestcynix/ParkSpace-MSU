@@ -152,7 +152,10 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
     try {
       const { data, error } = await createSupabaseBrowserClient().from("parking_areas").select(fields).order("code");
       if (error) throw error;
-      setAreas((data ?? []) as AreaRow[]);
+      const loadedAreas = (data ?? []) as AreaRow[];
+      setAreas(loadedAreas);
+      setEditingId((current) => current || (loadedAreas.length > 0 ? loadedAreas[0].id : null));
+      setDraft((current) => current.code ? current : (loadedAreas.length > 0 ? draftFromArea(loadedAreas[0]) : emptyDraft));
       setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : t.operationalData);
@@ -361,16 +364,48 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
         ) : filteredAreas.length ? (
           <div className="data-list">
             {filteredAreas.map((area) => (
-              <article className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`} key={area.id}>
+              <article
+                className={`data-list-item ${selectedArea?.id === area.id ? "selected" : ""}`}
+                key={area.id}
+                onClick={() => startEdit(area)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    startEdit(area);
+                  }
+                }}
+              >
                 <div>
                   <strong>{area.code} · {locale === "th" ? area.name_th : area.name_en}</strong>
                   <small>{area.capacity ?? "—"} · {area.capacity_source} · {area.slot_mode} · {area.data_status}</small>
                   <small>{area.current_status === "CLOSED" ? t.areaClosed : t.areaOpen} · {Array.isArray(area.vehicle_types) ? area.vehicle_types.length : 0} {t.vehicleTypes}</small>
                 </div>
                 <div className="data-list-actions">
-                  <button className="icon-button" type="button" onClick={() => startEdit(area)} aria-label={`${t.edit} ${area.code}`}><Edit3 size={15} /></button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEdit(area);
+                    }}
+                    aria-label={`${t.edit} ${area.code}`}
+                  >
+                    <Edit3 size={15} />
+                  </button>
                   {role === "admin" ? (
-                    <button className="icon-button danger" type="button" onClick={() => void deleteArea(area)} aria-label={`${t.delete} ${area.code}`}><Trash2 size={15} /></button>
+                    <button
+                      className="icon-button danger"
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void deleteArea(area);
+                      }}
+                      aria-label={`${t.delete} ${area.code}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   ) : <Check size={16} color="#2b9d65" />}
                 </div>
               </article>

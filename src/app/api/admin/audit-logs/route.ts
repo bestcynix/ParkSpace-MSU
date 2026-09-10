@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { createClient } from "@supabase/supabase-js";
+import { getSystemDatabaseClient } from "@/lib/supabase/system-client";
 
 async function verifyAdminAuth(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return { error: "Supabase not configured", status: 503 };
@@ -14,7 +13,7 @@ async function verifyAdminAuth(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.replace(/^Bearer\s+/i, "");
 
-  const client = createServerClient(supabaseUrl, serviceRoleKey || supabaseAnonKey, {
+  const authClient = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -27,11 +26,12 @@ async function verifyAdminAuth(request: NextRequest) {
   let userEmail: string | null = null;
 
   if (token) {
-    const { data: userData } = await client.auth.getUser(token);
+    const { data: userData } = await authClient.auth.getUser(token);
     userId = userData.user?.id ?? null;
     userEmail = userData.user?.email ?? null;
-  } else {
-    const { data: userData } = await client.auth.getUser();
+  }
+  if (!userId) {
+    const { data: userData } = await authClient.auth.getUser();
     userId = userData.user?.id ?? null;
     userEmail = userData.user?.email ?? null;
   }
@@ -40,26 +40,25 @@ async function verifyAdminAuth(request: NextRequest) {
     return { error: "Sign in required", status: 401 };
   }
 
+  const adminClient = await getSystemDatabaseClient();
+
   // Super Admins bypass
-  const normalizedEmail = (userEmail || "").toLowerCase();
+  const normalizedEmail = (userEmail || "").toLowerCase().trim();
   if (normalizedEmail === "68011211206@msu.ac.th" || normalizedEmail === "69010518004@msu.ac.th") {
-    const adminClient = serviceRoleKey
-      ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
-      : client;
     return { userId, adminClient };
   }
 
   // Check user_roles
-  const { data: userRoles } = await client
+  const { data: userRoles } = await adminClient
     .from("user_roles")
     .select("role")
     .eq("user_id", userId);
 
-  const roles = (userRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
+  const roles = (userRoles ?? []).map((r: { role: string }) => String(r.role).toLowerCase().trim());
   let isAdmin = roles.includes("admin") || roles.includes("developer");
 
   if (!isAdmin) {
-    const { data: profile } = await client
+    const { data: profile } = await adminClient
       .from("profiles")
       .select("user_type")
       .eq("id", userId)
@@ -73,10 +72,6 @@ async function verifyAdminAuth(request: NextRequest) {
   if (!isAdmin) {
     return { error: "Administrator role required", status: 403 };
   }
-
-  const adminClient = serviceRoleKey
-    ? createClient(supabaseUrl, serviceRoleKey, { auth: { autoRefreshToken: false, persistSession: false } })
-    : client;
 
   return { userId, adminClient };
 }

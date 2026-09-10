@@ -61,7 +61,7 @@ export function NotificationList({ locale }: { locale: Locale }) {
 
       const { data, error } = await supabase
         .from("notifications")
-        .select("id, notification_type, title_th, title_en, body_th, body_en, read_at, created_at, metadata")
+        .select("id, notification_type, title_th, title_en, body_th, body_en, read_at, created_at")
         .eq("user_id", sessionData.session.user.id)
         .order("created_at", { ascending: false })
         .limit(100);
