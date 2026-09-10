@@ -984,31 +984,32 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
             </div>
 
             <span
-              className="data-badge"
+              className={`booking-status ${result.booking_status.toLowerCase()}`}
               style={{
                 fontSize: 12,
                 fontWeight: 700,
-                padding: "6px 12px",
+                padding: "6px 14px",
                 borderRadius: 8,
-                background:
-                  result.booking_status === "CHECKED_IN"
-                    ? "#eff6ff"
-                    : result.booking_status === "COMPLETED"
-                    ? "#f0fdf4"
-                    : result.booking_status === "CONFIRMED" || result.booking_status === "RESERVED"
-                    ? "#fefce8"
-                    : "#fef2f2",
-                color:
-                  result.booking_status === "CHECKED_IN"
-                    ? "#1e40af"
-                    : result.booking_status === "COMPLETED"
-                    ? "#166534"
-                    : result.booking_status === "CONFIRMED" || result.booking_status === "RESERVED"
-                    ? "#854d0e"
-                    : "#991b1b",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
               }}
             >
-              {result.booking_status}
+              {result.booking_status === "CHECKED_IN"
+                ? isTh ? "🟢 เช็คอินแล้ว / กำลังจอด" : "🟢 Checked-in / Parked"
+                : result.booking_status === "OVERSTAY"
+                ? isTh ? "🚨 เลยเวลาจอด (OVERSTAY)" : "🚨 Overstay"
+                : result.booking_status === "CONFIRMED"
+                ? isTh ? "🟡 ยืนยันแล้ว" : "🟡 Confirmed"
+                : result.booking_status === "RESERVED"
+                ? isTh ? "🟡 จองแล้ว" : "🟡 Reserved"
+                : result.booking_status === "COMPLETED"
+                ? isTh ? "🏁 เช็คเอาท์แล้ว / เสร็จสิ้น" : "🏁 Completed"
+                : result.booking_status === "CANCELLED"
+                ? isTh ? "❌ ยกเลิกแล้ว" : "❌ Cancelled"
+                : result.booking_status === "NO_SHOW"
+                ? isTh ? "⚠️ ไม่มาตามนัด (No-Show)" : "⚠️ No-Show"
+                : isTh ? "⏳ รอดำเนินการ" : "⏳ Pending"}
             </span>
           </div>
 
@@ -1236,7 +1237,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     {transitioning === "CHECK_IN" ? <RefreshCw size={15} className="spin" /> : <CheckCircle2 size={15} />}
-                    <span>🟢 {t.checkIn} (ยืนยันเข้าจอด)</span>
+                    <span>🟢 {isTh ? "เช็คอิน (ยืนยันเข้าจอด)" : "Check In (Confirm Entry)"}</span>
                   </button>
                 )}
 
@@ -1249,7 +1250,7 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     {transitioning === "CHECK_OUT" ? <RefreshCw size={15} className="spin" /> : <CheckCircle2 size={15} />}
-                    <span>🔵 {t.checkOut} (ยืนยันออก / เสร็จสิ้น)</span>
+                    <span>🔵 {isTh ? "เช็คเอาท์ (ยืนยันออก / เสร็จสิ้น)" : "Check Out (Confirm Exit)"}</span>
                   </button>
                 )}
 
@@ -1266,52 +1267,72 @@ export function StaffScanner({ locale, role = "staff" }: { locale: Locale; role?
                 )}
               </div>
             ) : (
-              /* Admin: Full Transition Authority */
+              /* Admin: Full Transition Authority - Conditionally Switched by Status */
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    className="primary-button small-button"
-                    type="button"
-                    onClick={() => void handleTransition("CHECK_IN")}
-                    disabled={Boolean(transitioning)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    {transitioning === "CHECK_IN" ? <RefreshCw size={13} className="spin" /> : <CheckCircle2 size={13} />}
-                    <span>{t.checkIn}</span>
-                  </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  {canCheckIn && (
+                    <button
+                      className="primary-button small-button"
+                      type="button"
+                      onClick={() => void handleTransition("CHECK_IN")}
+                      disabled={Boolean(transitioning)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                    >
+                      {transitioning === "CHECK_IN" ? <RefreshCw size={13} className="spin" /> : <CheckCircle2 size={13} />}
+                      <span>🟢 {isTh ? "เช็คอิน (เข้าจอด)" : "Check In"}</span>
+                    </button>
+                  )}
 
-                  <button
-                    className="secondary-button small-button"
-                    type="button"
-                    onClick={() => void handleTransition("CHECK_OUT")}
-                    disabled={Boolean(transitioning)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    {transitioning === "CHECK_OUT" ? <RefreshCw size={13} className="spin" /> : <CheckCircle2 size={13} />}
-                    <span>{t.checkOut}</span>
-                  </button>
+                  {canCheckOut && (
+                    <button
+                      className="secondary-button small-button"
+                      type="button"
+                      onClick={() => void handleTransition("CHECK_OUT")}
+                      disabled={Boolean(transitioning)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#eff6ff", borderColor: "#bfdbfe", color: "#1d4ed8" }}
+                    >
+                      {transitioning === "CHECK_OUT" ? <RefreshCw size={13} className="spin" /> : <CheckCircle2 size={13} />}
+                      <span>🔵 {isTh ? "เช็คเอาท์ (ออก)" : "Check Out"}</span>
+                    </button>
+                  )}
 
-                  <button
-                    className="secondary-button small-button danger"
-                    type="button"
-                    onClick={() => void handleTransition("CANCEL")}
-                    disabled={Boolean(transitioning)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    <AlertTriangle size={13} />
-                    <span>{isTh ? "ยกเลิก (Cancel)" : "Cancel"}</span>
-                  </button>
+                  {canCheckIn && (
+                    <>
+                      <button
+                        className="secondary-button small-button danger"
+                        type="button"
+                        onClick={() => void handleTransition("CANCEL")}
+                        disabled={Boolean(transitioning)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <AlertTriangle size={13} />
+                        <span>❌ {isTh ? "ยกเลิกการจอง" : "Cancel"}</span>
+                      </button>
 
-                  <button
-                    className="secondary-button small-button"
-                    type="button"
-                    onClick={() => void handleTransition("NO_SHOW")}
-                    disabled={Boolean(transitioning)}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
-                  >
-                    <Clock3 size={13} />
-                    <span>No Show</span>
-                  </button>
+                      <button
+                        className="secondary-button small-button"
+                        type="button"
+                        onClick={() => void handleTransition("NO_SHOW")}
+                        disabled={Boolean(transitioning)}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Clock3 size={13} />
+                        <span>⏳ {isTh ? "ไม่มาตามนัด (No-show)" : "No Show"}</span>
+                      </button>
+                    </>
+                  )}
+
+                  {isCompleted && (
+                    <span style={{ color: "#166534", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                      <CheckCircle2 size={15} /> {isTh ? "เสร็จสิ้นแล้ว" : "Completed"}
+                    </span>
+                  )}
+
+                  {isCancelled && (
+                    <span style={{ color: "#991b1b", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+                      <AlertTriangle size={15} /> {isTh ? "ยกเลิกแล้ว" : "Cancelled"}
+                    </span>
+                  )}
 
                   <button
                     className="secondary-button small-button danger"

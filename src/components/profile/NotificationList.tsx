@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import {
+  AlertTriangle,
   Bell,
+  CalendarCheck,
+  Car,
   Check,
   CheckCheck,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Filter,
+  Info,
   LoaderCircle,
   Search,
-  Sparkles,
-  CalendarCheck,
-  Info,
+  XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Locale } from "@/lib/i18n";
@@ -33,9 +35,90 @@ type NotificationRow = {
   metadata?: Record<string, unknown> | null;
 };
 
-type FilterType = "all" | "unread" | "booking" | "system";
+type FilterType = "all" | "unread" | "booking" | "alert" | "system";
 
 const PAGE_SIZE = 8;
+
+function getNotificationVisual(item: NotificationRow, isTh: boolean) {
+  const type = (item.notification_type || "").toLowerCase();
+  const text = `${item.title_th} ${item.title_en} ${item.body_th ?? ""} ${item.body_en ?? ""}`.toLowerCase();
+
+  if (type.includes("overstay") || text.includes("overstay") || text.includes("เลยเวลา") || text.includes("เกินเวลา")) {
+    return {
+      icon: AlertTriangle,
+      badgeLabel: isTh ? "เลยเวลา / เตือน" : "Overstay / Alert",
+      bgBadge: "#fee2e2",
+      colorBadge: "#dc2626",
+      borderBadge: "#fecaca",
+      iconBg: "rgba(239, 68, 68, 0.14)",
+      iconColor: "#dc2626",
+      cardBorder: "#fca5a5",
+    };
+  }
+
+  if (type.includes("check_in") || text.includes("check_in") || text.includes("เช็คอิน") || text.includes("เข้าจอด")) {
+    return {
+      icon: Car,
+      badgeLabel: isTh ? "เช็คอินแล้ว / กำลังจอด" : "Checked-in / Parked",
+      bgBadge: "#dcfce7",
+      colorBadge: "#15803d",
+      borderBadge: "#bbf7d0",
+      iconBg: "rgba(22, 163, 74, 0.14)",
+      iconColor: "#16a34a",
+      cardBorder: "#86efac",
+    };
+  }
+
+  if (type.includes("check_out") || text.includes("check_out") || text.includes("เช็คเอาท์") || text.includes("เสร็จสิ้น")) {
+    return {
+      icon: CheckCircle2,
+      badgeLabel: isTh ? "เช็คเอาท์แล้ว / เสร็จสิ้น" : "Checked-out / Completed",
+      bgBadge: "#ecfdf5",
+      colorBadge: "#047857",
+      borderBadge: "#a7f3d0",
+      iconBg: "rgba(5, 150, 105, 0.14)",
+      iconColor: "#059669",
+      cardBorder: "#6ee7b7",
+    };
+  }
+
+  if (type.includes("cancel") || text.includes("cancel") || text.includes("ยกเลิก")) {
+    return {
+      icon: XCircle,
+      badgeLabel: isTh ? "ยกเลิกแล้ว" : "Cancelled",
+      bgBadge: "#f3f4f6",
+      colorBadge: "#6b7280",
+      borderBadge: "#e5e7eb",
+      iconBg: "rgba(107, 114, 128, 0.14)",
+      iconColor: "#6b7280",
+      cardBorder: "#d1d5db",
+    };
+  }
+
+  if (type.includes("booking") || text.includes("booking") || text.includes("จอง") || text.includes("msupk-bkg")) {
+    return {
+      icon: CalendarCheck,
+      badgeLabel: isTh ? "การจองสำเร็จ" : "Booking Confirmed",
+      bgBadge: "#fef3c7",
+      colorBadge: "#92400e",
+      borderBadge: "#fde68a",
+      iconBg: "rgba(245, 158, 11, 0.14)",
+      iconColor: "#d97706",
+      cardBorder: "#fcd34d",
+    };
+  }
+
+  return {
+    icon: Bell,
+    badgeLabel: isTh ? "ระบบ" : "System",
+    bgBadge: "#f1f5f9",
+    colorBadge: "#475569",
+    borderBadge: "#e2e8f0",
+    iconBg: "rgba(71, 85, 105, 0.1)",
+    iconColor: "#64748b",
+    cardBorder: "var(--line)",
+  };
+}
 
 export function NotificationList({ locale }: { locale: Locale }) {
   const t = getCopy(locale);
@@ -150,7 +233,16 @@ export function NotificationList({ locale }: { locale: Locale }) {
       // Filter tab
       if (filter === "unread" && item.read_at) return false;
       if (filter === "booking" && !item.notification_type?.toLowerCase().includes("booking") && !extractBookingRef(item)) return false;
-      if (filter === "system" && (item.notification_type?.toLowerCase().includes("booking") || extractBookingRef(item))) return false;
+      if (filter === "alert") {
+        const fullText = `${item.title_th} ${item.title_en} ${item.body_th ?? ""} ${item.body_en ?? ""}`.toLowerCase();
+        const ntype = (item.notification_type || "").toLowerCase();
+        if (!ntype.includes("overstay") && !fullText.includes("overstay") && !fullText.includes("เลยเวลา") && !fullText.includes("เกินเวลา") && !ntype.includes("warning")) return false;
+      }
+      if (filter === "system") {
+        const isBkg = item.notification_type?.toLowerCase().includes("booking") || Boolean(extractBookingRef(item));
+        const isAlert = item.notification_type?.toLowerCase().includes("overstay");
+        if (isBkg || isAlert) return false;
+      }
 
       // Search query
       if (searchQuery.trim()) {
@@ -332,6 +424,18 @@ export function NotificationList({ locale }: { locale: Locale }) {
         </button>
         <button
           type="button"
+          className={`chip ${filter === "alert" ? "active" : ""}`}
+          onClick={() => {
+            setFilter("alert");
+            setPage(1);
+          }}
+          style={{ cursor: "pointer" }}
+        >
+          <AlertTriangle size={13} style={{ display: "inline", marginRight: 4, color: "#dc2626" }} />
+          {isTh ? "เลยเวลา / แจ้งเตือน" : "Alerts"}
+        </button>
+        <button
+          type="button"
           className={`chip ${filter === "system" ? "active" : ""}`}
           onClick={() => {
             setFilter("system");
@@ -360,6 +464,8 @@ export function NotificationList({ locale }: { locale: Locale }) {
           {paginatedItems.map((item) => {
             const bookingRef = extractBookingRef(item);
             const isUnread = !item.read_at;
+            const visual = getNotificationVisual(item, isTh);
+            const VisualIcon = visual.icon;
 
             return (
               <article
@@ -370,32 +476,45 @@ export function NotificationList({ locale }: { locale: Locale }) {
                   gap: 14,
                   alignItems: "flex-start",
                   padding: "16px 18px",
-                  background: isUnread ? "var(--surface)" : "var(--surface)",
-                  border: isUnread ? "1.5px solid var(--gold)" : "1px solid var(--line)",
+                  background: "var(--surface)",
+                  border: isUnread ? `1.5px solid ${visual.cardBorder}` : "1px solid var(--line)",
                   borderRadius: 16,
-                  boxShadow: isUnread ? "0 4px 16px rgba(248, 201, 40, 0.12)" : "none",
+                  boxShadow: isUnread ? "0 4px 16px rgba(0, 0, 0, 0.08)" : "none",
                   position: "relative",
                 }}
               >
                 <div
                   className="notification-card-icon"
                   style={{
-                    width: 38,
-                    height: 38,
+                    width: 40,
+                    height: 40,
                     borderRadius: 12,
                     display: "grid",
                     placeItems: "center",
-                    background: isUnread ? "var(--gold-soft)" : "var(--canvas)",
-                    color: isUnread ? "#9a7800" : "var(--muted)",
+                    background: visual.iconBg,
+                    color: visual.iconColor,
                     flexShrink: 0,
                   }}
                 >
-                  {bookingRef ? <CalendarCheck size={18} /> : <Bell size={18} />}
+                  <VisualIcon size={20} />
                 </div>
 
                 <div className="notification-card-copy" style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
                     <strong style={{ fontSize: 14 }}>{isTh ? item.title_th : item.title_en}</strong>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: visual.colorBadge,
+                        background: visual.bgBadge,
+                        border: `1px solid ${visual.borderBadge}`,
+                        padding: "2px 8px",
+                        borderRadius: 8,
+                      }}
+                    >
+                      {visual.badgeLabel}
+                    </span>
                     {isUnread ? (
                       <span
                         style={{
@@ -404,7 +523,7 @@ export function NotificationList({ locale }: { locale: Locale }) {
                           color: "#9a7800",
                           background: "var(--gold-soft)",
                           padding: "2px 8px",
-                          borderRadius: 10,
+                          borderRadius: 8,
                         }}
                       >
                         {isTh ? "ใหม่" : "NEW"}

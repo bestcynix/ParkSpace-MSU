@@ -371,7 +371,9 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
           { key: "ALL", label: isTh ? "ทั้งหมด" : "All" },
           { key: "PENDING", label: isTh ? "รอดำเนินการ" : "Pending" },
           { key: "CONFIRMED", label: isTh ? "ยืนยันแล้ว" : "Confirmed" },
-          { key: "CHECKED_IN", label: isTh ? "กำลังใช้งาน" : "Checked-in" },
+          { key: "RESERVED", label: isTh ? "จองแล้ว" : "Reserved" },
+          { key: "CHECKED_IN", label: isTh ? "กำลังจอด" : "Checked-in" },
+          { key: "OVERSTAY", label: isTh ? "เลยเวลา" : "Overstay" },
           { key: "COMPLETED", label: isTh ? "เสร็จสิ้น" : "Completed" },
           { key: "CANCELLED", label: isTh ? "ยกเลิกแล้ว" : "Cancelled" },
         ].map((tab) => (
@@ -501,35 +503,33 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
 
                       <td style={{ padding: "12px 16px" }}>
                         <span
-                          className="data-badge"
+                          className={`booking-status ${b.status.toLowerCase()}`}
                           style={{
-                            padding: "4px 8px",
-                            borderRadius: 6,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "4px 10px",
+                            borderRadius: 8,
                             fontWeight: 700,
                             fontSize: 11,
-                            background:
-                              b.status === "CHECKED_IN"
-                                ? "#eff6ff"
-                                : b.status === "COMPLETED"
-                                ? "#f0fdf4"
-                                : b.status === "CONFIRMED" || b.status === "RESERVED"
-                                ? "#fefce8"
-                                : b.status === "CANCELLED"
-                                ? "#fef2f2"
-                                : "#fff7ed",
-                            color:
-                              b.status === "CHECKED_IN"
-                                ? "#1e40af"
-                                : b.status === "COMPLETED"
-                                ? "#166534"
-                                : b.status === "CONFIRMED" || b.status === "RESERVED"
-                                ? "#854d0e"
-                                : b.status === "CANCELLED"
-                                ? "#991b1b"
-                                : "#c2410c",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {b.status}
+                          {b.status === "CHECKED_IN"
+                            ? isTh ? "🟢 กำลังจอด" : "🟢 Checked-in"
+                            : b.status === "OVERSTAY"
+                            ? isTh ? "🚨 เลยเวลา" : "🚨 Overstay"
+                            : b.status === "CONFIRMED"
+                            ? isTh ? "🟡 ยืนยันแล้ว" : "🟡 Confirmed"
+                            : b.status === "RESERVED"
+                            ? isTh ? "🟡 จองแล้ว" : "🟡 Reserved"
+                            : b.status === "COMPLETED"
+                            ? isTh ? "🏁 เช็คเอาท์แล้ว" : "🏁 Completed"
+                            : b.status === "CANCELLED"
+                            ? isTh ? "❌ ยกเลิกแล้ว" : "❌ Cancelled"
+                            : b.status === "NO_SHOW"
+                            ? isTh ? "⚠️ ไม่มาตามนัด" : "⚠️ No-show"
+                            : isTh ? "⏳ รอดำเนินการ" : "⏳ Pending"}
                         </span>
                       </td>
 
@@ -703,12 +703,14 @@ export function AdminBookingsManager({ locale }: { locale: Locale }) {
                   onChange={(e) => setEditStatus(e.target.value)}
                   style={{ height: 40 }}
                 >
-                  <option value="PENDING">PENDING (รอดำเนินการ)</option>
-                  <option value="CONFIRMED">CONFIRMED (ยืนยันแล้ว)</option>
-                  <option value="CHECKED_IN">CHECKED_IN (เข้าจอดแล้ว)</option>
-                  <option value="COMPLETED">COMPLETED (เสร็จสิ้น)</option>
-                  <option value="CANCELLED">CANCELLED (ยกเลิก)</option>
-                  <option value="NO_SHOW">NO_SHOW (ไม่มาตามนัด)</option>
+                  <option value="PENDING">PENDING ({isTh ? "รอดำเนินการ" : "Pending"})</option>
+                  <option value="CONFIRMED">CONFIRMED ({isTh ? "ยืนยันแล้ว" : "Confirmed"})</option>
+                  <option value="RESERVED">RESERVED ({isTh ? "จองแล้ว" : "Reserved"})</option>
+                  <option value="CHECKED_IN">CHECKED_IN ({isTh ? "เข้าจอดแล้ว" : "Checked-in"})</option>
+                  <option value="OVERSTAY">OVERSTAY ({isTh ? "เลยเวลา" : "Overstay"})</option>
+                  <option value="COMPLETED">COMPLETED ({isTh ? "เสร็จสิ้น" : "Completed"})</option>
+                  <option value="CANCELLED">CANCELLED ({isTh ? "ยกเลิก" : "Cancelled"})</option>
+                  <option value="NO_SHOW">NO_SHOW ({isTh ? "ไม่มาตามนัด" : "No-show"})</option>
                 </select>
 
                 <button

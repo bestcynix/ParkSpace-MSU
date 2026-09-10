@@ -7,7 +7,7 @@ import { getCopy } from "@/lib/i18n";
 import { parkingAreas } from "@/lib/parking/demo-data";
 import { ParkingCard } from "@/components/parking/ParkingCard";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { LiveAreaSummary } from "@/components/parking/LiveAreaStatus";
+import { getOperationalTimeWindow, type LiveAreaSummary } from "@/components/parking/LiveAreaStatus";
 
 type ParkingFilter = "all" | "available" | "reserved" | "occupied" | "closed";
 type CapacityRow = {
@@ -44,13 +44,12 @@ export function ParkingBrowser({ locale }: { locale: Locale }) {
       }
       setLiveLoading(true);
       setLiveError("");
-      const startsAt = new Date();
-      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+      const { startsAt, endsAt } = getOperationalTimeWindow();
       try {
         const { data, error } = await createSupabaseBrowserClient().rpc("get_parking_capacity_by_type", {
           p_area_code: null,
-          p_starts_at: startsAt.toISOString(),
-          p_ends_at: endsAt.toISOString(),
+          p_starts_at: startsAt,
+          p_ends_at: endsAt,
         });
         if (error) throw error;
         const next: Record<string, LiveAreaSummary> = {};

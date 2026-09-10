@@ -23,7 +23,26 @@ export function ParkingCard({ area, locale, liveSummary = null }: { area: Parkin
           <LiveAreaStatus areaCode={area.code} locale={locale} fallback={area.status} summary={liveSummary} />
           </div>
         <a className="parking-detail-line text-link" href={getGoogleMapsSearchUrl(area)} target="_blank" rel="noreferrer"><MapPin size={13} />{t.openGoogleMaps}<ExternalLink size={12} /></a>
-        {area.estimatedCapacity ? <div className="parking-detail-line">{t.estimatedCapacity}: {area.estimatedCapacity} {locale === "th" ? "คัน" : "vehicles"}</div> : null}
+        <div className="parking-detail-line" style={{ display: "flex", flexWrap: "wrap", gap: "4px 8px", alignItems: "center" }}>
+          <span>
+            {t.estimatedCapacity}: <strong>{liveSummary ? `${liveSummary.available} / ${liveSummary.total}` : `${area.estimatedCapacity}`}</strong> {locale === "th" ? "คัน" : "vehicles"}
+          </span>
+          {liveSummary && (liveSummary.reserved > 0 || liveSummary.occupied > 0) ? (
+            <span style={{ fontSize: "0.82rem", color: "var(--muted, #64748b)" }}>
+              ({locale === "th" ? "ว่าง" : "free"} {liveSummary.available}
+              {liveSummary.reserved > 0 ? (
+                <span style={{ color: "#b45309", fontWeight: 700 }}>
+                  {" "}· {locale === "th" ? "จอง" : "res."} {liveSummary.reserved}
+                </span>
+              ) : null}
+              {liveSummary.occupied > 0 ? (
+                <span style={{ color: "#1d4ed8", fontWeight: 700 }}>
+                  {" "}· {locale === "th" ? "จอด" : "parked"} {liveSummary.occupied}
+                </span>
+              ) : null})
+            </span>
+          ) : null}
+        </div>
         <div className="inline-actions" style={{ marginTop: 10 }}>
           <span className="data-badge">{t.officialMap}</span>
         </div>

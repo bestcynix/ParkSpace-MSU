@@ -26,6 +26,16 @@ export function getLiveAreaStatus(summary: LiveAreaSummary, fallback: ParkingSta
   return "full";
 }
 
+export function getOperationalTimeWindow() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return {
+    startsAt: `${todayStr}T00:00:00+07:00`,
+    endsAt: `${todayStr}T23:59:59+07:00`,
+  };
+}
+
 export function LiveAreaStatus({
   areaCode,
   locale,
@@ -42,6 +52,13 @@ export function LiveAreaStatus({
   const [counts, setCounts] = useState<LiveAreaSummary | null>(summary);
 
   useEffect(() => {
+    if (summary) {
+      setStatus(getLiveAreaStatus(summary, fallback));
+      setCounts(summary);
+    }
+  }, [summary, fallback]);
+
+  useEffect(() => {
     let active = true;
     let refreshTimer: number | undefined;
 
@@ -53,50 +70,50 @@ export function LiveAreaStatus({
 
     async function loadStatus() {
       if (!isSupabaseConfigured()) return;
-      const startsAt = new Date();
-      const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+      const { startsAt, endsAt } = getOperationalTimeWindow();
       try {
         const supabase = createSupabaseBrowserClient();
-        const { data, error } = await supabase.rpc("get_available_parking_slots", {
+        const { data, error } = await supabase.rpc("get_parking_capacity_by_type", {
           p_area_code: areaCode,
-          p_starts_at: startsAt.toISOString(),
-          p_ends_at: endsAt.toISOString(),
+          p_starts_at: startsAt,
+          p_ends_at: endsAt,
         });
         if (error) throw error;
-        const rows = (data ?? []) as LiveSlotRow[];
+        const rows = (data ?? []) as Array<{
+          total_slots?: number | string | null;
+          available_slots?: number | string | null;
+          reserved_slots?: number | string | null;
+          occupied_slots?: number | string | null;
+          closed_slots?: number | string | null;
+        }>;
 
-        // Count base slot states
-        const rawAvailable = rows.filter((row) => row.availability === "AVAILABLE").length;
-        const closed = rows.filter((row) => row.availability === "CLOSED").length;
-        const occupied = rows.filter((row) => row.availability === "OCCUPIED").length;
-        let reserved = rows.filter((row) => row.availability === "RESERVED").length;
+        let total = 0;
+        let available = 0;
+        let reserved = 0;
+        let occupied = 0;
+        let closed = 0;
 
-        // Also check if any area-level bookings (where slot is null) exist for this area
-        const { data: areaBookings } = await supabase
-          .from("bookings")
-          .select("id")
-          .is("parking_slot_id", null)
-          .in("status", ["CONFIRMED", "RESERVED", "CHECKED_IN"])
-          .gte("ends_at", startsAt.toISOString())
-          .lte("starts_at", endsAt.toISOString());
+        for (const r of rows) {
+          total += Number(r.total_slots ?? 0);
+          available += Number(r.available_slots ?? 0);
+          reserved += Number(r.reserved_slots ?? 0);
+          occupied += Number(r.occupied_slots ?? 0);
+          closed += Number(r.closed_slots ?? 0);
+        }
 
-        const unassignedCount = areaBookings?.length ?? 0;
-        const available = Math.max(0, rawAvailable - unassignedCount);
-        reserved += Math.min(rawAvailable, unassignedCount);
+        const summaryData: LiveAreaSummary = {
+          total: total || 100,
+          available,
+          reserved,
+          occupied,
+          closed,
+        };
 
-        const nextStatus: ParkingStatus = !rows.length
-          ? fallback
-          : closed === rows.length
-          ? "closed"
-          : available === 0
-          ? (occupied ? "occupied" : "full")
-          : available < rows.length
-          ? "reserved"
-          : "available";
+        const nextStatus = getLiveAreaStatus(summaryData, fallback);
 
         if (active) {
           setStatus(nextStatus);
-          setCounts({ available, total: rows.length, reserved, occupied, closed });
+          setCounts(summaryData);
         }
       } catch {
         // Keep the explicit fallback label if the public availability RPC is unavailable.
@@ -143,10 +160,14 @@ export function LiveAreaStatus({
           <span style={{ color: "var(--ink)" }}>{locale === "th" ? "ทั้งหมด" : "Total"} {displayCounts.total}</span>
           <span style={{ color: "#16a34a" }}>· {locale === "th" ? "ว่าง" : "Free"} {displayCounts.available}</span>
           {displayCounts.reserved > 0 ? (
-            <span style={{ color: "#ca8a04" }}>· {locale === "th" ? "จอง" : "Booked"} {displayCounts.reserved}</span>
+            <span style={{ color: "#b45309", backgroundColor: "rgba(245, 158, 11, 0.15)", padding: "1px 7px", borderRadius: 999, border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+              {locale === "th" ? "จอง" : "Booked"} {displayCounts.reserved}
+            </span>
           ) : null}
           {displayCounts.occupied > 0 ? (
-            <span style={{ color: "#2563eb" }}>· {locale === "th" ? "จอด" : "Parked"} {displayCounts.occupied}</span>
+            <span style={{ color: "#1d4ed8", backgroundColor: "rgba(37, 99, 235, 0.12)", padding: "1px 7px", borderRadius: 999, border: "1px solid rgba(37, 99, 235, 0.3)" }}>
+              {locale === "th" ? "จอด" : "Parked"} {displayCounts.occupied}
+            </span>
           ) : null}
         </div>
       ) : null}

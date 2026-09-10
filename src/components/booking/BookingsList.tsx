@@ -3,21 +3,30 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
+  AlertTriangle,
+  CalendarCheck,
   CalendarDays,
   Car,
+  CheckCheck,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Clock,
   Clock3,
   Edit3,
   ExternalLink,
   Filter,
+  LogOut,
   MapPin,
   Navigation,
+  PlusCircle,
   QrCode,
   RefreshCw,
+  RotateCcw,
   Search,
   X,
+  XCircle,
 } from "lucide-react";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
@@ -48,29 +57,81 @@ type AreaInfo = {
 
 type QrRow = { qr_payload?: string; expires_at?: string; qr_reference?: string };
 
-function statusLabel(status: string, locale: Locale): string {
-  if (locale === "en") {
-    return status.replace("_", " ");
-  }
-  switch (status.toUpperCase()) {
+function renderStatusBadge(status: string, locale: Locale) {
+  const isTh = locale === "th";
+  const upper = (status || "").toUpperCase();
+  switch (upper) {
     case "PENDING":
-      return "รอดำเนินการ";
+      return (
+        <span className="booking-status pending">
+          <Clock size={12} strokeWidth={2.3} />
+          <span>{isTh ? "รอดำเนินการ (รอเข้าจอด)" : "Pending (Awaiting Check-in)"}</span>
+        </span>
+      );
     case "CONFIRMED":
-      return "ยืนยันแล้ว";
+      return (
+        <span className="booking-status confirmed">
+          <CalendarCheck size={12} strokeWidth={2.3} />
+          <span>{isTh ? "ยืนยันแล้ว" : "Confirmed"}</span>
+        </span>
+      );
     case "RESERVED":
-      return "จองแล้ว";
+      return (
+        <span className="booking-status reserved">
+          <CheckCircle2 size={12} strokeWidth={2.3} />
+          <span>{isTh ? "จองแล้ว" : "Reserved"}</span>
+        </span>
+      );
     case "CHECKED_IN":
-      return "เช็คอินแล้ว";
-    case "COMPLETED":
-      return "เสร็จสิ้น";
-    case "CANCELLED":
-      return "ยกเลิกแล้ว";
-    case "NO_SHOW":
-      return "ไม่มาใช้บริการ";
+      return (
+        <span className="booking-status checked_in">
+          <Car size={12} strokeWidth={2.3} />
+          <span>{isTh ? "เช็คอินแล้ว (กำลังจอด)" : "Checked In (Parked)"}</span>
+        </span>
+      );
     case "OVERSTAY":
-      return "จอดเกินเวลา";
+      return (
+        <span className="booking-status overstay">
+          <AlertTriangle size={12} strokeWidth={2.3} />
+          <span>{isTh ? "จอดเกินเวลา" : "Overstay"}</span>
+        </span>
+      );
+    case "COMPLETED":
+    case "CHECKED_OUT":
+      return (
+        <span className="booking-status completed">
+          <CheckCheck size={12} strokeWidth={2.3} />
+          <span>{isTh ? "เสร็จสิ้น / เช็คเอาท์แล้ว" : "Completed / Checked Out"}</span>
+        </span>
+      );
+    case "CANCELLED":
+    case "REJECTED":
+      return (
+        <span className="booking-status cancelled">
+          <XCircle size={12} strokeWidth={2.3} />
+          <span>{isTh ? "ยกเลิกแล้ว" : "Cancelled"}</span>
+        </span>
+      );
+    case "NO_SHOW":
+      return (
+        <span className="booking-status no_show">
+          <CircleAlert size={12} strokeWidth={2.3} />
+          <span>{isTh ? "ไม่มาใช้บริการ" : "No Show"}</span>
+        </span>
+      );
+    case "EXPIRED":
+      return (
+        <span className="booking-status expired">
+          <Clock size={12} strokeWidth={2.3} />
+          <span>{isTh ? "หมดอายุ" : "Expired"}</span>
+        </span>
+      );
     default:
-      return status;
+      return (
+        <span className="booking-status pending">
+          <span>{status}</span>
+        </span>
+      );
   }
 }
 
@@ -196,11 +257,12 @@ export function BookingsList({ locale }: { locale: Locale }) {
     });
     if (!confirmed) return;
     try {
-      const { error } = await createSupabaseBrowserClient()
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase
         .from("bookings")
         .update({ status: "CANCELLED", cancellation_reason: "USER_REQUEST" })
         .eq("id", booking.id)
-        .eq("status", "PENDING");
+        .in("status", ["PENDING", "CONFIRMED", "RESERVED"]);
       if (error) throw error;
       setBookings((current) => current.map((item) => (item.id === booking.id ? { ...item, status: "CANCELLED" } : item)));
       if (qrPass?.bookingId === booking.id) setQrPass(null);
@@ -367,12 +429,14 @@ export function BookingsList({ locale }: { locale: Locale }) {
               style={{ width: "100%", border: 0, outline: 0, background: "transparent", color: "inherit", font: "inherit" }}
               aria-label="Filter status"
             >
-              <option value="ALL">{isTh ? "สถานะทั้งหมด" : "All Status"}</option>
-              <option value="PENDING">{isTh ? "รอดำเนินการ" : "Pending"}</option>
-              <option value="CONFIRMED">{isTh ? "ยืนยันแล้ว" : "Confirmed"}</option>
-              <option value="CHECKED_IN">{isTh ? "เช็คอินแล้ว" : "Checked In"}</option>
-              <option value="COMPLETED">{isTh ? "เสร็จสิ้น" : "Completed"}</option>
-              <option value="CANCELLED">{isTh ? "ยกเลิกแล้ว" : "Cancelled"}</option>
+              <option value="ALL">{isTh ? "สถานะทั้งหมด (All Status)" : "All Status"}</option>
+              <option value="PENDING">{isTh ? "รอดำเนินการ (Pending)" : "Pending"}</option>
+              <option value="CONFIRMED">{isTh ? "ยืนยันแล้ว (Confirmed)" : "Confirmed"}</option>
+              <option value="RESERVED">{isTh ? "จองแล้ว (Reserved)" : "Reserved"}</option>
+              <option value="CHECKED_IN">{isTh ? "เช็คอินแล้ว (Checked In)" : "Checked In"}</option>
+              <option value="OVERSTAY">{isTh ? "จอดเกินเวลา (Overstay)" : "Overstay"}</option>
+              <option value="COMPLETED">{isTh ? "เสร็จสิ้น (Completed)" : "Completed"}</option>
+              <option value="CANCELLED">{isTh ? "ยกเลิกแล้ว (Cancelled)" : "Cancelled"}</option>
             </select>
           </label>
         </div>
@@ -411,9 +475,7 @@ export function BookingsList({ locale }: { locale: Locale }) {
                     </Link>
                     <span>{booking.booking_mode === "INDIVIDUAL_SLOT" ? t.individualSlot : t.areaOnly}</span>
                   </div>
-                  <span className={`booking-status ${booking.status.toLowerCase()}`}>
-                    {statusLabel(booking.status, locale)}
-                  </span>
+                  {renderStatusBadge(booking.status, locale)}
                 </div>
 
                 <div className="booking-card-line">
@@ -448,16 +510,65 @@ export function BookingsList({ locale }: { locale: Locale }) {
                   </span>
                 </div>
 
-                {/* Card Action Buttons */}
+                {/* Smart Status-Aware Action Buttons */}
                 <div className="booking-card-actions" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                  {/* Google Maps Navigation */}
-                  {area ? (
+                  {/* PENDING / CONFIRMED / RESERVED: QR Pass to Check-in */}
+                  {["PENDING", "CONFIRMED", "RESERVED"].includes(booking.status.toUpperCase()) && (
+                    <button
+                      className="booking-action-btn primary"
+                      type="button"
+                      onClick={() => void showQr(booking)}
+                      disabled={qrLoadingId === booking.id}
+                    >
+                      <QrCode size={14} />
+                      <span>{qrLoadingId === booking.id ? "…" : qrPass?.bookingId === booking.id ? (isTh ? "ซ่อน QR" : "Hide QR") : (isTh ? "QR Pass เข้าจอด" : "Check-in QR")}</span>
+                    </button>
+                  )}
+
+                  {/* CHECKED_IN: QR Pass to Check-out (Exit) */}
+                  {booking.status.toUpperCase() === "CHECKED_IN" && (
+                    <button
+                      className="booking-action-btn primary"
+                      type="button"
+                      onClick={() => void showQr(booking)}
+                      disabled={qrLoadingId === booking.id}
+                    >
+                      <QrCode size={14} />
+                      <span>{qrLoadingId === booking.id ? "…" : qrPass?.bookingId === booking.id ? (isTh ? "ซ่อน QR" : "Hide QR") : (isTh ? "QR Pass สแกนออก" : "Exit QR")}</span>
+                    </button>
+                  )}
+
+                  {/* OVERSTAY: QR Pass to settle/exit */}
+                  {booking.status.toUpperCase() === "OVERSTAY" && (
+                    <button
+                      className="booking-action-btn danger"
+                      type="button"
+                      onClick={() => void showQr(booking)}
+                      disabled={qrLoadingId === booking.id}
+                    >
+                      <AlertTriangle size={14} />
+                      <span>{qrLoadingId === booking.id ? "…" : qrPass?.bookingId === booking.id ? (isTh ? "ซ่อน QR" : "Hide QR") : (isTh ? "QR Pass เช็คเอาท์/เกินเวลา" : "Overstay Exit QR")}</span>
+                    </button>
+                  )}
+
+                  {/* COMPLETED or CANCELLED: Book Again shortcut */}
+                  {(["COMPLETED", "CHECKED_OUT"].includes(booking.status.toUpperCase()) || ["CANCELLED", "REJECTED", "EXPIRED", "NO_SHOW"].includes(booking.status.toUpperCase())) && (
+                    <Link
+                      className={["COMPLETED", "CHECKED_OUT"].includes(booking.status.toUpperCase()) ? "booking-action-btn success" : "booking-action-btn primary"}
+                      href={`/${locale}/parking/${area?.code?.toLowerCase() || ""}`}
+                    >
+                      {["COMPLETED", "CHECKED_OUT"].includes(booking.status.toUpperCase()) ? <PlusCircle size={14} /> : <RotateCcw size={14} />}
+                      <span>{isTh ? "จองใหม่อีกครั้ง" : "Book Again"}</span>
+                    </Link>
+                  )}
+
+                  {/* Navigation (for active bookings) */}
+                  {area && (["PENDING", "CONFIRMED", "RESERVED", "CHECKED_IN"].includes(booking.status.toUpperCase())) ? (
                     <a
-                      className="secondary-button"
+                      className="booking-action-btn secondary"
                       href={navUrl}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
                       <Navigation size={14} />
                       <span>{isTh ? "นำทาง" : "Navigate"}</span>
@@ -465,67 +576,39 @@ export function BookingsList({ locale }: { locale: Locale }) {
                     </a>
                   ) : null}
 
-                  {/* View Booking Detail Page */}
-                  <Link
-                    className="secondary-button"
-                    href={`/${locale}/app/bookings/${booking.reference}`}
-                    prefetch={false}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                  >
-                    <ExternalLink size={14} />
-                    <span>{isTh ? "ดูรายละเอียดการจอง" : "Booking Details"}</span>
-                  </Link>
-
-                  {/* View Area Page */}
-                  {area ? (
-                    <Link
-                      className="secondary-button"
-                      href={`/${locale}/parking/${area.code.toLowerCase()}`}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                    >
-                      <MapPin size={14} />
-                      <span>{isTh ? "ข้อมูลลานจอด" : "Area Info"}</span>
-                    </Link>
-                  ) : null}
-
-                  {/* Edit Booking (PENDING only) */}
-                  {isPending ? (
+                  {/* Edit Booking (Only allowed when PENDING or CONFIRMED before checking in) */}
+                  {["PENDING", "CONFIRMED", "RESERVED"].includes(booking.status.toUpperCase()) ? (
                     <button
-                      className="secondary-button"
+                      className="booking-action-btn secondary"
                       type="button"
                       onClick={() => openEdit(booking)}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
                       <Edit3 size={14} />
                       <span>{isTh ? "แก้ไขข้อมูล" : "Edit"}</span>
                     </button>
                   ) : null}
 
-                  {/* QR Pass */}
-                  {canShowQr ? (
+                  {/* Cancel Booking (Allowed when PENDING or CONFIRMED, NEVER when CHECKED_IN or COMPLETED) */}
+                  {["PENDING", "CONFIRMED", "RESERVED"].includes(booking.status.toUpperCase()) ? (
                     <button
-                      className="secondary-button"
+                      className="booking-action-btn danger"
                       type="button"
-                      onClick={() => void showQr(booking)}
-                      disabled={qrLoadingId === booking.id}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                      onClick={() => void cancelBooking(booking)}
                     >
-                      <QrCode size={14} />
-                      <span>{qrLoadingId === booking.id ? "…" : qrPass?.bookingId === booking.id ? (isTh ? "ซ่อน QR" : "Hide QR") : t.qrPass}</span>
+                      <XCircle size={14} />
+                      <span>{isTh ? "ยกเลิกการจอง" : "Cancel Booking"}</span>
                     </button>
                   ) : null}
 
-                  {/* Cancel Booking */}
-                  {isPending ? (
-                    <button
-                      className="secondary-button danger"
-                      type="button"
-                      onClick={() => void cancelBooking(booking)}
-                      style={{ color: "var(--red)" }}
-                    >
-                      {t.cancel}
-                    </button>
-                  ) : null}
+                  {/* View Booking Detail Page (Always available) */}
+                  <Link
+                    className="booking-action-btn secondary"
+                    href={`/${locale}/app/bookings/${booking.reference}`}
+                    prefetch={false}
+                  >
+                    <ExternalLink size={14} />
+                    <span>{isTh ? "ดูรายละเอียด" : "Details"}</span>
+                  </Link>
                 </div>
 
                 {/* QR Pass Render */}

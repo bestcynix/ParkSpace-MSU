@@ -3,7 +3,7 @@ import { MapPin, Navigation, SlidersHorizontal } from "lucide-react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { PublicFooter } from "@/components/layout/PublicFooter";
-import { ParkingCard } from "@/components/parking/ParkingCard";
+import { FeaturedParkingGrid } from "@/components/home/FeaturedParkingGrid";
 import { SearchCombobox } from "@/components/parking/SearchCombobox";
 import { HeroActions } from "@/components/home/HeroActions";
 import { RoleQuickActions } from "@/components/auth/RoleQuickActions";
@@ -55,9 +55,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
             <a className="text-link" href={`/${locale}/parking`}>{t.viewAll} <SlidersHorizontal size={12} style={{ verticalAlign: "-2px" }} /></a>
           </div>
 
-          <div className="parking-grid">
-            {parkingAreas.slice(0, 3).map((area) => <ParkingCard area={area} locale={locale} key={area.id} />)}
-          </div>
+          <FeaturedParkingGrid locale={locale} />
 
           <PublicFooter locale={locale} />
         </main>
