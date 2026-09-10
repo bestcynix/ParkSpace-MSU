@@ -51,6 +51,7 @@ type Profile = {
   department: string | null;
   phone: string | null;
   avatar_path: string | null;
+  user_type?: string | null;
 };
 
 type Role = "admin" | "staff" | "student" | "personnel" | "visitor";
@@ -71,7 +72,8 @@ type UserBooking = {
   created_at: string;
 };
 
-const profileFields = "id, email, full_name, university_id, faculty, major, department, phone, avatar_path";
+const profileFields = "id, email, full_name, university_id, faculty, major, department, phone, avatar_path, user_type";
+const SUPER_ADMIN_EMAIL = "68011211206@msu.ac.th";
 
 export function ProfileOverview({ locale }: { locale: Locale }) {
   const t = getCopy(locale);
@@ -163,6 +165,36 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
           return (r === "developer" ? "admin" : r) as Role;
         });
       }
+
+      // Multi-layer fallback for roles:
+      // Layer 1: profiles.user_type
+      const profileUserType = String(profileData.user_type ?? "").toLowerCase().trim();
+      if (profileUserType && (profileUserType === "admin" || profileUserType === "staff")) {
+        if (!loadedRoles.includes(profileUserType as Role)) {
+          loadedRoles.push(profileUserType as Role);
+        }
+      }
+
+      // Layer 2: user_metadata from Supabase Auth
+      const metaRole = String(user.user_metadata?.user_type || user.user_metadata?.role || "").toLowerCase().trim();
+      if (metaRole && (metaRole === "admin" || metaRole === "staff")) {
+        if (!loadedRoles.includes(metaRole as Role)) {
+          loadedRoles.push(metaRole as Role);
+        }
+      }
+
+      // Layer 3: Super Admin & Staff predefined emails
+      const userEmail = (user.email || profileData.email || "").toLowerCase().trim();
+      if (userEmail === SUPER_ADMIN_EMAIL || userEmail === "69010518004@msu.ac.th") {
+        if (!loadedRoles.includes("admin")) {
+          loadedRoles.unshift("admin");
+        }
+      } else if (userEmail === "staff@msu.ac.th" || userEmail.startsWith("staff")) {
+        if (!loadedRoles.includes("staff")) {
+          loadedRoles.unshift("staff");
+        }
+      }
+
       setRoles(loadedRoles);
 
       if (deletionResult.status === "fulfilled" && !deletionResult.value.error && deletionResult.value.data) {
@@ -541,10 +573,80 @@ export function ProfileOverview({ locale }: { locale: Locale }) {
             </button>
           </div>
           <span>{profile.email ?? "—"}</span>
-          <div className="role-chip-list">
-            <span className="role-chip active">
-              {roles.length ? roles.map((role) => roleLabel(t, role)).join(" · ") : t.userRole}
-            </span>
+          <div className="role-chip-list" style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "4px 0" }}>
+            {profile.email?.toLowerCase() === SUPER_ADMIN_EMAIL ? (
+              <span
+                className="role-chip active"
+                style={{
+                  background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                  color: "#ffffff",
+                  fontWeight: 800,
+                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  boxShadow: "0 2px 8px rgba(217, 119, 6, 0.35)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                👑 {locale === "th" ? "Admin หลัก (Super Admin)" : "Primary Super Admin"}
+              </span>
+            ) : roles.includes("admin") ? (
+              <span
+                className="role-chip active"
+                style={{
+                  background: "#e0f2fe",
+                  color: "#0369a1",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  border: "1px solid #7dd3fc",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                🛡️ {locale === "th" ? "ผู้ดูแลระบบ (Admin)" : "Administrator"}
+              </span>
+            ) : roles.includes("staff") ? (
+              <span
+                className="role-chip active"
+                style={{
+                  background: "#dcfce7",
+                  color: "#15803d",
+                  fontWeight: 700,
+                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  border: "1px solid #86efac",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                📋 {locale === "th" ? "เจ้าหน้าที่ (Staff)" : "Staff"}
+              </span>
+            ) : (
+              <span
+                className="role-chip active"
+                style={{
+                  background: "#f1f5f9",
+                  color: "#475569",
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  border: "1px solid #cbd5e1",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                }}
+              >
+                👤 {t.userRole}
+              </span>
+            )}
           </div>
           <span className={emailVerified ? "verification-status verified" : "verification-status pending"}>
             {emailVerified ? <CheckCircle2 size={13} /> : <MailCheck size={13} />}

@@ -2851,9 +2851,12 @@ button.role-chip:disabled {
   margin-inline: auto;
 }
 
-.google-account-complete-card {
-  width: min(100%, 560px);
-  margin: 26px auto;
+.google-account-complete-card,
+.support-form.google-account-complete-card {
+  width: min(100%, 560px) !important;
+  margin: 26px auto !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
 .password-control {

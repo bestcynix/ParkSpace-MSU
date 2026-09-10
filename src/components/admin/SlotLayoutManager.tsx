@@ -6,6 +6,7 @@ import type { Locale, Copy } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { useNotifications } from "@/components/layout/NotificationProvider";
+import { logAdminAudit } from "@/lib/admin/audit";
 
 type ManagerRole = "admin";
 type SlotType = "CAR" | "MOTORCYCLE" | "PICKUP" | "VAN" | "EV" | "OTHER" | "ANY";
@@ -123,27 +124,16 @@ export function SlotLayoutManager({ locale, role, areaId, areaCode }: { locale: 
   }
 
   async function audit(action: string, entityId: string, beforeData: unknown, afterData: unknown) {
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const traceId = crypto.randomUUID();
-      await supabase.from("audit_logs").insert({
-        event_id: `layout-${traceId}`,
-        trace_id: traceId,
-        actor_type: role.toUpperCase(),
-        actor_id: data.session?.user.id ?? null,
-        action,
-        entity_type: "parking_layout",
-        entity_id: entityId,
-        parking_area_id: areaId,
-        before_data: beforeData,
-        after_data: afterData,
-        reason: "Parking row and slot maintenance from the authorized console",
-        result: "SUCCESS",
-      });
-    } catch {
-      // The operational write remains the source of truth if an audit insert is unavailable.
-    }
+    await logAdminAudit({
+      action,
+      entity_type: "parking_layout",
+      entity_id: entityId,
+      before_data: beforeData,
+      after_data: afterData,
+      reason: "Parking row and slot maintenance from the authorized console",
+      metadata: { parking_area_id: areaId },
+      result: "SUCCESS",
+    });
   }
 
   async function saveRow(event: FormEvent<HTMLFormElement>) {

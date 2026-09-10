@@ -24,6 +24,7 @@ import {
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { logAdminAudit } from "@/lib/admin/audit";
 import { setFeatureFlag, type FeatureFlagKey } from "@/lib/feature-flags";
 
 type FlagRole = "admin";
@@ -211,26 +212,18 @@ export function FeatureFlagsManager({ locale, role }: { locale: Locale; role: Fl
         setSaveNote(changedDesc);
         window.setTimeout(() => setSaveNote(null), 3000);
 
-        // Record to Supabase audit_logs / system_events if configured
-        if (isSupabaseConfigured() && changedFlag) {
-          const supabase = createSupabaseBrowserClient();
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData.session) {
-            void supabase.from("audit_logs").insert({
-              event_id: `evt_ff_${Date.now()}`,
-              trace_id: `tr_ff_${Date.now().toString(36)}`,
-              actor_type: role,
-              actor_id: sessionData.session.user.id,
-              action: `FEATURE_FLAG_TOGGLE`,
-              entity_type: "feature_flags",
-              result: "SUCCESS",
-              metadata: {
-                flag_key: changedFlag.key,
-                new_state: changedFlag.enabled,
-                previous_state: !changedFlag.enabled,
-              },
-            });
-          }
+        // Record to audit_logs via API
+        if (changedFlag) {
+          void logAdminAudit({
+            action: "FEATURE_FLAG_TOGGLE",
+            entity_type: "feature_flags",
+            result: "SUCCESS",
+            metadata: {
+              flag_key: changedFlag.key,
+              new_state: changedFlag.enabled,
+              previous_state: !changedFlag.enabled,
+            },
+          });
         }
       } catch (err) {
         setSaveNote(err instanceof Error ? err.message : "Failed to persist flag state.");

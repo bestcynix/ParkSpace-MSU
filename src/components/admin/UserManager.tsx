@@ -29,6 +29,7 @@ import { useNotifications } from "@/components/layout/NotificationProvider";
 import type { Locale } from "@/lib/i18n";
 import { getCopy } from "@/lib/i18n";
 import { createSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import { logAdminAudit } from "@/lib/admin/audit";
 
 type ManagerRole = "admin";
 type ManagedRole = "admin" | "staff" | "user";
@@ -249,13 +250,30 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     setHistoryLoading(true);
     try {
       const supabase = createSupabaseBrowserClient();
-      const [auditResult, bookingResult, sessionResult] = await Promise.all([
-        supabase.from("audit_logs").select("id, action, actor_type, entity_type, result, created_at").or(`actor_id.eq.${userId},entity_id.eq.${userId}`).order("created_at", { ascending: false }).limit(25),
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      // Fetch bookings and sessions in parallel with audit logs via server API
+      const [auditRes, bookingResult, sessionResult] = await Promise.all([
+        fetch(`/api/admin/audit-logs?q=${encodeURIComponent(userId)}&pageSize=25`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).catch(() => null),
         supabase.from("bookings").select("id, reference, status, booking_date, starts_at, ends_at, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(25),
         supabase.from("parking_sessions").select("id, status, check_in_at, check_out_at, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(25),
       ]);
+
+      let auditsData: AuditHistoryRow[] = [];
+      if (auditRes && auditRes.ok) {
+        try {
+          const auditJson = await auditRes.json();
+          auditsData = (auditJson.logs ?? []) as AuditHistoryRow[];
+        } catch {
+          // ignore
+        }
+      }
+
       setHistory({
-        audits: (auditResult.data ?? []) as AuditHistoryRow[],
+        audits: auditsData,
         bookings: (bookingResult.data ?? []) as BookingHistoryRow[],
         sessions: (sessionResult.data ?? []) as SessionHistoryRow[],
       });
@@ -474,24 +492,13 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
   }
 
   async function audit(action: string, userId: string, metadata: Record<string, unknown>) {
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.auth.getSession();
-      const traceId = crypto.randomUUID();
-      await supabase.from("audit_logs").insert({
-        event_id: `admin-user-${traceId}`,
-        trace_id: traceId,
-        actor_type: "ADMIN",
-        actor_id: data.session?.user.id ?? null,
-        action,
-        entity_type: "profile",
-        entity_id: userId,
-        metadata,
-        result: "SUCCESS",
-      });
-    } catch {
-      // Safe fallback
-    }
+    await logAdminAudit({
+      action,
+      entity_type: "profile",
+      entity_id: userId,
+      metadata,
+      result: "SUCCESS",
+    });
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {

@@ -218,7 +218,11 @@ export function GoogleAccountComplete({ locale, next }: { locale: Locale; next: 
   if (loading || !needsPasswordSetup) return <div className="empty-card"><div><p>Loading · กำลังตรวจสอบ</p></div></div>;
 
   return (
-    <form className="form-card support-form google-account-complete-card" onSubmit={(event) => void submit(event)}>
+    <form
+      className="form-card support-form google-account-complete-card"
+      style={{ margin: "26px auto", width: "100%", maxWidth: 560 }}
+      onSubmit={(event) => void submit(event)}
+    >
       <div className="form-section-title">
         <CheckCircle2 size={22} />
         <div>

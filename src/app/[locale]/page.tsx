@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { ParkingCard } from "@/components/parking/ParkingCard";
 import { SearchCombobox } from "@/components/parking/SearchCombobox";
+import { HeroActions } from "@/components/home/HeroActions";
 import { RoleQuickActions } from "@/components/auth/RoleQuickActions";
 import { getCopy, getLocalizedTagline, isLocale, type Locale } from "@/lib/i18n";
 import { parkingAreas } from "@/lib/parking/demo-data";
@@ -35,10 +36,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
               <p className="eyebrow">Mahasarakham University</p>
               <h1>{tagline.primary}</h1>
               <p>{tagline.secondary} · {t.selectDestination}</p>
-              <div className="hero-actions">
-                <a className="secondary-button" href={`/${locale}/parking`}>{t.parking}</a>
-                <a className="ghost-button" href={`/${locale}/login`}>{t.login}</a>
-              </div>
+              <HeroActions locale={locale} />
             </div>
           </section>
 

@@ -12,5 +12,5 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 export default async function LoginPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
-  return <div className="app-frame"><div className="page-wrap"><AppHeader locale={locale} /><main><AuthForm locale={locale} mode="login" /><PublicFooter locale={locale} /></main></div></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><main><AuthForm locale={locale} mode="login" /><PublicFooter locale={locale} /></main></div></div>;
 }

@@ -12,5 +12,5 @@ export default async function AccountCompletePage({ params }: { params: Promise<
   const { locale: rawLocale } = await params;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : "th";
   const t = getCopy(locale);
-  return <div className="app-frame"><div className="page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.accountConnected} subtitle="Google" /><Suspense fallback={<div className="empty-card"><div><p>Loading · กำลังตรวจสอบ</p></div></div>}><GoogleAccountCompleteRoute locale={locale} /></Suspense><PublicFooter locale={locale} /></div></div>;
+  return <div className="app-frame"><div className="mobile-page page-wrap"><AppHeader locale={locale} /><PageTopbar locale={locale} title={t.accountConnected} subtitle="Google" /><Suspense fallback={<div className="empty-card"><div><p>Loading · กำลังตรวจสอบ</p></div></div>}><GoogleAccountCompleteRoute locale={locale} /></Suspense><PublicFooter locale={locale} /></div></div>;
 }

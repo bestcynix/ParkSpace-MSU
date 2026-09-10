@@ -209,3 +209,58 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    const authResult = await verifyAdminAuth(request);
+    if ("error" in authResult) {
+      return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+    }
+
+    const { adminClient, userId } = authResult;
+    const body = (await request.json()) as {
+      action?: string;
+      actor_type?: string;
+      entity_type?: string;
+      entity_id?: string;
+      before_data?: unknown;
+      after_data?: unknown;
+      reason?: string;
+      metadata?: Record<string, unknown>;
+      result?: string;
+      trace_id?: string;
+      event_id?: string;
+    };
+
+    const traceId = body.trace_id || crypto.randomUUID();
+    const eventId = body.event_id || `admin_evt_${Date.now()}`;
+
+    const { data, error } = await adminClient
+      .from("audit_logs")
+      .insert({
+        event_id: eventId,
+        trace_id: traceId,
+        actor_type: body.actor_type || "ADMIN",
+        actor_id: userId,
+        action: body.action || "ADMIN_ACTION",
+        entity_type: body.entity_type || "general",
+        entity_id: body.entity_id || null,
+        before_data: body.before_data || null,
+        after_data: body.after_data || null,
+        reason: body.reason || null,
+        metadata: body.metadata || {},
+        result: body.result || "SUCCESS",
+      })
+      .select()
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, log: data });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal error" },
+      { status: 500 }
+    );
+  }
+}
+
+

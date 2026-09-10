@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.replace(/^Bearer\s+/i, "");
 
-    const client = createServerClient(supabaseUrl, serviceRoleKey || supabaseAnonKey, {
+    const client = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -24,12 +25,16 @@ export async function POST(request: NextRequest) {
     });
 
     let userId: string | null = null;
+    let userEmail: string | null = null;
+
     if (token) {
       const { data: userData } = await client.auth.getUser(token);
       userId = userData.user?.id ?? null;
+      userEmail = userData.user?.email?.toLowerCase() ?? null;
     } else {
       const { data: userData } = await client.auth.getUser();
       userId = userData.user?.id ?? null;
+      userEmail = userData.user?.email?.toLowerCase() ?? null;
     }
 
     if (!userId) {
@@ -37,24 +42,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if requester has admin role
-    const { data: requesterRoles } = await client
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId);
+    let isAdmin = false;
+    if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+      isAdmin = true;
+    } else {
+      const { data: requesterRoles } = await client
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
 
-    const roles = (requesterRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
-    let isAdmin = roles.includes("admin") || roles.includes("developer");
+      const roles = (requesterRoles ?? []).map((r) => String(r.role).toLowerCase().trim());
+      isAdmin = roles.includes("admin") || roles.includes("developer");
 
-    if (!isAdmin) {
-      // Fallback check on profiles.user_type
-      const { data: requesterProfile } = await client
-        .from("profiles")
-        .select("user_type")
-        .eq("id", userId)
-        .maybeSingle();
+      if (!isAdmin) {
+        // Fallback check on profiles.user_type
+        const { data: requesterProfile } = await client
+          .from("profiles")
+          .select("user_type")
+          .eq("id", userId)
+          .maybeSingle();
 
-      if (requesterProfile?.user_type === "admin") {
-        isAdmin = true;
+        if (requesterProfile?.user_type === "admin") {
+          isAdmin = true;
+        }
       }
     }
 
@@ -69,8 +79,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
+    // Service client bypassing RLS
+    const adminClient = serviceRoleKey
+      ? createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        })
+      : client;
+
     // Protect Primary Super Admin (68011211206@msu.ac.th)
-    const { data: targetProfile } = await client
+    const { data: targetProfile } = await adminClient
       .from("profiles")
       .select("email")
       .eq("id", target_user_id)
@@ -94,23 +111,23 @@ export async function POST(request: NextRequest) {
       ? "staff"
       : "user";
 
-    // 1. Synchronize user_roles table if accessible
+    // 1. Synchronize user_roles table
     try {
-      await client.from("user_roles").delete().eq("user_id", target_user_id);
+      await adminClient.from("user_roles").delete().eq("user_id", target_user_id);
       if (effectiveRole !== "user") {
-        await client.from("user_roles").insert({
+        await adminClient.from("user_roles").insert({
           user_id: target_user_id,
           role: effectiveRole,
           granted_by: userId,
         });
       }
     } catch {
-      // Continue to profile update even if user_roles table lacks direct permission
+      // Continue
     }
 
     // 2. Synchronize profiles table
     try {
-      await client
+      await adminClient
         .from("profiles")
         .update({
           user_type: effectiveRole,
@@ -118,12 +135,26 @@ export async function POST(request: NextRequest) {
         })
         .eq("id", target_user_id);
     } catch {
-      // Ignore
+      // Continue
     }
 
-    // 3. Record audit log
+    // 3. Synchronize Supabase Auth user_metadata
+    if (serviceRoleKey) {
+      try {
+        await adminClient.auth.admin.updateUserById(target_user_id, {
+          user_metadata: {
+            user_type: effectiveRole,
+            role: effectiveRole,
+          },
+        });
+      } catch {
+        // Continue
+      }
+    }
+
+    // 4. Record audit log
     try {
-      await client.from("audit_logs").insert({
+      await adminClient.from("audit_logs").insert({
         event_id: `role_change_${Date.now()}`,
         trace_id: `tr_${Date.now().toString(36)}`,
         actor_type: "ADMIN",
@@ -140,11 +171,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      roles: effectiveRole === "user" ? ["user"] : [effectiveRole],
+      user_id: target_user_id,
+      role: effectiveRole,
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal error" },
+      { error: error instanceof Error ? error.message : "Failed to update role" },
       { status: 500 }
     );
   }

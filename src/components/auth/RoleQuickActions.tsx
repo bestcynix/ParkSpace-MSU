@@ -17,18 +17,55 @@ export function RoleQuickActions({ locale }: { locale: Locale }) {
         const supabase = createSupabaseBrowserClient();
         const { data: sessionData } = await supabase.auth.getSession();
         const userId = sessionData.session?.user.id;
-        if (!userId) return;
+        const user = sessionData.session.user;
+        const userEmail = (user.email ?? "").toLowerCase().trim();
 
         const { data } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", userId);
 
-        if (active && data) {
-          const fetchedRoles = data.map((r: { role?: unknown }) => {
+        let fetchedRoles: string[] = [];
+        if (data) {
+          fetchedRoles = data.map((r: { role?: unknown }) => {
             const role = String(r.role ?? "").toLowerCase().trim();
             return role === "developer" ? "admin" : role;
           });
+        }
+
+        // Fallback 1: profiles.user_type
+        if (!fetchedRoles.length) {
+          try {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("user_type")
+              .eq("id", userId)
+              .maybeSingle();
+            if (prof?.user_type) {
+              const pType = String(prof.user_type).toLowerCase().trim();
+              if (pType === "admin" || pType === "staff") {
+                fetchedRoles.push(pType);
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // Fallback 2: user_metadata
+        const metaType = String(user.user_metadata?.user_type || user.user_metadata?.role || "").toLowerCase().trim();
+        if (metaType === "admin" || metaType === "staff") {
+          if (!fetchedRoles.includes(metaType)) fetchedRoles.push(metaType);
+        }
+
+        // Fallback 3: predefined emails
+        if (userEmail === "68011211206@msu.ac.th" || userEmail === "69010518004@msu.ac.th") {
+          if (!fetchedRoles.includes("admin")) fetchedRoles.push("admin");
+        } else if (userEmail === "staff@msu.ac.th" || userEmail.startsWith("staff")) {
+          if (!fetchedRoles.includes("staff")) fetchedRoles.push("staff");
+        }
+
+        if (active) {
           setRoles(fetchedRoles);
         }
       } catch {

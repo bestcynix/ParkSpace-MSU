@@ -251,14 +251,14 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
 
       try {
         const supabase = createSupabaseBrowserClient();
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
 
-        // Fetch recent audit logs and error logs in parallel
-        const [auditRes, errorRes] = await Promise.all([
-          supabase
-            .from("audit_logs")
-            .select("id, event_id, trace_id, actor_type, action, entity_type, entity_id, result, created_at, metadata")
-            .order("created_at", { ascending: false })
-            .limit(50),
+        // Fetch recent audit logs via API and error logs in parallel
+        const [auditFetchRes, errorRes] = await Promise.all([
+          fetch("/api/admin/audit-logs?pageSize=50", {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }).catch(() => null),
           supabase
             .from("error_logs")
             .select("id, trace_id, route, severity, message, created_at, metadata")
@@ -266,10 +266,31 @@ export function TraceExplorer({ locale, role }: { locale: Locale; role: TraceRol
             .limit(50),
         ]);
 
+        let auditLogsList: Array<{
+          id: string;
+          trace_id?: string | null;
+          action: string;
+          actor_type?: string | null;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          result?: string | null;
+          metadata?: Record<string, unknown> | null;
+          created_at: string;
+        }> = [];
+
+        if (auditFetchRes && auditFetchRes.ok) {
+          try {
+            const auditJson = await auditFetchRes.json();
+            auditLogsList = auditJson.logs || [];
+          } catch {
+            // ignore
+          }
+        }
+
         const remoteTraces: TraceItem[] = [];
 
-        if (auditRes.data && auditRes.data.length > 0) {
-          for (const row of auditRes.data) {
+        if (auditLogsList.length > 0) {
+          for (const row of auditLogsList) {
             const rawMeta = (row.metadata as Record<string, unknown>) || {};
             const duration = typeof rawMeta.duration_ms === "number" ? rawMeta.duration_ms : Math.floor(Math.random() * 45 + 10);
             const isFailure = row.result === "FAILURE" || String(row.result).toUpperCase() === "ERROR";
