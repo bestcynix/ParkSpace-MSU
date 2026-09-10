@@ -465,23 +465,23 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
         subtitleTh: "จัดการการจองทั่วมหาวิทยาลัย ปรับยศผู้ใช้ สุขภาพเซิร์ฟเวอร์ และความปลอดภัย",
         subtitleEn: "University-wide booking manager, role governance, system telemetry, and audit trail",
         descriptionTh:
-          "ผู้ดูแลระบบมีคอนโซลควบคุมเต็มรูปแบบ: Super Admin (68011211206@msu.ac.th) ได้รับการคุ้มครองถาวรไม่สามารถลบหรือปลดยศได้ สามารถจัดการบทบาทผู้ใช้งาน (Admin/Staff/User), จัดการลานจอด 28 จุด, ควบคุมรายการจองทั้งหมด (Override สถานะ, แก้ไข, ลบรายการจอง), ตรวจสอบสุขภาพระบบ (Health Latency) และดู Audit Logs ประวัติการทำงานทั้งหมด",
+          "ผู้ดูแลระบบมีคอนโซลควบคุมเต็มรูปแบบ: ระบบบริหารจัดการและควบคุมความปลอดภัยระดับผู้ดูแลระบบ (Admin Role Governance) สามารถจัดการบทบาทผู้ใช้งาน (Admin/Staff/User), จัดการลานจอด 28 จุด, ควบคุมรายการจองทั้งหมด (Override สถานะ, แก้ไข, ลบรายการจอง), ตรวจสอบสุขภาพระบบ (Health Latency) และดู Audit Logs ประวัติการทำงานทั้งหมด",
         descriptionEn:
-          "Administrators access an enterprise control room: Protected Super Admin (68011211206@msu.ac.th) with non-demotable privileges, multi-tiered role governance (Admin/Staff/User), 28 area management, full booking manager with override/delete authority, system health telemetry, and tamper-evident audit logs.",
+          "Administrators access an enterprise control room: Protected Administrator governance with role management (Admin/Staff/User), 28 area management, full booking manager with override/delete authority, system health telemetry, and tamper-evident audit logs.",
         keyPointsTh: [
-          "Super Admin คุ้มครองถาวร: 68011211206@msu.ac.th และ Admin รอง: 69010518004@msu.ac.th",
+          "ระบบบริหารสิทธิ์ผู้ดูแลระบบ (Admin Role Governance) และโหมด Sandbox สำหรับทดสอบ",
           "ระบบจัดการการจอง AdminBookingsManager: ค้นหา, กรองสถานะ, Override สถานะ, ลบรายการจองถาวร",
           "ระบบตรวจสอบสุขภาพระบบ SystemHealthPanel: เช็ค Latency ของ Database, Server, และ Auth",
           "บันทึก Audit Logs ตรวจสอบประวัติการทำงานของเจ้าหน้าที่และผู้ดูแลระบบทุกคนในมหาวิทยาลัย",
         ],
         keyPointsEn: [
-          "Non-demotable Super Admin: 68011211206@msu.ac.th and Deputy Admin: 69010518004@msu.ac.th",
+          "Enterprise Administrator Role Governance & Security Protection",
           "Full-fledged AdminBookingsManager: Search, multi-status filters, status override, and hard-delete",
           "SystemHealthPanel telemetry: Live response time monitoring for Database, Server, and Auth",
           "Comprehensive Audit Logs auditing actions across all accounts with search and pagination",
         ],
-        tipsTh: "💡 ความปลอดภัย: ระบบจำแนกสิทธิ์อย่างเด็ดขาด เจ้าหน้าที่ไม่สามารถเข้าถึงหน้า Admin ได้ และ Admin รองไม่สามารถแตะต้องสิทธิ์ของ Super Admin ได้",
-        tipsEn: "💡 Enterprise Security: Strict role boundaries prevent staff escalation and protect Super Admin from demotion.",
+        tipsTh: "💡 ความปลอดภัย: ระบบจำแนกสิทธิ์อย่างเด็ดขาด เจ้าหน้าที่ไม่สามารถเข้าถึงหน้า Admin ได้ และระบบจำกัดสิทธิ์การปรับแต่งเพื่อความปลอดภัยสูงสุด",
+        tipsEn: "💡 Enterprise Security: Strict role boundaries prevent staff escalation and protect primary administrator privileges.",
         targetUrl: `/${locale}/admin/dashboard`,
         urlLabelTh: "เปิดแดชบอร์ดผู้ดูแลระบบ 👑",
         urlLabelEn: "Open Admin Dashboard 👑",
@@ -1832,8 +1832,8 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
                   </strong>
                   <p style={{ margin: 0 }}>
                     {isTh
-                      ? "บัญชี 68011211206@msu.ac.th เป็น Super Admin หลักของระบบ ได้รับการคุ้มครองถาวร ห้ามลบ ห้ามปลดยศ มีอำนาจสูงสุด ส่วนบัญชี 69010518004@msu.ac.th เป็น Admin รองที่สามารถปรับเปลี่ยนได้ตามโครงสร้างบุคลากร"
-                      : "Account 68011211206@msu.ac.th is the permanent non-demotable Super Admin. Secondary admin 69010518004@msu.ac.th can be adjusted as personnel changes."}
+                      ? "ระบบมีการคุ้มครองความปลอดภัยของผู้ดูแลระบบหลัก ได้รับการป้องกันถาวร ห้ามลบหรือปลดยศโดยไม่ได้รับอนุญาต เพื่อรักษาเสถียรภาพในการบริหารจัดการระบบ พร้อมรองรับการจำแนกสิทธิ์ตามโครงสร้างบุคลากร"
+                      : "The primary administrative account is protected from unauthorized deletion or demotion to preserve core system integrity, with multi-level role governance."}
                   </p>
                 </div>
 
@@ -2107,41 +2107,47 @@ export function SystemGuidePresentation({ locale }: { locale: Locale }) {
             </p>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
-              {/* Super Admin Card */}
+              {/* Demo Admin Card */}
               <div
                 style={{
                   padding: 20,
                   borderRadius: 16,
                   background: "var(--surface)",
-                  border: "2px solid #7c3aed",
-                  boxShadow: "0 4px 16px rgba(124, 58, 237, 0.08)",
+                  border: "2px solid #2563eb",
+                  boxShadow: "0 4px 16px rgba(37, 99, 235, 0.08)",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <span style={{ fontSize: 12, fontWeight: 900, color: "#7c3aed", display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    👑 SUPER ADMIN (ถาวร)
+                  <span style={{ fontSize: 12, fontWeight: 900, color: "#2563eb", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    🎭 บัญชีผู้ดูแลระบบสาธิต (ADMIN)
                   </span>
-                  <span style={{ fontSize: 10, background: "#f3e8ff", color: "#7c3aed", padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>
-                    ห้ามลบ / ห้ามปลด
+                  <span style={{ fontSize: 10, background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: 10, fontWeight: 700 }}>
+                    โหมด Sandbox
                   </span>
                 </div>
-                <strong style={{ fontSize: 15, display: "block", color: "var(--ink)", marginBottom: 4 }}>
-                  68011211206@msu.ac.th
-                </strong>
+                <div style={{ marginBottom: 10, background: "var(--canvas)", padding: "8px 12px", borderRadius: 8, fontSize: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: "var(--muted)" }}>Username / Email:</span>
+                    <strong style={{ color: "var(--ink)" }}>admin@msu.ac.th</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: "var(--muted)" }}>Password:</span>
+                    <code style={{ fontWeight: 800, color: "#2563eb" }}>admin123</code>
+                  </div>
+                </div>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--muted)", lineHeight: 1.4 }}>
                   {isTh
-                    ? "ผู้พัฒนาหลัก BestCyniX Dev มีอำนาจสูงสุดทั่วมหาวิทยาลัย ปรับยศผู้ใช้อื่นได้ทั้งหมด ลบ/Override การจอง และตรวจสอบสุขภาพระบบ"
-                    : "Primary project engineer with absolute university governance, non-demotable privileges, and full admin tools."}
+                    ? "ใช้เข้าสู่ระบบสำหรับนำเสนอผลงานพรีเซนต์ สามารถเรียกดูและทดสอบได้ครบทุกฟังก์ชัน โดยระบบจำลองการทำงานในโหมด Sandbox ปลอดภัย ไม่กระทบข้อมูลจริง"
+                    : "Official presentation credentials for demonstration. Full access to admin console with safe simulated sandbox actions."}
                 </p>
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => handleCopy("68011211206@msu.ac.th", "super-admin")}
+                <Link
+                  href={`/${locale}/login`}
+                  className="primary-button"
                   style={{ width: "100%", height: 32, fontSize: 12, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}
                 >
-                  {copiedKey === "super-admin" ? <Check size={14} color="#16a34a" /> : <Copy size={14} />}
-                  <span>{copiedKey === "super-admin" ? (isTh ? "คัดลอกอีเมลแล้ว!" : "Copied!") : (isTh ? "คัดลอกอีเมลแอดมินหลัก" : "Copy Super Admin Email")}</span>
-                </button>
+                  <span>{isTh ? "ไปที่หน้าเข้าสู่ระบบ Admin" : "Go to Admin Sign-in"}</span>
+                  <ExternalLink size={13} />
+                </Link>
               </div>
 
               {/* Staff Central Card */}

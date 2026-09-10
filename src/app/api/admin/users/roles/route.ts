@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
       return NextResponse.json(
-        { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของ Admin หลัก (68011211206@msu.ac.th)" },
+        { error: "ไม่อนุญาตให้ปรับเปลี่ยนบทบาทของ Admin หลัก (Super Admin)" },
         { status: 403 }
       );
     }

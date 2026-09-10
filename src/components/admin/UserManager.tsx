@@ -320,7 +320,7 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
     if (isSuperAdminEmail(targetUser.email)) {
       notify({
         title: locale === "th" ? "ไม่อนุญาตให้ลบบัญชี" : "Cannot Delete",
-        message: locale === "th" ? `บัญชี ${SUPER_ADMIN_EMAIL} เป็น Admin หลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถลบได้` : "Primary Super Admin account is protected from deletion.",
+        message: locale === "th" ? "บัญชีผู้ดูแลระบบหลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถลบได้" : "Primary Super Admin account is protected from deletion.",
         kind: "error",
       });
       return;
@@ -1214,7 +1214,7 @@ export function UserManager({ locale, role = "admin" }: { locale: Locale; role?:
                       <div>
                         <div>{locale === "th" ? "Admin หลัก (Super Admin) - คุ้มครองความปลอดภัยสูงสุด" : "Primary Super Admin Account"}</div>
                         <small style={{ fontWeight: 500, opacity: 0.9 }}>
-                          {locale === "th" ? "บัญชี 68011211206@msu.ac.th ได้รับการคุ้มครองถาวร ไม่สามารถลบบัญชี หรือปลด/เปลี่ยนยศได้" : "This account is permanently protected from deletion and role modifications."}
+                          {locale === "th" ? "บัญชีผู้ดูแลระบบหลักได้รับการคุ้มครองถาวร ไม่สามารถลบบัญชี หรือปลด/เปลี่ยนยศได้" : "This primary admin account is permanently protected from deletion and role modifications."}
                         </small>
                       </div>
                     </div>

@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     if (targetProfile?.email?.toLowerCase() === "68011211206@msu.ac.th") {
       return NextResponse.json(
-        { error: "บัญชี 68011211206@msu.ac.th เป็น Admin หลัก (Super Admin) ไม่สามารถลบได้" },
+        { error: "บัญชีผู้ดูแลระบบหลัก (Super Admin) ได้รับการคุ้มครองถาวร ไม่สามารถลบได้" },
         { status: 403 }
       );
     }

@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
     const targetEmail = targetProfile?.email?.toLowerCase();
     if (targetEmail === "68011211206@msu.ac.th") {
       return NextResponse.json(
-        { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ Admin หลัก (68011211206@msu.ac.th)" },
+        { error: "ไม่อนุญาตให้เปลี่ยนรหัสผ่านของ Admin หลัก (Super Admin)" },
         { status: 403 }
       );
     }
