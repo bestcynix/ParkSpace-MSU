@@ -1465,6 +1465,23 @@ button {
   color: white;
 }
 
+.admin-sidebar-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-sidebar-brand {
+  width: 100%;
+}
+
+.admin-sidebar-brand .brand {
+  text-decoration: none;
+  width: 100%;
+}
+
 .admin-sidebar .brand-name,
 .admin-sidebar .brand-tagline {
   color: white;
@@ -1474,10 +1491,63 @@ button {
   opacity: 0.65;
 }
 
+.admin-sidebar-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.admin-sidebar-role-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.admin-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.admin-sidebar .header-user-menu {
+  position: static;
+}
+
+.admin-sidebar .header-dropdown-menu {
+  left: 0;
+  right: auto;
+  top: calc(100% + 8px);
+  width: 250px;
+}
+
+.admin-sidebar .theme-toggle-btn,
+.admin-sidebar .header-user-btn {
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #f1f5f9;
+}
+
+.admin-sidebar .theme-toggle-btn:hover,
+.admin-sidebar .header-user-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: var(--gold);
+}
+
 .admin-nav {
   display: grid;
   gap: 5px;
-  margin-top: 32px;
+  margin-top: 16px;
 }
 
 .admin-nav a {
@@ -4652,7 +4722,30 @@ button.role-chip:disabled {
     z-index: 5;
     top: 0;
     overflow-x: auto;
-    padding: 10px 12px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .admin-sidebar-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding-bottom: 0;
+    border-bottom: none;
+    flex-shrink: 0;
+  }
+
+  .admin-sidebar-brand,
+  .admin-sidebar-role-badge {
+    display: none;
+  }
+
+  .admin-sidebar-toolbar {
+    padding: 2px 4px;
+    border: none;
+    background: transparent;
   }
 
   .admin-sidebar .brand {
@@ -4850,15 +4943,96 @@ button.role-chip:disabled {
 
 .image-uploader-preview-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .compact-btn {
-  padding: 4px 8px !important;
+  padding: 4px 10px !important;
   font-size: 11px !important;
+  font-weight: 700 !important;
+  min-height: 28px !important;
   height: 28px !important;
+  border-radius: 8px !important;
+  white-space: nowrap;
+}
+
+.secondary-button.danger {
+  color: var(--red);
+  border-color: rgba(212, 60, 69, 0.35);
+  background: var(--surface);
+}
+
+.secondary-button.danger:hover {
+  background: #fff1f2;
+  border-color: var(--red);
+}
+
+.area-image-uploaders-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.vehicle-type-fieldset {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+  margin: 0;
+  background: var(--surface);
+}
+
+.vehicle-type-fieldset legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.vehicle-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.vehicle-type-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+  transition: all 140ms ease;
+}
+
+.vehicle-type-options label:hover {
+  border-color: var(--gold);
+  background: rgba(248, 201, 40, 0.08);
+}
+
+.vehicle-type-options label:has(input:checked) {
+  border-color: var(--gold-deep, #ca8a04);
+  background: rgba(248, 201, 40, 0.14);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.vehicle-type-options input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--gold);
+  cursor: pointer;
+  margin: 0;
 }
 
 .image-uploader-url-row {

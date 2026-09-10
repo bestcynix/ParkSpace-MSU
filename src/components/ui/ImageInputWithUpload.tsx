@@ -224,12 +224,12 @@ export function ImageInputWithUpload({
                 </button>
                 <button
                   type="button"
-                  className="icon-button danger compact-btn"
+                  className="secondary-button danger compact-btn"
                   onClick={handleClear}
                   title={t.removeImage}
                   aria-label={t.removeImage}
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={13} />
                   <span>{t.clear}</span>
                 </button>
               </div>

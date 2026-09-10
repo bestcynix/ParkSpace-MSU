@@ -464,7 +464,7 @@ export function AreaManager({ locale, role }: { locale: Locale; role: ManagerRol
           <div className="form-group"><label htmlFor="area-lon">{t.longitude}</label><input id="area-lon" className="form-control" type="number" step="any" value={draft.longitude} onChange={(event) => updateDraft("longitude", event.target.value)} /></div>
         </div>
         <div className="form-group"><label htmlFor="area-source-reference">{t.sourceReference}</label><input id="area-source-reference" className="form-control" type="url" value={draft.source_reference} onChange={(event) => updateDraft("source_reference", event.target.value)} /></div>
-        <div className="support-form-grid">
+        <div className="area-image-uploaders-grid">
           <ImageInputWithUpload
             label={t.imagePath}
             value={draft.cover_image_path}
