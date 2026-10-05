@@ -316,5 +316,6 @@ npx cap open ios
 
 ---
 
-**พัฒนาขึ้นเพื่อมหาวิทยาลัยมหาสารคาม (Mahasarakham University)**  
-*Made with ❤️ by the ParkSpace MSU Developer Team*
+### ⚡ BESTCYNIX DEV • FULL-STACK ENGINEERING ⚡
+- 💻 **ยินดีต้อนรับสู่ระบบของ BestCyniX Dev** • สนใจพัฒนาระบบหรือร่วมงาน ติดต่อได้ที่ [bestcynix@gmail.com](mailto:bestcynix@gmail.com)
+- 🎓 **Powered by นายพงศ์ภรณ์ ทองศิริ** • 68011211206 · สาขาวิทยาการสารสนเทศ · เทคโนโลยีสารสนเทศ
